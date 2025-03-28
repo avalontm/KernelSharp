@@ -21,5 +21,13 @@ namespace Internal.Runtime.CompilerHelpers
         {
             *dst = src;
         }
+
+         [RuntimeExport("RhpCheckedAssignRefEAX")]
+        public static void RhpCheckedAssignRefEAX(void** dst, void* src)
+        {
+            // Esta función verifica asignaciones de referencias
+            // En un GC real, aquí se implementarían verificaciones y barreras de escritura
+            *dst = src;
+        }
     }
 }

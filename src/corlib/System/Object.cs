@@ -77,6 +77,11 @@ namespace System
             return false;
         }
 
+        public virtual string GetType()
+        {
+            return "Type";
+        }
+
         public virtual int GetHashCode()
         {
             return (int)this.m_pEEType->HashCode;

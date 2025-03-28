@@ -1,4 +1,7 @@
-﻿using Internal.Runtime.CompilerHelpers;
+﻿using Internal.Runtime;
+using Internal.Runtime.CompilerHelpers;
+using Internal.Runtime.CompilerServices;
+using System;
 using System.Runtime;
 
 namespace Corlib.Internal.Runtime.CompilerHelpers
@@ -13,23 +16,51 @@ namespace Corlib.Internal.Runtime.CompilerHelpers
         }
 
         [RuntimeExport("RhpNewArray")]
-        public static void* RhpNewArray(void* elementType, int length)
+        public static unsafe object RhpNewArray(EEType* pEEType, int length)
         {
-            // Calcular tamaño total
-            // 8 bytes para el header + tamaño de elementos
-            int elementSize = 1; // Ajustar según el tipo
-            int totalSize = 8 + (elementSize * length);
-
-            // Asignar memoria
-            void* array = (void*)MemoryHelpers.Malloc((ulong)totalSize);
-            if (array == null)
+            // Validaciones básicas
+            if (pEEType == null || length < 0)
                 return null;
 
-            // Inicializar array
-            *(int*)array = length; // Guardar longitud en el primer slot
+            // Obtener el tamaño del componente
+            uint componentSize = pEEType->ComponentSize;
 
-            // Devolver puntero que apunta después del header
-            return (int*)array + 2; // +2 porque cada int es 4 bytes (8 bytes total)
+            // Calcular el tamaño total necesario
+            uint headerSize = (uint)(sizeof(IntPtr) + sizeof(int)); // EEType* + length
+
+            // Prevenir desbordamiento en el cálculo
+            if (componentSize > 0 && (uint)length > (uint.MaxValue - headerSize) / componentSize)
+                return null;
+
+            uint dataSize = componentSize * (uint)length;
+            uint totalSize = headerSize + dataSize;
+
+            // Alinear a 8 bytes
+            totalSize = (totalSize + 7) & ~7U;
+
+            // Asignar memoria
+            IntPtr memory = (IntPtr)MemoryHelpers.Malloc(totalSize);
+            if (memory == IntPtr.Zero)
+                return null;
+
+            // Limpiar completamente la memoria (importante para valores correctos)
+            byte* memoryPtr = (byte*)memory;
+            for (uint i = 0; i < totalSize; i++)
+            {
+                memoryPtr[i] = 0;
+            }
+
+            // Configurar el objeto
+            object arrayObj = Unsafe.As<IntPtr, object>(ref memory);
+
+            // Establecer el EEType
+            Unsafe.As<object, IntPtr>(ref arrayObj) = (IntPtr)pEEType;
+
+            // Establecer la longitud
+            int* lengthField = (int*)(memoryPtr + sizeof(IntPtr));
+            *lengthField = length;
+
+            return arrayObj;
         }
 
         [RuntimeExport("RhpNewFast")]

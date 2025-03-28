@@ -14,11 +14,11 @@ namespace System
         // Non-inlinable wrapper around the QCall that avoids polluting the fast path
         // with P/Invoke prolog/epilog.
         [MethodImpl(MethodImplOptions.NoInlining)]
-        public static unsafe void _ZeroMemory(ref byte b, nuint byteLength)
+        public static unsafe void _ZeroMemory(ref byte b, uint byteLength)
         {
             fixed (byte* bytePointer = &b)
             {
-                MemoryHelpers.MemSet(bytePointer, 0, (int)byteLength);
+                MemoryHelpers.MemSet((IntPtr)bytePointer, 0, byteLength);
             }
         }
 

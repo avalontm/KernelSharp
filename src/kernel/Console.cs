@@ -68,40 +68,6 @@ namespace Kernel
             row = 0;
         }
 
-        /// <summary>
-        /// Método auxiliar para convertir objetos a cadena imprimible
-        /// </summary>
-        private string ObjectToString(object obj)
-        {
-            if (obj == null)
-                return "null";
-
-            // Manejar tipos primitivos directamente
-            switch (obj)
-            {
-                case int intValue:
-                    return intValue.ToString();
-                case bool boolValue:
-                    return boolValue.ToString();
-                case double doubleValue:
-                    return doubleValue.ToString();
-                case float floatValue:
-                    return floatValue.ToString();
-                case long longValue:
-                    return longValue.ToString();
-                case short shortValue:
-                    return shortValue.ToString();
-                case byte byteValue:
-                    return byteValue.ToString();
-                case char charValue:
-                    return charValue.ToString();
-                case string stringValue:
-                    return stringValue;
-                default:
-                    // Usar ToString() para otros tipos
-                    return obj.ToString();
-            }
-        }
 
         public void PrintLine(string str)
         {
@@ -172,21 +138,56 @@ namespace Kernel
             // Calcular posición en memoria de video
             int position = (row * width + column) * 2;
 
-            // Convertir correctamente el carácter Unicode a ASCII
+            // Convertir correctamente el carácter a un byte para VGA text mode
             byte charByte;
 
-            if (c <= 127) // ASCII estándar
+            // Expandir la lógica de conversión de caracteres
+            switch (c)
             {
-                charByte = (byte)c;
-            }
-            else if (c >= 0x80 && c <= 0xFF) // ASCII extendido
-            {
-                charByte = (byte)c;
-            }
-            else // Caracteres Unicode fuera del rango ASCII
-            {
-                // Caracteres Unicode no representables, usar un carácter sustituto como '?'
-                charByte = (byte)'?';
+                // Manejar caracteres de control
+                case '\t':   // Tabulación
+                    charByte = (byte)' ';
+                    break;
+                case '\r':   // Retorno de carro
+                    column = 0;
+                    return;
+                case '\0':   // Carácter nulo
+                    return;
+
+                // Caracteres ASCII estándar (0-127)
+                case char ch when ch <= 127:
+                    charByte = (byte)ch;
+                    break;
+
+                // Caracteres ASCII extendidos (128-255)
+                case char ch when ch >= 128 && ch <= 255:
+                    charByte = (byte)ch;
+                    break;
+
+                // Caracteres Unicode fuera del rango de VGA text mode
+                default:
+                    // Mapeo de algunos caracteres Unicode comunes
+                    switch (c)
+                    {
+                        case 'á': charByte = (byte)'a'; break;
+                        case 'é': charByte = (byte)'e'; break;
+                        case 'í': charByte = (byte)'i'; break;
+                        case 'ó': charByte = (byte)'o'; break;
+                        case 'ú': charByte = (byte)'u'; break;
+                        case 'ñ': charByte = (byte)'n'; break;
+                        case 'Á': charByte = (byte)'A'; break;
+                        case 'É': charByte = (byte)'E'; break;
+                        case 'Í': charByte = (byte)'I'; break;
+                        case 'Ó': charByte = (byte)'O'; break;
+                        case 'Ú': charByte = (byte)'U'; break;
+                        case 'Ñ': charByte = (byte)'N'; break;
+
+                        // Caracteres Unicode no representables
+                        default:
+                            charByte = (byte)'?';
+                            break;
+                    }
+                    break;
             }
 
             // Escribir carácter
@@ -200,57 +201,6 @@ namespace Kernel
 
             // Escribir atributo de color
             frameBuffer.Write(position + 1, colorAttribute);
-        }
-
-        // Método de conversión de entero a cadena
-        private unsafe static void IntToString(int value, char* buffer)
-        {
-            int index = 0;
-            int originalValue = value;
-
-            // Manejar caso de cero
-            if (value == 0)
-            {
-                buffer[0] = '0';
-                buffer[1] = '\0';
-                return;
-            }
-
-            // Manejar números negativos
-            int isNegative = 0;
-            if (value < 0)
-            {
-                isNegative = 1;
-                value = -value;
-            }
-
-            // Convertir dígitos
-            while (value > 0)
-            {
-                buffer[index++] = (char)((value % 10) + '0');
-                value /= 10;
-            }
-
-            // Añadir signo negativo si es necesario
-            if (isNegative)
-            {
-                buffer[index++] = '-';
-            }
-
-            // Invertir la cadena
-            int start = 0;
-            int end = index - 1;
-            while (start < end)
-            {
-                char temp = buffer[start];
-                buffer[start] = buffer[end];
-                buffer[end] = temp;
-                start++;
-                end--;
-            }
-
-            // Terminar con null
-            buffer[index] = '\0';
         }
     }
 }

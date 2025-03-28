@@ -26,7 +26,7 @@ namespace System
 
             // Calcular tamaño y asignar memoria
             int elementSize = sizeof(T);
-            _dataPtr = MemoryHelpers.Malloc((ulong)(length * elementSize));
+            _dataPtr = MemoryHelpers.Malloc((uint)(length * elementSize));
 
             // Verificar que la asignación fue exitosa
             if (_dataPtr == IntPtr.Zero)
@@ -127,7 +127,7 @@ namespace System
 
             _length = length;
             // Cada elemento es un puntero a un objeto
-            _dataPtr = MemoryHelpers.Malloc((ulong)(length * sizeof(IntPtr)));
+            _dataPtr = MemoryHelpers.Malloc((uint)(length * sizeof(IntPtr)));
 
             if (_dataPtr == IntPtr.Zero)
                 ThrowHelpers.ThrowOutOfMemoryException();

@@ -7,65 +7,150 @@ namespace Internal.Runtime.CompilerHelpers
 {
     internal static unsafe class MemoryHelpers
     {
+        /// <summary>
+        /// Asigna memoria del sistema operativo
+        /// </summary>
+        /// <param name="size">Tamaño en bytes a asignar</param>
+        /// <returns>Puntero a la memoria asignada o IntPtr.Zero si hay un error</returns>
         [DllImport("*", EntryPoint = "_malloc")]
-        public static extern IntPtr Malloc(ulong size);
+        public static extern unsafe IntPtr Malloc(uint size);
+
+        /// <summary>
+        /// Libera memoria previamente asignada
+        /// </summary>
+        /// <param name="ptr">Puntero a la memoria a liberar</param>
         [DllImport("*", EntryPoint = "_free")]
-        public static extern void Free(IntPtr ptr);
-        [DllImport("*", EntryPoint = "_realloc")]
-        public static extern nint Realloc(nint ptr, ulong new_size);
+        public static extern unsafe void Free(IntPtr ptr);
 
-        [RuntimeExport("memset")]
-        public static unsafe void MemSet(byte* ptr, int c, int count)
+        /// <summary>
+        /// Establece un bloque de memoria a un valor específico
+        /// </summary>
+        /// <param name="ptr">Puntero donde comenzar</param>
+        /// <param name="value">Valor byte para establecer</param>
+        /// <param name="size">Número de bytes a establecer</param>
+        public static unsafe void MemSet(IntPtr ptr, byte value, uint size)
         {
-            for (byte* p = ptr; p < ptr + count; p++)
-                *p = (byte)c;
-        }
+            // Implementación manual de memset
+            byte* p = (byte*)ptr;
+            uint remaining = size;
 
-        [RuntimeExport("memcpy")]
-        public static unsafe void MemCpy(byte* dest, byte* src, ulong count)
-        {
-            for (ulong i = 0; i < count; i++) dest[i] = src[i];
-        }
-
-        // Tamaño fijo para memoria del kernel - 16MB
-        private const int POOL_SIZE = 16 * 1024 * 1024;
-
-        // Puntero a la memoria preasignada
-        private static IntPtr s_memoryPoolPtr;
-        private static ulong s_currentPosition = 0;
-        private static bool s_initialized = false;
-
-        // Inicialización del pool de memoria
-        private static void EnsureInitialized()
-        {
-            if (!s_initialized)
+            // Primero, configurar bytes individuales hasta alinear a 4 bytes
+            while (remaining > 0 && ((ulong)p & 3) != 0)
             {
-                // En un sistema real, esto podría ser una dirección física específica
-                // o memoria reservada por el bootloader
-                byte[] initialPool = new byte[POOL_SIZE];
-                fixed (byte* pPool = initialPool)
-                {
-                    s_memoryPoolPtr = (IntPtr)pPool;
-                }
-                s_initialized = true;
+                *p++ = value;
+                remaining--;
+            }
+
+            // Si el valor no es cero, crear un valor de relleno de 32 bits
+            uint fillValue = 0;
+            if (value != 0)
+            {
+                fillValue = (uint)value;
+                fillValue |= (fillValue << 8);
+                fillValue |= (fillValue << 16);
+            }
+
+            // Luego configurar bloques de 4 bytes (más eficiente)
+            while (remaining >= 4)
+            {
+                *(uint*)p = fillValue;
+                p += 4;
+                remaining -= 4;
+            }
+
+            // Configurar los bytes restantes
+            while (remaining > 0)
+            {
+                *p++ = value;
+                remaining--;
             }
         }
 
-        // Helper method for safe array creation
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T[] CreateArray<T>(int length)
+        /// <summary>
+        /// Copia un bloque de memoria de origen a destino
+        /// </summary>
+        /// <param name="dest">Puntero de destino</param>
+        /// <param name="src">Puntero de origen</param>
+        /// <param name="size">Número de bytes a copiar</param>
+        public static unsafe void MemCpy(void* dest, void* src, uint size)
         {
-            if (length < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException(nameof(length));
+            // Comprobar superposición
+            if ((ulong)dest == (ulong)src)
+                return; // No hay nada que hacer
 
-            return new T[length];
+            byte* pDest = (byte*)dest;
+            byte* pSrc = (byte*)src;
+            uint remaining = size;
+
+            // Verificar si hay superposición y hacer copia segura si es necesario
+            if ((ulong)pDest < (ulong)pSrc || (ulong)pDest >= ((ulong)pSrc + size))
+            {
+                // Sin superposición o pDest está antes de pSrc, copia normal
+
+                // Primero, copiar bytes individuales hasta alinear pDest a 4 bytes
+                while (remaining > 0 && ((ulong)pDest & 3) != 0)
+                {
+                    *pDest++ = *pSrc++;
+                    remaining--;
+                }
+
+                // Luego copiar por bloques de 4 bytes si está alineado
+                if (((ulong)pSrc & 3) == 0)
+                {
+                    while (remaining >= 4)
+                    {
+                        *(uint*)pDest = *(uint*)pSrc;
+                        pDest += 4;
+                        pSrc += 4;
+                        remaining -= 4;
+                    }
+                }
+
+                // Copiar los bytes restantes
+                while (remaining > 0)
+                {
+                    *pDest++ = *pSrc++;
+                    remaining--;
+                }
+            }
+            else
+            {
+                // Hay superposición y pDest está después de pSrc, copia inversa
+                pDest += remaining;
+                pSrc += remaining;
+
+                // Copiar byte por byte en orden inverso
+                while (remaining > 0)
+                {
+                    *--pDest = *--pSrc;
+                    remaining--;
+                }
+            }
         }
 
-        // Zero memory utility
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe void ZeroMemory(IntPtr address, ulong size)
+        /// <summary>
+        /// Compara dos bloques de memoria
+        /// </summary>
+        /// <param name="ptr1">Primer puntero</param>
+        /// <param name="ptr2">Segundo puntero</param>
+        /// <param name="size">Número de bytes a comparar</param>
+        /// <returns>0 si son iguales, <0 si ptr1 < ptr2, >0 si ptr1 > ptr2</returns>
+        public static unsafe int MemCmp(void* ptr1, void* ptr2, uint size)
         {
-            MemoryHelpers.MemSet((byte*)address, 0, (int)size);
+            byte* p1 = (byte*)ptr1;
+            byte* p2 = (byte*)ptr2;
+
+            // Comparar byte por byte
+            for (uint i = 0; i < size; i++)
+            {
+                if (*p1 != *p2)
+                    return *p1 - *p2;
+
+                p1++;
+                p2++;
+            }
+
+            return 0; // Iguales
         }
     }
 }

@@ -10,7 +10,7 @@ namespace Internal.Runtime.CompilerHelpers
         [DllImport("*", EntryPoint = "_kernel_print")]
         private static extern void kernel_print(byte* text, int length);
 
-        private static unsafe void DisplayPanicMessage(string message)
+        public static unsafe void DisplayPanicMessage(string message)
         {
             // Encabezado del mensaje de pánico
             string fullMessage = "\n\n====== KERNEL PANIC ======\n\n";
@@ -215,6 +215,27 @@ namespace Internal.Runtime.CompilerHelpers
         internal static void ThrowNotSupportedException(string message)
         {
             Panic("FormatException: " + message);
+        }
+
+        internal static void ThrowNotImplementedException(string message)
+        {
+            Panic("ThrowNotImplementedException: " + message);
+        }
+
+        internal static void ThrowInvalidCastException(string message)
+        {
+            Panic("ThrowInvalidCastException: " + message);
+        }
+
+        internal static void OutOfMemoryException(string message)
+        {
+            Panic("OutOfMemoryException: " + message);
+        }
+
+        internal static void NotSupportedException(string message)
+        {
+            Panic("NotSupportedException: " + message);
+
         }
     }
 }

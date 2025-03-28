@@ -1,7 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using System.Text;
-
-namespace System
+﻿namespace System
 {
     public unsafe struct Double
     {
@@ -14,11 +11,15 @@ namespace System
 
         public static unsafe bool IsNaN(double d)
         {
-            // A NaN will never equal itself so this is an
-            // easy and efficient way to check for NaN.
-#pragma warning disable CS1718
-            return d != d;
-#pragma warning restore CS1718
+            // IEEE 754 floating-point representation of NaN
+            // Use bit manipulation to check NaN status
+            ulong bits = *(ulong*)&d;
+
+            // NaN has all exponent bits set (0x7FF) and non-zero fraction
+            const ulong exponentMask = 0x7FF0000000000000UL;
+            const ulong fractionMask = 0x000FFFFFFFFFFFFFUL;
+
+            return (bits & exponentMask) == exponentMask && (bits & fractionMask) != 0;
         }
 
         public static bool IsPositiveInfinity(double d)
@@ -35,7 +36,7 @@ namespace System
         {
             double value = this;
 
-            // Manejar casos especiales
+            // Handle special cases first
             if (IsNaN(value))
                 return "NaN";
             if (IsPositiveInfinity(value))
@@ -43,54 +44,94 @@ namespace System
             if (IsNegativeInfinity(value))
                 return "-Infinity";
 
-            // Buffer para el resultado
+            // Buffer for result
             char* buffer = stackalloc char[32];
             int position = 0;
 
-            // Manejar signo negativo
+            // Handle sign
+            bool isNegative = false;
             if (value < 0)
             {
-                buffer[position++] = '-';
+                isNegative = true;
                 value = -value;
             }
 
-            // Separar parte entera y decimal
-            long intPart = (long)value;
-            double fractPart = value - intPart;
-
-            // Convertir parte entera
-            if (intPart == 0)
+            // Special case for zero
+            if (value < 0.000001)
             {
-                buffer[position++] = '0';
+                return "0.0";
+            }
+
+            // 32-bit safe integer part conversion
+            int intPartLow = (int)value;
+            int intPartHigh = (int)((value - intPartLow) * 4294967296.0);
+            double fractPart = value - intPartLow;
+
+            // Convert integer part
+            bool digitStarted = false;
+
+            // Handle high part first
+            if (intPartHigh > 0)
+            {
+                int tempHigh = intPartHigh;
+                while (tempHigh > 0)
+                {
+                    buffer[position++] = (char)('0' + (tempHigh % 10));
+                    tempHigh /= 10;
+                    digitStarted = true;
+                }
+            }
+
+            // Handle low part
+            int tempLow = intPartLow;
+            if (intPartHigh > 0 || tempLow > 0)
+            {
+                while (tempLow > 0 || !digitStarted)
+                {
+                    buffer[position++] = (char)('0' + (tempLow % 10));
+                    tempLow /= 10;
+                    digitStarted = true;
+
+                    // Prevent infinite loop if both parts are zero
+                    if (tempLow == 0 && intPartHigh == 0)
+                        break;
+                }
             }
             else
             {
-                // Necesitamos convertir los dígitos en orden inverso
-                int startPos = position;
-                while (intPart > 0)
-                {
-                    buffer[position++] = (char)('0' + (intPart % 10));
-                    intPart /= 10;
-                }
-
-                // Invertir los dígitos
-                int endPos = position - 1;
-                while (startPos < endPos)
-                {
-                    char temp = buffer[startPos];
-                    buffer[startPos] = buffer[endPos];
-                    buffer[endPos] = temp;
-                    startPos++;
-                    endPos--;
-                }
+                buffer[position++] = '0';
             }
 
-            // Añadir parte decimal si existe
+            // Reverse the digits
+            int startPos = 0;
+            int endPos = position - 1;
+            while (startPos < endPos)
+            {
+                char temp = buffer[startPos];
+                buffer[startPos] = buffer[endPos];
+                buffer[endPos] = temp;
+                startPos++;
+                endPos--;
+            }
+
+            // Add negative sign if necessary
+            if (isNegative)
+            {
+                // Move existing digits to make room for minus sign
+                for (int i = position - 1; i >= 0; i--)
+                {
+                    buffer[i + 1] = buffer[i];
+                }
+                buffer[0] = '-';
+                position++;
+            }
+
+            // Add decimal part if exists
             if (fractPart > 0)
             {
                 buffer[position++] = '.';
 
-                // Mostrar 6 decimales como máximo
+                // Show up to 6 decimal places
                 for (int i = 0; i < 6; i++)
                 {
                     fractPart *= 10;
@@ -98,16 +139,16 @@ namespace System
                     buffer[position++] = (char)('0' + digit);
                     fractPart -= digit;
 
-                    // Si no quedan decimales significativos, terminar
+                    // Stop if no significant decimal parts remain
                     if (fractPart < 0.000001)
                         break;
                 }
             }
 
-            // Añadir terminador nulo
+            // Null terminator
             buffer[position] = '\0';
 
-            // Convertir a string
+            // Convert to string
             return new string(buffer, 0, position);
         }
     }

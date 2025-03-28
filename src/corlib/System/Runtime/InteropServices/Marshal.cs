@@ -26,13 +26,13 @@ namespace System.Runtime.InteropServices
         // Allocate unmanaged memory
         public static IntPtr AllocHGlobal(int cb)
         {
-            return (IntPtr)MemoryHelpers.Malloc((ulong)cb);
+            return (IntPtr)MemoryHelpers.Malloc((uint)cb);
         }
 
         // Allocate unmanaged memory with a specific size
         public static IntPtr AllocHGlobal(IntPtr cb)
         {
-            return (IntPtr)MemoryHelpers.Malloc((ulong)cb);
+            return (IntPtr)MemoryHelpers.Malloc((uint)cb);
         }
 
         // Free unmanaged memory

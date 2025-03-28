@@ -1,3 +1,4 @@
+using Corlib.Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
 using System.Collections.Generic;
@@ -17,23 +18,13 @@ namespace System
         {
             get
             {
-                // Evitamos usar una variable estática inicializada
-                // en tiempo de ejecución
-                return GetEmptyString();
+                return new string(new char[0]);
             }
-        }
-
-        static string GetEmptyString()
-        {
-            // Creamos una cadena vacía cada vez que se necesita
-            // Esto es menos eficiente pero más seguro durante el arranque
-            return new string(new char[0]);
         }
 
         // The layout of the string type is a contract with the compiler.
         private int _length;
         internal char _firstChar;
-
 
         public int Length
         {
@@ -68,13 +59,116 @@ namespace System
             }
         }
 
-#pragma warning disable CS0824 // Constructor is marked external
-        public extern unsafe String(char* ptr);
-        public extern String(IntPtr ptr);
-        public extern String(char[] buf);
-        public extern unsafe String(char* ptr, int index, int length);
-        public extern unsafe String(char[] buf, int index, int length);
-#pragma warning restore CS0824 // Constructor is marked external
+        // Constructor from char pointer
+        public String(char* ptr)
+        {
+            if (ptr == null)
+                ThrowHelpers.ThrowArgumentNullException("ptr");
+
+            // Calculate length by finding null terminator
+            int length = 0;
+            while (ptr[length] != '\0')
+                length++;
+
+            // Create string from pointer with calculated length
+            this._length = length;
+
+            // If length is 0, use empty string
+            if (length == 0)
+            {
+                this._firstChar = '\0';
+                return;
+            }
+
+            // Allocate and copy characters
+            fixed (char* dest = &this._firstChar)
+            {
+                for (int i = 0; i < length; i++)
+                {
+                    dest[i] = ptr[i];
+                }
+                dest[length] = '\0';
+            }
+        }
+
+        // Constructor from IntPtr
+        public String(IntPtr ptr) : this((char*)ptr)
+        {
+        }
+
+        // Constructor from char array with index and length
+        public String(char[] buf, int index, int length)
+        {
+            // Validate arguments
+            if (buf == null)
+                ThrowHelpers.ThrowArgumentNullException("buf");
+
+            if (index < 0)
+                ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+
+            if (length < 0)
+                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+
+            if (index + length > buf.Length)
+                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+
+            // Handle empty string case
+            if (length == 0)
+            {
+                this._length = 0;
+                this._firstChar = '\0';
+                return;
+            }
+
+            // Set length
+            this._length = length;
+
+            // Copy characters
+            fixed (char* src = buf)
+            fixed (char* dest = &this._firstChar)
+            {
+                for (int i = 0; i < length; i++)
+                {
+                    dest[i] = src[index + i];
+                }
+                dest[length] = '\0';
+            }
+        }
+
+        // Constructor from char pointer with index and length
+        public String(char* ptr, int index, int length)
+        {
+            // Validate arguments
+            if (ptr == null)
+                ThrowHelpers.ThrowArgumentNullException("ptr");
+
+            if (index < 0)
+                ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+
+            if (length < 0)
+                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+
+            // Handle empty string case
+            if (length == 0)
+            {
+                this._length = 0;
+                this._firstChar = '\0';
+                return;
+            }
+
+            // Set length
+            this._length = length;
+
+            // Copy characters
+            fixed (char* dest = &this._firstChar)
+            {
+                for (int i = 0; i < length; i++)
+                {
+                    dest[i] = ptr[index + i];
+                }
+                dest[length] = '\0';
+            }
+        }
 
         /// <summary>
         /// Constructor que crea una nueva cadena a partir de otra cadena existente.
@@ -188,7 +282,7 @@ namespace System
             char* start = ptr + index;
 
             // Crear una nueva instancia de String utilizando la infraestructura nativa
-            object stringObj = StartupCodeHelpers.RhpNewArray(et._value, length);
+            object stringObj = RuntimeImports.RhpNewArray(et._value, length);
 
             // Convertir el objeto a string
             string s = Unsafe.As<object, string>(ref stringObj);
@@ -536,15 +630,12 @@ namespace System
             }
         }
 
-#nullable enable
-        public static bool IsNullOrEmpty(string? value)
-#nullable disable
+        public static bool IsNullOrEmpty(string value)
         {
             return value == null || value.Length == 0;
         }
-#nullable enable
-        public static bool IsNullOrWhiteSpace(string? value)
-#nullable disable
+
+        public static bool IsNullOrWhiteSpace(string value)
         {
             if (value == null)
             {
