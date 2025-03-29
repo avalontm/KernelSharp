@@ -79,7 +79,7 @@ namespace System
 
         public virtual string GetType()
         {
-            return "Type";
+            return "Object";
         }
 
         public virtual int GetHashCode()
@@ -88,8 +88,41 @@ namespace System
         }
 
         public virtual string ToString()
-            => "System.Object";
+        {
+            // Obtener el tipo real del objeto
+            string typeName = GetType();
+            /*
+            // Comprobar si es uno de los tipos primitivos y proporcionar una representación especial
+            if (this.m_pEEType != null)
+            {
+                switch (this.m_pEEType->ElementType)
+                {
+                    case EETypeElementType.Int32:
+                        // Para enteros, convertir el valor a cadena
+                        return ((Int32)this).ToString();
+                    case EETypeElementType.Double:
+                        // Para enteros, convertir el valor a cadena
+                        return ((Double)this).ToString();
+                    case EETypeElementType.Boolean:
+                        // Para booleanos, devolver "True" o "False"
+                        return ((Boolean)this).ToString();
+                    case EETypeElementType.Char:
+                        // Alternativa sin usar el constructor string(char, int)
+                        char c = (Char)this;
+                        // Crear un array de un solo carácter
+                        char[] charArray = new char[1];
+                        charArray[0] = c;
+                        return new string(charArray);
 
+                    case EETypeElementType.String:
+                        // Para strings, devolver el string mismo
+                        return (string)this;
+                }
+            }
+            */
+            // Para otros tipos, devolver el nombre del tipo
+            return typeName;
+        }
         public virtual void Dispose()
         {
             var obj = this;

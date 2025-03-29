@@ -237,5 +237,10 @@ namespace Internal.Runtime.CompilerHelpers
             Panic("NotSupportedException: " + message);
 
         }
+
+        internal static void ArgumentException(string message)
+        {
+            Panic("ArgumentException: " + message);
+        }
     }
 }

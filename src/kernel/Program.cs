@@ -1,3 +1,4 @@
+using Internal.Runtime.CompilerHelpers;
 using System;
 using System.Runtime;
 
@@ -33,6 +34,7 @@ namespace Kernel
             string welcomeMessage = "Welcome to the KernelSharp!";
             console.PrintLine(welcomeMessage);
 
+            StartupCodeHelpers.InitializeModules(Modules);
             // Detectar arquitectura
             if (RuntimeArchitecture.Is32Bit)
             {
@@ -44,6 +46,7 @@ namespace Kernel
             }
 
             ArrayExamples.DemoArrays(console);
+
 
             console.PrintLine("Inicialización completada!");
 
@@ -68,8 +71,6 @@ namespace Kernel
             console.Print(@"                                                                                ");
             console.PrintLine("");
         }
-
-
     }
 
     public static class ArrayExamples
@@ -93,10 +94,7 @@ namespace Kernel
             }
 
             // Crear un array de strings
-            string[] stringArray = new string[3];
-            stringArray[0] = "Hola";
-            stringArray[1] = "Mundo";
-            stringArray[2] = "KernelSharp";
+            string[] stringArray = new string[] { "Hola", "Mundo", "KernelSharp" };
 
             console.PrintLine("\nArray de strings:");
             for (int i = 0; i < stringArray.Length; i++)
@@ -106,6 +104,16 @@ namespace Kernel
 
 
             console.PrintLine("==========================");
+
+            Elemento elemento = new Elemento()
+            {
+                Name = "AvalonTM",
+                Value = 21,
+            };
+
+            console.PrintLine($"{elemento.Name} | {elemento.Value.ToString()}");
+
+
         }
     }
 }

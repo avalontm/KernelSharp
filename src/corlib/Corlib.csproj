@@ -12,10 +12,6 @@
     <LangVersion>latest</LangVersion>
     <DebugType>embedded</DebugType>
     
-    <!-- Propiedades para AOT -->
-    <PublishAot>true</PublishAot>
-    <IsAotCompatible>true</IsAotCompatible>
-    
     <!-- Evitar generación de atributos que no necesitas -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>

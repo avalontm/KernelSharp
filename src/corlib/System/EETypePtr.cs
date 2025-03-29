@@ -155,65 +155,13 @@ namespace System
         /// Obtiene el EETypePtr para el tipo genérico especificado.
         /// </summary>
         [Intrinsic]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static EETypePtr EETypePtrOf<T>()
+        internal static EETypePtr EETypePtrOf<T>()
         {
-            // Esta implementación básica aprovecha la información de tipo disponible en tiempo de ejecución
-
-            // Crear una instancia temporal del tipo para obtener su EEType
-            // Esto funciona para la mayoría de los tipos, aunque no es óptimo para tipos que no se pueden crear fácilmente
-
-            // Para tipos de referencia
-            if (typeof(T) == typeof(string))
-            {
-                // Caso especial para string
-                string temp = "";
-                IntPtr objPtr = Unsafe.As<string, IntPtr>(ref temp);
-                EEType* pEEType = *(EEType**)objPtr;
-                return new EETypePtr(pEEType);
-            }
-            else if (!typeof(T).IsValueType)
-            {
-                // Para otros tipos de referencia, podemos intentar obtener el EEType del tipo object
-                // y luego buscar el EEType específico en tiempo de ejecución
-                object temp = null;
-                IntPtr objPtr = Unsafe.As<object, IntPtr>(ref temp);
-
-                // Nota: En un sistema real, aquí necesitaríamos buscar el EEType correcto
-                // basado en metadatos o tablas de tipos
-                EEType* pEEType = *(EEType**)objPtr;
-                return new EETypePtr(pEEType);
-            }
-            else
-            {
-                // Para tipos de valor, podemos crear una instancia temporal
-                // y obtener su EEType
-                T temp = default;
-
-                // Acceder al EEType a través de manipulación de memoria
-                // Nota: Esto solo funciona para tipos que se pueden inicializar con default
-                IntPtr typeHandle;
-
-                if (typeof(T) == typeof(int))
-                    typeHandle = typeof(int).TypeHandle.Value;
-                else if (typeof(T) == typeof(long))
-                    typeHandle = typeof(long).TypeHandle.Value;
-                else if (typeof(T) == typeof(byte))
-                    typeHandle = typeof(byte).TypeHandle.Value;
-                else if (typeof(T) == typeof(char))
-                    typeHandle = typeof(char).TypeHandle.Value;
-                else if (typeof(T) == typeof(bool))
-                    typeHandle = typeof(bool).TypeHandle.Value;
-                else if (typeof(T) == typeof(double))
-                    typeHandle = typeof(double).TypeHandle.Value;
-                else
-                    typeHandle = typeof(object).TypeHandle.Value; // Fallback
-
-                return new EETypePtr(typeHandle);
-            }
-
-            // Nota: En una implementación real, este método sería reemplazado por el compilador
-            // o el JIT con código que obtiene directamente el EEType del tipo T.
+            // Compilers are required to provide a low level implementation of this method.
+            // This can be achieved by optimizing away the reflection part of this implementation
+            // by optimizing typeof(!!0).TypeHandle into "ldtoken !!0", or by
+            // completely replacing the body of this method.
+            return default;
         }
 
         /// <summary>

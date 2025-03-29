@@ -1,4 +1,3 @@
-using Internal.Runtime;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
 using System.Runtime.CompilerServices;
@@ -25,6 +24,35 @@ namespace System
         private ref int GetRawMultiDimArrayBounds()
         {
             return ref Unsafe.AddByteOffset(ref _numComponents, (nuint)sizeof(IntPtr));
+        }
+
+        public static unsafe Array NewMultiDimArray(EETypePtr eeType, int* pLengths, int rank)
+        {
+            ulong totalLength = 1;
+
+            for (int i = 0; i < rank; i++)
+            {
+                int length = pLengths[i];
+                /*
+				if (length > MaxLength)
+				{
+					ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+				}
+				*/
+
+                totalLength *= (ulong)length;
+            }
+
+            object v = RuntimeImports.RhpNewArray(eeType._value, (int)totalLength);
+            Array ret = Unsafe.As<object, Array>(ref v);
+
+            ref int bounds = ref ret.GetRawMultiDimArrayBounds();
+            for (int i = 0; i < rank; i++)
+            {
+                Unsafe.Add(ref bounds, i) = pLengths[i];
+            }
+
+            return ret;
         }
 
         // Operador de indexación genérico

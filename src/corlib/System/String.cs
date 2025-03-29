@@ -1,8 +1,8 @@
-using Corlib.Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 // String.cs - Implementation by AvalonTM
 // Created: March 28, 2025
@@ -63,7 +63,7 @@ namespace System
         public String(char* ptr)
         {
             if (ptr == null)
-                ThrowHelpers.ThrowArgumentNullException("ptr");
+                ThrowHelpers.ThrowArgumentNullException("[Constructor String] char ptr");
 
             // Calculate length by finding null terminator
             int length = 0;
@@ -96,21 +96,50 @@ namespace System
         {
         }
 
+        public String(char[] value)
+        {
+            if (value == null)
+                ThrowHelpers.ThrowArgumentNullException("[Constructor String] char array");
+
+            // Obtener longitud del array
+            int length = value.Length;
+
+            // Establecer longitud en la instancia
+            this._length = length;
+
+            // Si length es 0, usar string vacío
+            if (length == 0)
+            {
+                this._firstChar = '\0';
+                return;
+            }
+
+            // Copiar caracteres del array a la instancia
+            fixed (char* dest = &this._firstChar)
+            {
+                for (int i = 0; i < length; i++)
+                {
+                    dest[i] = value[i];
+                }
+                dest[length] = '\0';
+            }
+        }
+
         // Constructor from char array with index and length
         public String(char[] buf, int index, int length)
         {
             // Validate arguments
             if (buf == null)
-                ThrowHelpers.ThrowArgumentNullException("buf");
+                ThrowHelpers.ThrowArgumentNullException("[Constructor String] buf");
 
             if (index < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] index");
 
             if (length < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] length");
 
             if (index + length > buf.Length)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] length");
 
             // Handle empty string case
             if (length == 0)
@@ -140,13 +169,13 @@ namespace System
         {
             // Validate arguments
             if (ptr == null)
-                ThrowHelpers.ThrowArgumentNullException("ptr");
+                ThrowHelpers.ThrowArgumentNullException("[Constructor String] char* null");
 
             if (index < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] index");
 
             if (length < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] length");
 
             // Handle empty string case
             if (length == 0)
@@ -263,13 +292,13 @@ namespace System
         {
             // Validar los argumentos
             if (ptr == null)
-                ThrowHelpers.ThrowArgumentNullException("ptr");
+                ThrowHelpers.ThrowArgumentNullException("[Constructor String] ptr");
 
             if (index < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] index");
 
             if (length < 0)
-                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+                ThrowHelpers.ThrowArgumentOutOfRangeException("[Constructor String] length: " + length.ToString());
 
             // Caso especial para cadenas vacías
             if (length == 0)
@@ -529,52 +558,222 @@ namespace System
         public static string Format(string format, params object[] args)
         {
             if (format == null)
-                ThrowHelpers.ThrowArgumentNullException("format");
+                return null;
 
-            // Si no hay argumentos, devolver el formato tal cual
             if (args == null || args.Length == 0)
                 return format;
 
-            lock (format)
+            // Estimar el tamaño máximo necesario
+            int maxLength = format.Length * 2; // Estimación conservadora
+            char[] result = new char[maxLength];
+            int resultIndex = 0;
+
+            for (int i = 0; i < format.Length; i++)
             {
-                string res = Empty;
-                for (int i = 0; i < format.Length; i++)
+                // Buscar el inicio de un marcador de formato
+                if (i + 1 < format.Length && format[i] == '{')
                 {
-                    string chr;
-                    if ((i + 2) < format.Length && format[i] == '{' && format[i + 2] == '}')
+                    // Comprobar si es un escape {{
+                    if (i + 1 < format.Length && format[i + 1] == '{')
                     {
-                        int argIndex = format[i + 1] - 0x30; // Convertir '0'-'9' a 0-9
+                        result[resultIndex++] = '{';
+                        i++; // Saltar el segundo {
+                        continue;
+                    }
 
-                        // Verificar que el índice sea válido
-                        if (argIndex >= 0 && argIndex < args.Length)
+                    // Buscar el cierre del marcador
+                    int indexStart = i + 1;
+                    int indexEnd = indexStart;
+
+                    while (indexEnd < format.Length && format[indexEnd] != '}')
+                    {
+                        indexEnd++;
+                    }
+
+                    // Si encontramos el cierre y hay espacio para al menos un dígito
+                    if (indexEnd < format.Length && indexEnd > indexStart)
+                    {
+                        bool isValidIndex = true;
+                        int argIndex = 0;
+
+                        // Parsear el índice
+                        for (int j = indexStart; j < indexEnd; j++)
                         {
-                            // Manejar argumento nulo con seguridad
+                            char digit = format[j];
+                            if (digit >= '0' && digit <= '9')
+                            {
+                                argIndex = argIndex * 10 + (digit - '0');
+                            }
+                            else
+                            {
+                                isValidIndex = false;
+                                break;
+                            }
+                        }
+
+                        // Si el índice es válido y está dentro del rango
+                        if (isValidIndex && argIndex >= 0 && argIndex < args.Length)
+                        {
                             object arg = args[argIndex];
-                            chr = arg != null ? arg.ToString() : "null";
+                            
+                            string argStr;
+
+                            // Manejar diferentes tipos de argumentos
+                            if (arg == null)
+                            {
+                                argStr = "";
+                            }
+                            else
+                            {
+                                // Manejar tipos específicos para asegurar representación correcta
+                                if (arg is int)
+                                {
+                                    // Manejar enteros explícitamente
+                                    int intValue = (int)arg;
+                                    argStr = IntToString(intValue);
+                                }
+                                else if (arg is bool)
+                                {
+                                    // Manejar booleanos explícitamente
+                                    bool boolValue = (bool)arg;
+                                    argStr = boolValue ? "True" : "False";
+                                }
+                                else if (arg is char)
+                                {
+                                    // Manejar caracteres explícitamente
+                                    char charValue = (char)arg;
+                                    // Crear un array con un solo carácter
+                                    char[] charArray = new char[1];
+                                    charArray[0] = charValue;
+                                    argStr = new string(charArray);
+                                }
+                                else if (arg is string)
+                                {
+                                    // Si ya es un string, usarlo directamente
+                                    argStr = (string)arg;
+                                }
+                                else
+                                {
+                                    // Para otros tipos, llamar a ToString()
+                                    argStr = arg.ToString();
+
+                                    // Si ToString devuelve null, usar una cadena vacía
+                                    if (argStr == null)
+                                    {
+                                        argStr = "";
+                                    }
+                                }
+                            }
+
+                            // Asegurarse de que hay suficiente espacio
+                            if (resultIndex + argStr.Length > result.Length)
+                            {
+                                // Ampliar el buffer
+                                int newSize = result.Length * 2;
+                                while (resultIndex + argStr.Length > newSize)
+                                {
+                                    newSize *= 2;
+                                }
+
+                                char[] newResult = new char[newSize];
+                                for (int k = 0; k < resultIndex; k++)
+                                {
+                                    newResult[k] = result[k];
+                                }
+                                result = newResult;
+                            }
+
+                            // Copiar el string del argumento
+                            for (int k = 0; k < argStr.Length; k++)
+                            {
+                                result[resultIndex++] = argStr[k];
+                            }
+
+                            // Avanzar después del marcador de cierre
+                            i = indexEnd;
+                            continue;
                         }
-                        else
-                        {
-                            // Mantener el marcador de posición si el índice está fuera de rango
-                            chr = $"{{{format[i + 1]}}}";
-                        }
-
-                        i += 2;
                     }
-                    else
-                    {
-                        chr = format[i].ToString();
-                    }
-
-                    // Concatenar con seguridad
-                    string str = res + chr;
-
-                    // No llamar a Dispose en cadenas
-                    res = str;
+                }
+                else if (i + 1 < format.Length && format[i] == '}' && format[i + 1] == '}')
+                {
+                    // Escape para }
+                    result[resultIndex++] = '}';
+                    i++; // Saltar el segundo }
+                    continue;
                 }
 
-                return res;
+                // Si llegamos aquí, es un carácter normal o un marcador inválido
+                // Asegurarse de que hay suficiente espacio
+                if (resultIndex >= result.Length)
+                {
+                    // Ampliar el buffer
+                    char[] newResult = new char[result.Length * 2];
+                    for (int k = 0; k < resultIndex; k++)
+                    {
+                        newResult[k] = result[k];
+                    }
+                    result = newResult;
+                }
+
+                result[resultIndex++] = format[i];
             }
+
+            // Crear el string final con el tamaño exacto
+            char[] finalResult = new char[resultIndex];
+            for (int i = 0; i < resultIndex; i++)
+            {
+                finalResult[i] = result[i];
+            }
+
+            return new string(finalResult);
         }
+
+        // Método auxiliar para convertir int a string manualmente
+        private static string IntToString(int value)
+        {
+            // Manejar el caso especial de 0
+            if (value == 0)
+                return "0";
+
+            // Manejar el caso especial de Int32.MinValue
+            if (value == int.MinValue)
+                return "-2147483648";
+
+            bool isNegative = value < 0;
+            if (isNegative)
+                value = -value;
+
+            // Determinar la longitud del resultado
+            int length = 0;
+            int temp = value;
+            while (temp > 0)
+            {
+                temp /= 10;
+                length++;
+            }
+
+            if (isNegative)
+                length++; // Para el signo -
+
+            // Crear el array de caracteres para el resultado
+            char[] chars = new char[length];
+
+            // Llenar el array desde el final
+            int index = length - 1;
+            while (value > 0)
+            {
+                chars[index--] = (char)('0' + (value % 10));
+                value /= 10;
+            }
+
+            // Añadir el signo negativo si es necesario
+            if (isNegative)
+                chars[0] = '-';
+
+            return new string(chars);
+        }
+
 
         public string Remove(int startIndex)
         {

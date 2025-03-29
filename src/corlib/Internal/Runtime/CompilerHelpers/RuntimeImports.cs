@@ -4,7 +4,7 @@ using Internal.Runtime.CompilerServices;
 using System;
 using System.Runtime;
 
-namespace Corlib.Internal.Runtime.CompilerHelpers
+namespace Internal.Runtime.CompilerHelpers
 {
     internal unsafe class RuntimeImports
     {
