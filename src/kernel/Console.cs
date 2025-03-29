@@ -1,206 +1,567 @@
+using Internal.Runtime.CompilerHelpers;
+using System;
+using System.Runtime.InteropServices;
+
 namespace Kernel
 {
     /// <summary>
-    /// A virtual terminal for the kernel to interact with the user through
+    /// Representa la consola estándar de entrada, salida y error.
     /// </summary>
-    unsafe public struct Console
+    public static unsafe class Console
     {
-        private int width;
-        private int height;
+        // Constantes para el buffer de video VGA
+        private const int VIDEO_MEMORY = 0xB8000;
+        private const int SCREEN_WIDTH = 80;
+        private const int SCREEN_HEIGHT = 25;
 
-        private FrameBuffer frameBuffer;
-
-        private int column;
-        private int row;
-
-        private Color foregroundColor;
-        private Color backgroundColor;
-
-        // Constructor predeterminado con valores por defecto
-        public Console(FrameBuffer frameBuffer)
-            : this(80, 25, Color.White, frameBuffer)
-        { }
-
-        public Console(int width, int height, FrameBuffer frameBuffer)
-            : this(width, height, Color.White, frameBuffer)
-        { }
-
-        public Console(int width, int height, Color foregroundColor, FrameBuffer frameBuffer)
+        // Estructura para un carácter en el buffer de texto VGA
+        private struct VGACharacter
         {
-            this.width = width;
-            this.height = height;
-            this.foregroundColor = foregroundColor;
-            this.backgroundColor = Color.Black; // Color de fondo predeterminado
-            this.frameBuffer = frameBuffer;
-            this.column = 0;
-            this.row = 0;
+            public byte Character;
+            public byte Attribute;
         }
 
-        // Método para cambiar el color de primer plano
-        public void SetForegroundColor(Color color)
-        {
-            this.foregroundColor = color;
-        }
+        // Referencia al buffer de video
+        private static VGACharacter* _buffer;
 
-        // Método para cambiar el color de fondo
-        public void SetBackgroundColor(Color color)
+        // Posición actual del cursor
+        private static int _cursorX;
+        private static int _cursorY;
+
+        // Colores actuales
+        private static ConsoleColor _foregroundColor;
+        private static ConsoleColor _backgroundColor;
+
+        // Flag para indicar si la consola está inicializada
+        private static bool _initialized;
+
+        /// <summary>
+        /// Inicializa la consola.
+        /// </summary>
+        static Console()
         {
-            this.backgroundColor = color;
+            Initialize();
         }
 
         /// <summary>
-        /// Clear the screen
+        /// Inicializa el buffer de video y los colores predeterminados.
         /// </summary>
-        public void Clear()
+        private static void Initialize()
         {
-            // Resetear posición del cursor
-            column = 0;
-            row = 0;
+            if (_initialized)
+                return;
 
-            // Limpiar pantalla con espacios
-            for (int i = 0; i < width * height; i++)
+            // Inicializar buffer de video
+            _buffer = (VGACharacter*)VIDEO_MEMORY;
+
+            // Inicializar colores predeterminados
+            _foregroundColor = ConsoleColor.White;
+            _backgroundColor = ConsoleColor.Black;
+
+            // Inicializar cursor
+            _cursorX = 0;
+            _cursorY = 0;
+
+            // Marcar como inicializado
+            _initialized = true;
+
+            // Limpiar la pantalla al iniciar
+            Clear();
+        }
+
+        /// <summary>
+        /// Limpia la pantalla y restablece el cursor a la posición (0, 0).
+        /// </summary>
+        public static void Clear()
+        {
+            if (!_initialized)
+                Initialize();
+
+            VGACharacter empty;
+            empty.Character = (byte)' ';
+            empty.Attribute = (byte)(((byte)_backgroundColor << 4) | ((byte)_foregroundColor & 0x0F));
+
+            for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++)
             {
-                Print(' ');
+                _buffer[i] = empty;
             }
 
-            // Resetear posición del cursor
-            column = 0;
-            row = 0;
+            _cursorX = 0;
+            _cursorY = 0;
+            UpdateCursor();
         }
 
-
-        public void PrintLine(string str)
+        /// <summary>
+        /// Establece la posición del cursor.
+        /// </summary>
+        /// <param name="left">Posición horizontal del cursor.</param>
+        /// <param name="top">Posición vertical del cursor.</param>
+        public static void SetCursorPosition(int left, int top)
         {
-            Print(str);
-            Print('\n');
+            if (!_initialized)
+                Initialize();
+
+            _cursorX = Math.Clamp(left, 0, SCREEN_WIDTH - 1);
+            _cursorY = Math.Clamp(top, 0, SCREEN_HEIGHT - 1);
+            UpdateCursor();
         }
 
-        public void Print(string str)
+        /// <summary>
+        /// Obtiene o establece la posición horizontal del cursor.
+        /// </summary>
+        public static int CursorLeft
         {
-            // Imprimir carácter por carácter
-            for (int i = 0; i < str.Length; i++)
+            get
             {
-                Print(str[i]);
+                if (!_initialized)
+                    Initialize();
+                return _cursorX;
+            }
+            set
+            {
+                SetCursorPosition(value, _cursorY);
             }
         }
 
         /// <summary>
-        /// Print a character to the current cursor position
+        /// Obtiene o establece la posición vertical del cursor.
         /// </summary>
-        void Print(char c)
+        public static int CursorTop
         {
-            // Desplazar si el cursor ha llegado al final de la pantalla
-            if (row >= height)
+            get
             {
-                // Desplazar contenido hacia arriba
-                frameBuffer.Copy(width * 2, 0, (height - 1) * width * 2);
+                if (!_initialized)
+                    Initialize();
+                return _cursorY;
+            }
+            set
+            {
+                SetCursorPosition(_cursorX, value);
+            }
+        }
 
-                row = height - 1;
-                column = 0;
+        /// <summary>
+        /// Obtiene o establece el color de primer plano utilizado por la consola.
+        /// </summary>
+        public static ConsoleColor ForegroundColor
+        {
+            get
+            {
+                if (!_initialized)
+                    Initialize();
+                return _foregroundColor;
+            }
+            set
+            {
+                if (!_initialized)
+                    Initialize();
+                _foregroundColor = value;
+            }
+        }
 
-                // Limpiar la última línea
-                for (int i = 0; i < width; i++)
-                {
-                    WriteVGATextCharacter(' ');
-                    column++;
-                }
+        /// <summary>
+        /// Obtiene o establece el color de fondo utilizado por la consola.
+        /// </summary>
+        public static ConsoleColor BackgroundColor
+        {
+            get
+            {
+                if (!_initialized)
+                    Initialize();
+                return _backgroundColor;
+            }
+            set
+            {
+                if (!_initialized)
+                    Initialize();
+                _backgroundColor = value;
+            }
+        }
 
-                // Volver al inicio de la última línea
-                column = 0;
+        /// <summary>
+        /// Escribe un carácter individual a la consola.
+        /// </summary>
+        /// <param name="c">Carácter a escribir.</param>
+        public static void Write(char c)
+        {
+            if (!_initialized)
+                Initialize();
+
+            // Manejar caracteres especiales
+            switch (c)
+            {
+                case '\n': // Nueva línea
+                    _cursorX = 0;
+                    _cursorY++;
+                    break;
+
+                case '\r': // Retorno de carro
+                    _cursorX = 0;
+                    break;
+
+                case '\t': // Tabulador
+                    const int TAB_SIZE = 4;
+                    _cursorX = (_cursorX + TAB_SIZE) & ~(TAB_SIZE - 1);
+                    break;
+
+                case '\b': // Retroceso
+                    if (_cursorX > 0)
+                    {
+                        _cursorX--;
+                    }
+                    else if (_cursorY > 0)
+                    {
+                        _cursorY--;
+                        _cursorX = SCREEN_WIDTH - 1;
+                    }
+
+                    // Borrar el carácter en la posición actual
+                    int index = _cursorY * SCREEN_WIDTH + _cursorX;
+                    _buffer[index].Character = (byte)' ';
+                    break;
+
+                default: // Carácter normal
+                    // Calcular índice en el buffer
+                    int idx = _cursorY * SCREEN_WIDTH + _cursorX;
+
+                    // Escribir carácter y atributo
+                    _buffer[idx].Character = (byte)c;
+                    _buffer[idx].Attribute = (byte)(((byte)_backgroundColor << 4) | ((byte)_foregroundColor & 0x0F));
+
+                    // Avanzar cursor
+                    _cursorX++;
+                    break;
             }
 
-            // Manejo de salto de línea
-            if (c == '\n')
+            // Manejar desbordamiento horizontal
+            if (_cursorX >= SCREEN_WIDTH)
             {
-                column = 0;
-                row++;
+                _cursorX = 0;
+                _cursorY++;
+            }
+
+            // Manejar desbordamiento vertical (scrolling)
+            if (_cursorY >= SCREEN_HEIGHT)
+            {
+                ScrollUp();
+                _cursorY = SCREEN_HEIGHT - 1;
+            }
+
+            // Actualizar posición física del cursor
+            UpdateCursor();
+        }
+
+        /// <summary>
+        /// Escribe una cadena a la consola.
+        /// </summary>
+        /// <param name="s">Cadena a escribir.</param>
+        public static void Write(string s)
+        {
+            if (s == null)
+                return;
+
+            if (!_initialized)
+                Initialize();
+
+            for (int i = 0; i < s.Length; i++)
+            {
+                Write(s[i]);
+            }
+        }
+
+        /// <summary>
+        /// Escribe una línea a la consola.
+        /// </summary>
+        /// <param name="s">Cadena a escribir.</param>
+        public static void WriteLine(string s)
+        {
+            Write(s);
+            Write('\n');
+        }
+
+        /// <summary>
+        /// Escribe una nueva línea a la consola.
+        /// </summary>
+        public static void WriteLine()
+        {
+            Write('\n');
+        }
+
+        /// <summary>
+        /// Escribe la representación en cadena de un objeto a la consola.
+        /// </summary>
+        /// <param name="value">Objeto a escribir.</param>
+        public static void Write(object value)
+        {
+            if (value == null)
+            {
+                Write("null");
                 return;
             }
 
-            WriteVGATextCharacter(c);
+            Write(value.ToString());
+        }
 
-            // Mover cursor
-            column++;
+        /// <summary>
+        /// Escribe la representación en cadena de un objeto seguido de una nueva línea.
+        /// </summary>
+        /// <param name="value">Objeto a escribir.</param>
+        public static void WriteLine(object value)
+        {
+            Write(value);
+            WriteLine();
+        }
 
-            // Saltar a nueva línea si se alcanza el final
-            if (column >= width)
+        /// <summary>
+        /// Escribe una cadena con formato a la consola.
+        /// </summary>
+        /// <param name="format">Cadena de formato.</param>
+        /// <param name="args">Argumentos para formatear.</param>
+        public static void Write(string format, params object[] args)
+        {
+            if (format == null)
+                ThrowHelpers.ArgumentNullException("format");
+
+            if (args == null || args.Length == 0)
             {
-                column = 0;
-                row++;
+                Write(format);
+                return;
+            }
+
+            Write(String.Format(format, args));
+        }
+
+        /// <summary>
+        /// Escribe una cadena con formato seguida de una nueva línea a la consola.
+        /// </summary>
+        /// <param name="format">Cadena de formato.</param>
+        /// <param name="args">Argumentos para formatear.</param>
+        public static void WriteLine(string format, params object[] args)
+        {
+            Write(format, args);
+            WriteLine();
+        }
+
+        /// <summary>
+        /// Actualiza la posición del cursor de hardware.
+        /// </summary>
+        private static void UpdateCursor()
+        {
+            // Calcular posición lineal
+            ushort position = (ushort)(_cursorY * SCREEN_WIDTH + _cursorX);
+
+            // Actualizar cursor de hardware a través de los puertos VGA
+            // Puerto 0x3D4 = registro de selección
+            // Puerto 0x3D5 = registro de datos
+            OutByte(0x3D4, 0x0F);
+            OutByte(0x3D5, (byte)(position & 0xFF));
+            OutByte(0x3D4, 0x0E);
+            OutByte(0x3D5, (byte)((position >> 8) & 0xFF));
+        }
+
+        /// <summary>
+        /// Envía un byte a un puerto de salida.
+        /// </summary>
+        /// <param name="port">Puerto de destino.</param>
+        /// <param name="value">Valor a enviar.</param>
+        [DllImport("*", EntryPoint = "_OutByte")]
+        private static extern void OutByte(ushort port, byte value);
+
+        /// <summary>
+        /// Desplaza el contenido de la pantalla hacia arriba una línea.
+        /// </summary>
+        private static void ScrollUp()
+        {
+            // Mover todas las líneas una posición hacia arriba
+            for (int y = 0; y < SCREEN_HEIGHT - 1; y++)
+            {
+                for (int x = 0; x < SCREEN_WIDTH; x++)
+                {
+                    int currentIdx = y * SCREEN_WIDTH + x;
+                    int nextIdx = (y + 1) * SCREEN_WIDTH + x;
+                    _buffer[currentIdx] = _buffer[nextIdx];
+                }
+            }
+
+            // Limpiar la última línea
+            int lastLineOffset = (SCREEN_HEIGHT - 1) * SCREEN_WIDTH;
+            for (int x = 0; x < SCREEN_WIDTH; x++)
+            {
+                _buffer[lastLineOffset + x].Character = (byte)' ';
+                _buffer[lastLineOffset + x].Attribute = (byte)(((byte)_backgroundColor << 4) | ((byte)_foregroundColor & 0x0F));
             }
         }
 
         /// <summary>
-        /// Escribir un carácter directamente en memoria de video
+        /// Escribe múltiples caracteres a la consola.
         /// </summary>
-        private void WriteVGATextCharacter(char c)
+        /// <param name="buffer">Array de caracteres a escribir.</param>
+        /// <param name="index">Índice del primer carácter a escribir.</param>
+        /// <param name="count">Número de caracteres a escribir.</param>
+        public static void Write(char[] buffer, int index, int count)
         {
-            // Calcular posición en memoria de video
-            int position = (row * width + column) * 2;
+            if (buffer == null)
+                ThrowHelpers.ArgumentNullException("buffer");
 
-            // Convertir correctamente el carácter a un byte para VGA text mode
-            byte charByte;
+            if (index < 0)
+                ThrowHelpers.ArgumentOutOfRangeException("index");
 
-            // Expandir la lógica de conversión de caracteres
-            switch (c)
+            if (count < 0)
+                ThrowHelpers.ArgumentOutOfRangeException("count");
+
+            if (index + count > buffer.Length)
+                ThrowHelpers.ArgumentException("index + count exceeds buffer length");
+
+            for (int i = 0; i < count; i++)
             {
-                // Manejar caracteres de control
-                case '\t':   // Tabulación
-                    charByte = (byte)' ';
-                    break;
-                case '\r':   // Retorno de carro
-                    column = 0;
-                    return;
-                case '\0':   // Carácter nulo
-                    return;
+                Write(buffer[index + i]);
+            }
+        }
 
-                // Caracteres ASCII estándar (0-127)
-                case char ch when ch <= 127:
-                    charByte = (byte)ch;
-                    break;
+        /// <summary>
+        /// Lee una línea de caracteres desde la entrada estándar.
+        /// </summary>
+        /// <returns>La línea de caracteres leída.</returns>
+        public static string ReadLine()
+        {
+            if (!_initialized)
+                Initialize();
 
-                // Caracteres ASCII extendidos (128-255)
-                case char ch when ch >= 128 && ch <= 255:
-                    charByte = (byte)ch;
-                    break;
+            // Buffer temporal para almacenar caracteres
+            char[] buffer = new char[256];
+            int index = 0;
 
-                // Caracteres Unicode fuera del rango de VGA text mode
-                default:
-                    // Mapeo de algunos caracteres Unicode comunes
-                    switch (c)
+            while (true)
+            {
+                // Lee un carácter de teclado (simplificado, en un sistema real usaríamos interrupciones)
+                char c = ReadChar();
+
+                // Si es Enter, terminamos
+                if (c == '\r' || c == '\n')
+                {
+                    WriteLine();
+                    break;
+                }
+                // Si es retroceso, borramos el último carácter
+                else if (c == '\b')
+                {
+                    if (index > 0)
                     {
-                        case 'á': charByte = (byte)'a'; break;
-                        case 'é': charByte = (byte)'e'; break;
-                        case 'í': charByte = (byte)'i'; break;
-                        case 'ó': charByte = (byte)'o'; break;
-                        case 'ú': charByte = (byte)'u'; break;
-                        case 'ñ': charByte = (byte)'n'; break;
-                        case 'Á': charByte = (byte)'A'; break;
-                        case 'É': charByte = (byte)'E'; break;
-                        case 'Í': charByte = (byte)'I'; break;
-                        case 'Ó': charByte = (byte)'O'; break;
-                        case 'Ú': charByte = (byte)'U'; break;
-                        case 'Ñ': charByte = (byte)'N'; break;
-
-                        // Caracteres Unicode no representables
-                        default:
-                            charByte = (byte)'?';
-                            break;
+                        index--;
+                        Write('\b');
+                        Write(' ');
+                        Write('\b');
                     }
-                    break;
+                }
+                // Ignorar caracteres que no se pueden imprimir
+                else if (c >= 32 && c < 127)
+                {
+                    // Si hay espacio en el buffer, añadimos el carácter
+                    if (index < buffer.Length - 1)
+                    {
+                        buffer[index++] = c;
+                        Write(c);
+                    }
+                }
             }
 
-            // Escribir carácter
-            frameBuffer.Write(position, charByte);
-
-            // Calcular atributo de color (primer plano y fondo)
-            byte colorAttribute = (byte)(
-                ((byte)backgroundColor << 4) |
-                ((byte)foregroundColor & 0x0F)
-            );
-
-            // Escribir atributo de color
-            frameBuffer.Write(position + 1, colorAttribute);
+            // Crear string a partir de los caracteres acumulados
+            return new string(buffer, 0, index);
         }
+
+        /// <summary>
+        /// Lee un carácter de teclado.
+        /// Nota: Esta es una implementación de ejemplo; en un sistema real usaríamos
+        /// interrupciones de teclado u otras técnicas para obtener entrada.
+        /// </summary>
+        /// <returns>Carácter leído.</returns>
+        private static char ReadChar()
+        {
+            // En un sistema real, esta función llamaría a una rutina de 
+            // la BIOS o al controlador de teclado para obtener entrada.
+            // Para este ejemplo, simplemente retornamos un valor por defecto.
+
+            // Este es un placeholder. En un kernel real, este código sería reemplazado
+            // con la implementación específica para tu arquitectura de entrada.
+
+            // Por ahora, este método espera indefinidamente un carácter (simulado)
+            bool keyAvailable = false;
+            char result = '\0';
+
+            while (!keyAvailable)
+            {
+                // Llamada a la BIOS Int 16h, AH=01h (verificar si hay tecla disponible)
+                keyAvailable = CheckKeyAvailable();
+
+                if (keyAvailable)
+                {
+                    // Llamada a la BIOS Int 16h, AH=00h (leer tecla)
+                    result = ReadKeyFromBIOS();
+                }
+
+                // Pequeño retraso para no saturar la CPU mientras espera entrada
+                // En un sistema real, usaríamos mecanismos de espera más eficientes
+                for (int i = 0; i < 1000; i++) { }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Verifica si hay una tecla disponible en el buffer del teclado.
+        /// </summary>
+        /// <returns>true si hay una tecla disponible.</returns>
+        [DllImport("*", EntryPoint = "_CheckKeyAvailable")]
+        private static extern bool CheckKeyAvailable();
+
+        /// <summary>
+        /// Lee una tecla del buffer del teclado.
+        /// </summary>
+        /// <returns>El carácter leído.</returns>
+        [DllImport("*", EntryPoint = "_ReadKeyFromBIOS")]
+        private static extern char ReadKeyFromBIOS();
+
+        /// <summary>
+        /// Obtiene el ancho de la pantalla de la consola.
+        /// </summary>
+        public static int WindowWidth => SCREEN_WIDTH;
+
+        /// <summary>
+        /// Obtiene la altura de la pantalla de la consola.
+        /// </summary>
+        public static int WindowHeight => SCREEN_HEIGHT;
+
+        /// <summary>
+        /// Método auxiliar para limitar un valor dentro de un rango.
+        /// </summary>
+        private static int Clamp(int value, int min, int max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+        }
+    }
+
+    /// <summary>
+    /// Enumeración de colores soportados por la consola.
+    /// </summary>
+    public enum ConsoleColor
+    {
+        Black = 0,
+        Blue = 1,
+        Green = 2,
+        Cyan = 3,
+        Red = 4,
+        Magenta = 5,
+        Brown = 6,
+        LightGray = 7,
+        DarkGray = 8,
+        LightBlue = 9,
+        LightGreen = 10,
+        LightCyan = 11,
+        LightRed = 12,
+        LightMagenta = 13,
+        Yellow = 14,
+        White = 15
     }
 }

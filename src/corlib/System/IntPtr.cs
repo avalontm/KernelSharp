@@ -60,6 +60,18 @@ namespace System
             return !(a._value == b._value);
         }
 
+        public static IntPtr Add(IntPtr ptr, int offset)
+        {
+            // Convierte el offset de índice a bytes según el tipo de dato
+            return new IntPtr((byte*)ptr._value + offset);
+        }
+
+        public static IntPtr Add(IntPtr ptr, int offset, int elementSize)
+        {
+            // Convierte el offset de índice a bytes según el tamaño del elemento
+            return new IntPtr((byte*)ptr._value + (offset * elementSize));
+        }
+
         public override string ToString()
         {
             return ((UIntPtr)this).ToString();

@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Runtime;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Internal.Runtime.CompilerHelpers

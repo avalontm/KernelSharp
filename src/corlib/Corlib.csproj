@@ -4,22 +4,29 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    
-    <!-- Propiedades para emular el comportamiento del comando csc -->
-    <NoStdLib>true</NoStdLib>
-    <NoConfig>true</NoConfig>
-    <RuntimeMetadataVersion>v4.0.30319</RuntimeMetadataVersion>
-    <LangVersion>latest</LangVersion>
-    <DebugType>embedded</DebugType>
-    
-    <!-- Evitar generación de atributos que no necesitas -->
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-    
-    <!-- Asegurar que el ejecutable final se llame kernel.ilexe -->
+	  
+	  <!-- Configuración de metadatos -->
+	  <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+	  <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+	  
+	  <!-- Configuraciones importantes para un proyecto de OS -->
+	  <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+	  <DisableStandardFrameworkResolution>true</DisableStandardFrameworkResolution>
+	  <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+	  <NoStdLib>true</NoStdLib>
+
+	  <!-- Para asegurar que se generen los metadatos correctamente -->
+	  <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+	  <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+	  <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+	  <!-- Configuración de optimización -->
+	  <Optimize>true</Optimize>
+	  <DebugType>embedded</DebugType>
+	  
+    <!-- Asegurar que el ejecutable final se llame Corlib.ildll -->
 	<AssemblyName>Corlib</AssemblyName>
   </PropertyGroup>
-
 
 	<!-- Remover todas las referencias estándar que el SDK de .NET añade -->
 	<Target Name="CustomizeReferences" BeforeTargets="BeforeCompile" AfterTargets="FindReferenceAssembliesForReferences">

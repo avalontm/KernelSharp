@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Kernel
+namespace Kernel.Boot
 {
     /// <summary>
     /// Multiboot header structure and VBE/VESA information for x86 boot process

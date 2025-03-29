@@ -80,6 +80,51 @@ namespace System
         {
             return new T[0];
         }
+
+
+        public int Sum()
+        {
+            int sum = 0;
+
+            // Verificamos si hay elementos para sumar
+            if (_numComponents <= 0)
+                return 0;
+
+            // Recorremos todos los elementos y los sumamos
+            for (int i = 0; i < _numComponents; i++)
+            {
+                object value = GetValue(i);
+
+                // Intentamos convertir el valor a int para sumarlo
+                if (value is int intValue)
+                {
+                    sum += intValue;
+                }
+                else if (value is byte byteValue)
+                {
+                    sum += byteValue;
+                }
+                else if (value is short shortValue)
+                {
+                    sum += shortValue;
+                }
+                else if (value is long longValue)
+                {
+                    sum += (int)longValue; // Conversión con posible pérdida para valores grandes
+                }
+                else if (value is float floatValue)
+                {
+                    sum += (int)floatValue; // Conversión con posible pérdida de precisión
+                }
+                else if (value is double doubleValue)
+                {
+                    sum += (int)doubleValue; // Conversión con posible pérdida de precisión
+                }
+                // Si no es un tipo numérico, no contribuye a la suma
+            }
+
+            return sum;
+        }
     }
 
     // Implementación específica para arrays unidimensionales de tipo T

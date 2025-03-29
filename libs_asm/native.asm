@@ -1,23 +1,9 @@
 ; CPU operations for x86 (32-bit)
 section .text
-global _CPU_WriteCR3
-global _CPU_ReadCR3
 global _Stosb
 global _Movsb
 global _Memcpy
 global _Memset
-global _Invlpg
-
-; void CPU_WriteCR3(unsigned long value)
-_CPU_WriteCR3:
-    mov eax, [esp+4]  ; Primer argumento en la pila
-    mov cr3, eax
-    ret
-
-; unsigned long CPU_ReadCR3()
-_CPU_ReadCR3:
-    mov eax, cr3      ; Valor de retorno en eax
-    ret
 
 ; void _Stosb(void* p, byte value, unsigned int count)
 _Stosb:
@@ -67,12 +53,6 @@ _Movsb:
     inc esi           ; Incrementar ESI (avanzar en la memoria de origen)
     inc edi           ; Incrementar EDI (avanzar en la memoria de destino)
 
-    ret
-
-; void _Invlpg(void* address)
-_Invlpg:
-    mov eax, [esp+4]   ; Cargar la dirección a invalidar
-    invlpg [eax]       ; Invalidar la entrada de página para la dirección
     ret
 
 ; void* _memcpy(void* dest, const void* src, size_t count)

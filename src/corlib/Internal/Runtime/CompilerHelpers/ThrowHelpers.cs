@@ -242,5 +242,9 @@ namespace Internal.Runtime.CompilerHelpers
         {
             Panic("ArgumentException: " + message);
         }
+
+        internal static void NotImplementedException()
+        {
+        }
     }
 }

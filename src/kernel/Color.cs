@@ -1,4 +1,4 @@
-namespace Kernel
+﻿namespace Kernel
 {
     /// <summary>
     /// Allowable terminal colors
