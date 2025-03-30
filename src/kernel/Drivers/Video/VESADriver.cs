@@ -169,74 +169,64 @@ namespace Kernel.Drivers.Video
             // Inicializar memoria para VBEInfo
             IntPtr vbeInfoPtr = MarshalHelper.AllocateTemporaryMemory(sizeof(VBEInfo));
 
-            try
+
+            // Obtener información VBE
+            if (!GetVBEInfo((VBEInfo*)vbeInfoPtr))
             {
-                // Obtener información VBE
-                if (!GetVBEInfo((VBEInfo*)vbeInfoPtr))
-                {
-                    Console.WriteLine("Error: No se pudo obtener información VESA/VBE");
-                    return;
-                }
-
-                // Copiar la información VBE
-                _vbeInfo = *(VBEInfo*)vbeInfoPtr;
-
-                // Buscar el mejor modo disponible
-                ushort bestMode = FindBestMode(width, height, bpp);
-                if (bestMode == 0xFFFF)
-                {
-                    Console.WriteLine("Error: No se encontró un modo VESA compatible");
-                    return;
-                }
-
-                // Inicializar memoria para ModeInfo
-                IntPtr modeInfoPtr = MarshalHelper.AllocateTemporaryMemory(sizeof(VBEModeInfo));
-
-                try
-                {
-                    // Obtener información del modo
-                    if (!GetModeInfo(bestMode, (VBEModeInfo*)modeInfoPtr))
-                    {
-                        Console.WriteLine("Error: No se pudo obtener información del modo VESA");
-                        return;
-                    }
-
-                    // Copiar la información del modo
-                    _modeInfo = *(VBEModeInfo*)modeInfoPtr;
-
-                    // Establecer el modo
-                    if (!SetVBEMode(bestMode))
-                    {
-                        Console.WriteLine("Error: No se pudo establecer el modo VESA");
-                        return;
-                    }
-
-                    // Mapear el framebuffer
-                    _frameBuffer = (byte*)_modeInfo.PhysBasePtr;
-
-                    // Verificar que se haya establecido correctamente
-                    if (_frameBuffer == null || _modeInfo.PhysBasePtr == 0)
-                    {
-                        Console.WriteLine("Error: No se pudo mapear el framebuffer VESA");
-                        return;
-                    }
-
-                    _initialized = true;
-
-                    // Limpiar la pantalla
-                    Clear(0);
-
-                    Console.WriteLine($"Modo VESA establecido: {Width}x{Height}x{BitsPerPixel}");
-                }
-                finally
-                {
-                    MarshalHelper.FreeTemporaryMemory(modeInfoPtr);
-                }
+                Console.WriteLine("Error: No se pudo obtener información VESA/VBE");
+                return;
             }
-            finally
+
+            // Copiar la información VBE
+            _vbeInfo = *(VBEInfo*)vbeInfoPtr;
+
+            // Buscar el mejor modo disponible
+            ushort bestMode = FindBestMode(width, height, bpp);
+            if (bestMode == 0xFFFF)
             {
-                MarshalHelper.FreeTemporaryMemory(vbeInfoPtr);
+                Console.WriteLine("Error: No se encontró un modo VESA compatible");
+                return;
             }
+
+            // Inicializar memoria para ModeInfo
+            IntPtr modeInfoPtr = MarshalHelper.AllocateTemporaryMemory(sizeof(VBEModeInfo));
+
+
+            // Obtener información del modo
+            if (!GetModeInfo(bestMode, (VBEModeInfo*)modeInfoPtr))
+            {
+                Console.WriteLine("Error: No se pudo obtener información del modo VESA");
+                return;
+            }
+
+            // Copiar la información del modo
+            _modeInfo = *(VBEModeInfo*)modeInfoPtr;
+
+            // Establecer el modo
+            if (!SetVBEMode(bestMode))
+            {
+                Console.WriteLine("Error: No se pudo establecer el modo VESA");
+                return;
+            }
+
+            // Mapear el framebuffer
+            _frameBuffer = (byte*)_modeInfo.PhysBasePtr;
+
+            // Verificar que se haya establecido correctamente
+            if (_frameBuffer == null || _modeInfo.PhysBasePtr == 0)
+            {
+                Console.WriteLine("Error: No se pudo mapear el framebuffer VESA");
+                return;
+            }
+
+            _initialized = true;
+
+            // Limpiar la pantalla
+            Clear(0);
+
+            Console.WriteLine($"Modo VESA establecido: {Width}x{Height}x{BitsPerPixel}");
+
+            MarshalHelper.FreeTemporaryMemory(modeInfoPtr);
         }
 
         /// <summary>
@@ -284,28 +274,23 @@ namespace Kernel.Drivers.Video
         /// <returns>true si se obtuvo la información correctamente</returns>
         private bool GetModeInfo(ushort mode, VBEModeInfo* info)
         {
-            try
-            {
-                // Llamar a la interrupción BIOS
-                RegistersX86 regs = new RegistersX86();
-                regs.AX = 0x4F01;      // Función 01h: Obtener información de modo
-                regs.CX = mode;        // Modo a consultar
-                regs.ES = (ushort)((uint)info >> 4);
-                regs.DI = (ushort)((uint)info & 0xF);
 
-                // Ejecutar interrupción 0x10
-                BIOS.Int10h(ref regs);
+            // Llamar a la interrupción BIOS
+            RegistersX86 regs = new RegistersX86();
+            regs.AX = 0x4F01;      // Función 01h: Obtener información de modo
+            regs.CX = mode;        // Modo a consultar
+            regs.ES = (ushort)((uint)info >> 4);
+            regs.DI = (ushort)((uint)info & 0xF);
 
-                // Verificar resultado
-                if ((regs.AX & 0xFF) != 0x4F || ((regs.AX >> 8) & 0xFF) != 0)
-                    return false;
+            // Ejecutar interrupción 0x10
+            BIOS.Int10h(ref regs);
 
-                return true;
-            }
-            catch
-            {
+            // Verificar resultado
+            if ((regs.AX & 0xFF) != 0x4F || ((regs.AX >> 8) & 0xFF) != 0)
                 return false;
-            }
+
+            return true;
+
         }
 
         /// <summary>
@@ -315,29 +300,22 @@ namespace Kernel.Drivers.Video
         /// <returns>true si se estableció el modo correctamente</returns>
         private bool SetVBEMode(ushort mode)
         {
-            try
-            {
-                // Solicitar modo con framebuffer lineal
-                mode |= VBE_USE_LINEAR_FRAMEBUFFER;
+            // Solicitar modo con framebuffer lineal
+            mode |= VBE_USE_LINEAR_FRAMEBUFFER;
 
-                // Llamar a la interrupción BIOS
-                RegistersX86 regs = new RegistersX86();
-                regs.AX = 0x4F02;      // Función 02h: Establecer modo
-                regs.BX = mode;        // Modo a establecer con framebuffer lineal
+            // Llamar a la interrupción BIOS
+            RegistersX86 regs = new RegistersX86();
+            regs.AX = 0x4F02;      // Función 02h: Establecer modo
+            regs.BX = mode;        // Modo a establecer con framebuffer lineal
 
-                // Ejecutar interrupción 0x10
-                BIOS.Int10h(ref regs);
+            // Ejecutar interrupción 0x10
+            BIOS.Int10h(ref regs);
 
-                // Verificar resultado
-                if ((regs.AX & 0xFF) != 0x4F || ((regs.AX >> 8) & 0xFF) != 0)
-                    return false;
-
-                return true;
-            }
-            catch
-            {
+            // Verificar resultado
+            if ((regs.AX & 0xFF) != 0x4F || ((regs.AX >> 8) & 0xFF) != 0)
                 return false;
-            }
+
+            return true;
         }
 
         /// <summary>
@@ -352,99 +330,88 @@ namespace Kernel.Drivers.Video
             ushort bestMode = 0xFFFF;
             int bestScore = -1;
 
-            try
-            {
-                IntPtr modeInfoPtr = MarshalHelper.AllocateTemporaryMemory(sizeof(VBEModeInfo));
+            IntPtr modeInfoPtr = MarshalHelper.AllocateTemporaryMemory(sizeof(VBEModeInfo));
 
-                try
-                {
-                    // Obtener el puntero a la lista de modos
-                    ushort* modes = (ushort*)ConvertSegmentedToLinear(_vbeInfo.VideoModePtr);
 
-                    // Si no podemos acceder a la lista de modos, fallamos
-                    if (modes == null)
-                        return 0xFFFF;
+            // Obtener el puntero a la lista de modos
+            ushort* modes = (ushort*)ConvertSegmentedToLinear(_vbeInfo.VideoModePtr);
 
-                    // Recorrer la lista de modos (termina con 0xFFFF)
-                    for (int i = 0; modes[i] != 0xFFFF; i++)
-                    {
-                        ushort currentMode = modes[i];
-
-                        // Obtener información del modo
-                        if (!GetModeInfo(currentMode, (VBEModeInfo*)modeInfoPtr))
-                            continue;
-
-                        VBEModeInfo modeInfo = *(VBEModeInfo*)modeInfoPtr;
-
-                        // Verificar si el modo es compatible: debe ser gráfico y tener framebuffer lineal
-                        if ((modeInfo.ModeAttributes & (VBE_MODE_ATTR_GRAPHICS | VBE_MODE_ATTR_LINEAR)) !=
-                            (VBE_MODE_ATTR_GRAPHICS | VBE_MODE_ATTR_LINEAR))
-                            continue;
-
-                        // El modo debe ser de color directo para 16bpp, 24bpp o 32bpp
-                        if (modeInfo.BitsPerPixel >= 16 && modeInfo.MemoryModel != VBE_MEMORYMODEL_DIRECT_COLOR)
-                            continue;
-
-                        // El framebuffer debe ser accesible
-                        if (modeInfo.PhysBasePtr == 0)
-                            continue;
-
-                        // Calcular la puntuación del modo según la cercanía a las dimensiones deseadas
-                        int score = 0;
-
-                        // Coincidencia exacta de dimensiones
-                        if (modeInfo.XResolution == width && modeInfo.YResolution == height)
-                            score += 1000;
-                        else
-                        {
-                            // Penalizar por diferencia de dimensiones
-                            score -= Math.Abs(modeInfo.XResolution - width) / 10;
-                            score -= Math.Abs(modeInfo.YResolution - height) / 10;
-
-                            // Preferir resoluciones más grandes que las solicitadas
-                            if (modeInfo.XResolution >= width && modeInfo.YResolution >= height)
-                                score += 500;
-                        }
-
-                        // Coincidencia exacta de BPP
-                        if (modeInfo.BitsPerPixel == bpp)
-                            score += 500;
-                        else
-                        {
-                            // Penalizar por diferencia de BPP
-                            score -= Math.Abs(modeInfo.BitsPerPixel - bpp) * 10;
-                        }
-
-                        // Preferir 32bpp para mayor calidad de color
-                        if (modeInfo.BitsPerPixel == 32)
-                            score += 100;
-                        else if (modeInfo.BitsPerPixel == 24)
-                            score += 50;
-                        else if (modeInfo.BitsPerPixel == 16)
-                            score += 25;
-
-                        // Actualizar el mejor modo si encontramos uno con mayor puntuación
-                        if (score > bestScore)
-                        {
-                            bestScore = score;
-                            bestMode = currentMode;
-
-                            // Si es una coincidencia exacta, terminamos la búsqueda
-                            if (modeInfo.XResolution == width && modeInfo.YResolution == height &&
-                                modeInfo.BitsPerPixel == bpp)
-                                break;
-                        }
-                    }
-                }
-                finally
-                {
-                    MarshalHelper.FreeTemporaryMemory(modeInfoPtr);
-                }
-            }
-            catch
-            {
+            // Si no podemos acceder a la lista de modos, fallamos
+            if (modes == null)
                 return 0xFFFF;
+
+            // Recorrer la lista de modos (termina con 0xFFFF)
+            for (int i = 0; modes[i] != 0xFFFF; i++)
+            {
+                ushort currentMode = modes[i];
+
+                // Obtener información del modo
+                if (!GetModeInfo(currentMode, (VBEModeInfo*)modeInfoPtr))
+                    continue;
+
+                VBEModeInfo modeInfo = *(VBEModeInfo*)modeInfoPtr;
+
+                // Verificar si el modo es compatible: debe ser gráfico y tener framebuffer lineal
+                if ((modeInfo.ModeAttributes & (VBE_MODE_ATTR_GRAPHICS | VBE_MODE_ATTR_LINEAR)) !=
+                    (VBE_MODE_ATTR_GRAPHICS | VBE_MODE_ATTR_LINEAR))
+                    continue;
+
+                // El modo debe ser de color directo para 16bpp, 24bpp o 32bpp
+                if (modeInfo.BitsPerPixel >= 16 && modeInfo.MemoryModel != VBE_MEMORYMODEL_DIRECT_COLOR)
+                    continue;
+
+                // El framebuffer debe ser accesible
+                if (modeInfo.PhysBasePtr == 0)
+                    continue;
+
+                // Calcular la puntuación del modo según la cercanía a las dimensiones deseadas
+                int score = 0;
+
+                // Coincidencia exacta de dimensiones
+                if (modeInfo.XResolution == width && modeInfo.YResolution == height)
+                    score += 1000;
+                else
+                {
+                    // Penalizar por diferencia de dimensiones
+                    score -= Math.Abs(modeInfo.XResolution - width) / 10;
+                    score -= Math.Abs(modeInfo.YResolution - height) / 10;
+
+                    // Preferir resoluciones más grandes que las solicitadas
+                    if (modeInfo.XResolution >= width && modeInfo.YResolution >= height)
+                        score += 500;
+                }
+
+                // Coincidencia exacta de BPP
+                if (modeInfo.BitsPerPixel == bpp)
+                    score += 500;
+                else
+                {
+                    // Penalizar por diferencia de BPP
+                    score -= Math.Abs(modeInfo.BitsPerPixel - bpp) * 10;
+                }
+
+                // Preferir 32bpp para mayor calidad de color
+                if (modeInfo.BitsPerPixel == 32)
+                    score += 100;
+                else if (modeInfo.BitsPerPixel == 24)
+                    score += 50;
+                else if (modeInfo.BitsPerPixel == 16)
+                    score += 25;
+
+                // Actualizar el mejor modo si encontramos uno con mayor puntuación
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestMode = currentMode;
+
+                    // Si es una coincidencia exacta, terminamos la búsqueda
+                    if (modeInfo.XResolution == width && modeInfo.YResolution == height &&
+                        modeInfo.BitsPerPixel == bpp)
+                        break;
+                }
             }
+
+            MarshalHelper.FreeTemporaryMemory(modeInfoPtr);
 
             return bestMode;
         }

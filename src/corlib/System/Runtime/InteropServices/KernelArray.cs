@@ -45,7 +45,7 @@ namespace System
             get
             {
                 if (index < 0 || index >= _length)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 T* ptr = (T*)_dataPtr;
                 return ptr[index];
@@ -53,7 +53,7 @@ namespace System
             set
             {
                 if (index < 0 || index >= _length)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 T* ptr = (T*)_dataPtr;
                 ptr[index] = value;

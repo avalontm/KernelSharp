@@ -135,6 +135,14 @@ namespace System
             }
         }
 
+        internal bool HasPointers
+        {
+            get
+            {
+                return _value->HasGCPointers;
+            }
+        }
+
         /// <summary>
         /// Crea una nueva instancia de EETypePtr a partir de un IntPtr.
         /// </summary>

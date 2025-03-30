@@ -4,17 +4,17 @@ using System.Runtime.CompilerServices;
 namespace Internal.Runtime.CompilerServices
 {
     /// <summary>
-    /// Proporciona funcionalidad de bajo nivel para manipular punteros.
+    /// Provides low-level functionality for pointer manipulation.
     /// </summary>
     public static unsafe partial class Unsafe
     {
         /// <summary>
-        /// Retorna un puntero al par�metro por referencia dado.
+        /// Returns a pointer to the given reference parameter.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void* AsPointer<T>(ref T value)
         {
-            // Implementaci�n directa usando un puntero fijo
+            // Direct implementation using a fixed pointer
             fixed (T* p = &value)
             {
                 return (void*)p;
@@ -22,12 +22,12 @@ namespace Internal.Runtime.CompilerServices
         }
 
         /// <summary>
-        /// Retorna el tama�o de un objeto del tipo de par�metro dado.
+        /// Returns the size of an object of the given type parameter.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int SizeOf<T>()
         {
-            // Implementación básica para tipos comunes
+            // Basic implementation for common types
             if (typeof(T) == typeof(byte) || typeof(T) == typeof(sbyte))
                 return 1;
             if (typeof(T) == typeof(char) || typeof(T) == typeof(short) || typeof(T) == typeof(ushort))
@@ -37,109 +37,109 @@ namespace Internal.Runtime.CompilerServices
             if (typeof(T) == typeof(long) || typeof(T) == typeof(ulong) || typeof(T) == typeof(double))
                 return 8;
 
-            // Para string, devolver el tamaño de un puntero (ya que es un tipo de referencia)
+            // For string, return the size of a pointer (since it's a reference type)
             if (typeof(T) == typeof(string))
                 return sizeof(IntPtr);
 
-            // Para punteros e IntPtr, usar el tamaño del puntero de la plataforma
+            // For pointers and IntPtr, use the platform's pointer size
             if (typeof(T) == typeof(IntPtr) || typeof(T) == typeof(UIntPtr) || typeof(T).IsPointer)
                 return sizeof(IntPtr);
 
-            // Para otros tipos, usar una estimación
-            return 16; // Valor por defecto
+            // For other types, use an estimate
+            return 16; // Default value
         }
 
         /// <summary>
-        /// Convierte el objeto dado al tipo especificado, sin realizar comprobaci�n de tipo din�mica.
+        /// Converts the given object to the specified type, without performing dynamic type checking.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T As<T>(object value) where T : class
         {
-            // Conversi�n directa sin verificaci�n
+            // Direct conversion without verification
             return (T)value;
         }
 
         /// <summary>
-        /// Reinterpreta la referencia dada como una referencia a un valor de tipo TTo.
+        /// Reinterprets the given reference as a reference to a value of type TTo.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref TTo As<TFrom, TTo>(ref TFrom source)
         {
-            // Implementaci�n utilizando punteros
+            // Implementation using pointers
             return ref *(TTo*)AsPointer(ref source);
         }
 
         /// <summary>
-        /// A�ade un desplazamiento de elemento a la referencia dada.
+        /// Adds an element offset to the given reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T Add<T>(ref T source, int elementOffset)
         {
-            // Calcular el desplazamiento en bytes y usar AddByteOffset
+            // Calculate the offset in bytes and use AddByteOffset
             return ref AddByteOffset(ref source, elementOffset * SizeOf<T>());
         }
 
         /// <summary>
-        /// A�ade un desplazamiento de elemento a la referencia dada.
+        /// Adds an element offset to the given reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T Add<T>(ref T source, IntPtr elementOffset)
         {
-            // Calcular el desplazamiento en bytes
+            // Calculate the offset in bytes
             int offset = (int)elementOffset * SizeOf<T>();
             return ref AddByteOffset(ref source, offset);
         }
 
         /// <summary>
-        /// A�ade un desplazamiento de elemento al puntero dado.
+        /// Adds an element offset to the given pointer.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void* Add<T>(void* source, int elementOffset)
         {
-            // Implementaci�n directa para punteros
+            // Direct implementation for pointers
             return (byte*)source + (elementOffset * SizeOf<T>());
         }
 
         /// <summary>
-        /// Determina si las referencias especificadas apuntan a la misma ubicaci�n.
+        /// Determines whether the specified references point to the same location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool AreSame<T>(ref T left, ref T right)
         {
-            // Comparar las direcciones de memoria
+            // Compare memory addresses
             return AsPointer(ref left) == AsPointer(ref right);
         }
 
         /// <summary>
-        /// Determina si la direcci�n de memoria referenciada por left es mayor que
-        /// la direcci�n de memoria referenciada por right.
+        /// Determines whether the memory address referenced by left is greater than
+        /// the memory address referenced by right.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsAddressGreaterThan<T>(ref T left, ref T right)
         {
-            // Comparar direcciones
+            // Compare addresses
             return (ulong)AsPointer(ref left) > (ulong)AsPointer(ref right);
         }
 
         /// <summary>
-        /// Determina si la direcci�n de memoria referenciada por left es menor que
-        /// la direcci�n de memoria referenciada por right.
+        /// Determines whether the memory address referenced by left is less than
+        /// the memory address referenced by right.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsAddressLessThan<T>(ref T left, ref T right)
         {
-            // Comparar direcciones
+            // Compare addresses
             return (ulong)AsPointer(ref left) < (ulong)AsPointer(ref right);
         }
 
         /// <summary>
-        /// Inicializa un bloque de memoria en la ubicaci�n dada con un valor inicial dado
-        /// sin asumir la alineaci�n de la direcci�n dependiente de la arquitectura.
+        /// Initializes a block of memory at the given location with a given initial value
+        /// without assuming architecture-dependent address alignment.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void InitBlockUnaligned(ref byte startAddress, byte value, uint byteCount)
         {
-            // Implementaci�n para inicializar memoria
+            // Implementation to initialize memory
             byte* p = (byte*)AsPointer(ref startAddress);
             for (uint i = 0; i < byteCount; i++)
             {
@@ -148,174 +148,174 @@ namespace Internal.Runtime.CompilerServices
         }
 
         /// <summary>
-        /// Lee un valor de tipo T desde la ubicaci�n dada.
+        /// Reads a value of type T from the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T ReadUnaligned<T>(void* source)
         {
-            // Leer memoria sin alineaci�n
+            // Read memory without alignment
             return *(T*)source;
         }
 
         /// <summary>
-        /// Lee un valor de tipo T desde la ubicaci�n dada.
+        /// Reads a value of type T from the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T ReadUnaligned<T>(ref byte source)
         {
-            // Usar As para convertir la referencia y luego leer
+            // Use As to convert the reference and then read
             return As<byte, T>(ref source);
         }
 
         /// <summary>
-        /// Escribe un valor de tipo T en la ubicaci�n dada.
+        /// Writes a value of type T to the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteUnaligned<T>(void* destination, T value)
         {
-            // Escribir memoria sin alineaci�n
+            // Write memory without alignment
             *(T*)destination = value;
         }
 
         /// <summary>
-        /// Escribe un valor de tipo T en la ubicaci�n dada.
+        /// Writes a value of type T to the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteUnaligned<T>(ref byte destination, T value)
         {
-            // Usar As para convertir la referencia y luego escribir
+            // Use As to convert the reference and then write
             As<byte, T>(ref destination) = value;
         }
 
         /// <summary>
-        /// A�ade un desplazamiento de bytes a la referencia dada.
+        /// Adds a byte offset to the given reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T AddByteOffset<T>(ref T source, int byteOffset)
         {
-            // Implementaci�n para a�adir un desplazamiento de bytes
+            // Implementation to add a byte offset
             byte* ptr = (byte*)AsPointer(ref source) + byteOffset;
             return ref *(T*)ptr;
         }
 
         /// <summary>
-        /// A�ade un desplazamiento de bytes a la referencia dada.
+        /// Adds a byte offset to the given reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T AddByteOffset<T>(ref T source, IntPtr byteOffset)
         {
-            // Implementaci�n para a�adir un desplazamiento de bytes
+            // Implementation to add a byte offset
             byte* ptr = (byte*)AsPointer(ref source) + (int)byteOffset;
             return ref *(T*)ptr;
         }
 
         /// <summary>
-        /// A�ade un desplazamiento de bytes a la referencia dada.
+        /// Adds a byte offset to the given reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ref T AddByteOffset<T>(ref T source, ulong byteOffset)
         {
-            // Implementaci�n para a�adir un desplazamiento de bytes
+            // Implementation to add a byte offset
             return ref AddByteOffset(ref source, (int)byteOffset);
         }
 
         /// <summary>
-        /// Lee un valor de tipo T desde la ubicaci�n dada.
+        /// Reads a value of type T from the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Read<T>(void* source)
         {
-            // Implementaci�n directa
+            // Direct implementation
             return *(T*)source;
         }
 
         /// <summary>
-        /// Lee un valor de tipo T desde la ubicaci�n dada.
+        /// Reads a value of type T from the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T Read<T>(ref byte source)
         {
-            // Usar As para convertir la referencia
+            // Use As to convert the reference
             return As<byte, T>(ref source);
         }
 
         /// <summary>
-        /// Escribe un valor de tipo T en la ubicaci�n dada.
+        /// Writes a value of type T to the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write<T>(void* destination, T value)
         {
-            // Implementaci�n directa
+            // Direct implementation
             *(T*)destination = value;
         }
 
         /// <summary>
-        /// Escribe un valor de tipo T en la ubicaci�n dada.
+        /// Writes a value of type T to the given location.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write<T>(ref byte destination, T value)
         {
-            // Usar As para convertir la referencia
+            // Use As to convert the reference
             As<byte, T>(ref destination) = value;
         }
 
         /// <summary>
-        /// Reinterpreta la ubicaci�n dada como una referencia a un valor de tipo T.
+        /// Reinterprets the given location as a reference to a value of type T.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T AsRef<T>(void* source)
         {
-            // Implementaci�n directa
+            // Direct implementation
             return ref *(T*)source;
         }
 
         /// <summary>
-        /// Reinterpreta la ubicaci�n dada como una referencia a un valor de tipo T.
+        /// Converts a read-only reference to a mutable reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T AsRef<T>(in T source)
         {
-            // Simplemente devuelve la misma referencia
-            return ref Unsafe.As<T, T>(ref Unsafe.AsRef(source));
+            // Revised implementation to ensure it returns the correct reference
+            return ref As<T, T>(ref AsRef(source));
         }
 
         /// <summary>
-        /// Determina el desplazamiento en bytes desde el origen hasta el destino de las referencias dadas.
+        /// Determines the byte offset from the origin to the target of the given references.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IntPtr ByteOffset<T>(ref T origin, ref T target)
         {
-            // Calcular la diferencia de punteros
+            // Calculate the pointer difference
             return (IntPtr)((byte*)AsPointer(ref target) - (byte*)AsPointer(ref origin));
         }
 
         /// <summary>
-        /// Devuelve una referencia a un tipo T que es una referencia nula.
+        /// Returns a reference to a type T that is a null reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref T NullRef<T>()
         {
-            // Devolver una referencia a memoria nula (peligroso, solo para uso interno)
+            // Return a reference to null memory (dangerous, for internal use only)
             return ref *(T*)null;
         }
 
         /// <summary>
-        /// Devuelve si una referencia dada a un tipo T es una referencia nula.
+        /// Returns whether a given reference to a type T is a null reference.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsNullRef<T>(ref T source)
         {
-            // Comprobar si la direcci�n es nula
+            // Check if the address is null
             return AsPointer(ref source) == null;
         }
 
         /// <summary>
-        /// Evita las reglas de asignaci�n definitiva aprovechando la sem�ntica de 'out'.
+        /// Bypasses definite assignment rules by taking advantage of 'out' semantics.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SkipInit<T>(out T value)
         {
-            // Implementaci�n que no inicializa la variable
+            // Implementation that doesn't initialize the variable
             value = default!;
         }
     }

@@ -68,7 +68,7 @@ namespace System
             {
                 // Verificar límites
                 if (index < 0 || index >= _length)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 // Usar acceso directo para mayor fiabilidad
                 return GetDirectValue(index);
@@ -77,7 +77,7 @@ namespace System
             {
                 // Verificar límites
                 if (index < 0 || index >= _length)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 // Usar acceso directo para mayor fiabilidad
                 SetDirectValue(index, value);

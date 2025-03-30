@@ -82,10 +82,6 @@ namespace Internal.Runtime.CompilerHelpers
             while (true) { }
         }
 
-        public static void ThrowIndexOutOfRangeException()
-        {
-            Panic("IndexOutOfRangeException");
-        }
 
         public static void ThrowInvalidOperationException(string message)
         {
@@ -209,7 +205,17 @@ namespace Internal.Runtime.CompilerHelpers
 
         internal static void IndexOutOfRangeException()
         {
-            Panic("FormatException: ");
+            Panic("IndexOutOfRangeException: ");
+        }
+
+        internal static void ThrowIndexOutOfRangeException()
+        {
+            Panic("IndexOutOfRangeException: ");
+        }
+
+        internal static void IndexOutOfRangeException(string message)
+        {
+            Panic("IndexOutOfRangeException: " + message);
         }
 
         internal static void ThrowNotSupportedException(string message)

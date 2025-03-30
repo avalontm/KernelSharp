@@ -2,7 +2,7 @@ using Internal.Runtime.CompilerHelpers;
 using System;
 using System.Runtime.InteropServices;
 
-namespace Kernel
+namespace System
 {
     /// <summary>
     /// Representa la consola estándar de entrada, salida y error.

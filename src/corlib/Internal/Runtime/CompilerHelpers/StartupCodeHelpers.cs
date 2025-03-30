@@ -1,5 +1,6 @@
 using Internal.Runtime.CompilerServices;
 using System;
+using System.Diagnostics;
 using System.Runtime;
 
 namespace Internal.Runtime.CompilerHelpers
@@ -161,6 +162,7 @@ namespace Internal.Runtime.CompilerHelpers
                         RunEagerClassConstructors(sections[k].Start, sections[k].End);
                 }
             }
+            Debug.WriteLine("InitializeModules");
         }
 
         static unsafe void RunEagerClassConstructors(IntPtr cctorTableStart, IntPtr cctorTableEnd)

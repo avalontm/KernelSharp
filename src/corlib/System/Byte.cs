@@ -59,9 +59,5 @@
             return ((ushort)this).ToString();
         }
 
-        public readonly string ToString(string format)
-        {
-            return ((ushort)this).ToString(format);
-        }
     }
 }

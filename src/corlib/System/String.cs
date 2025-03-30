@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -39,7 +41,7 @@ namespace System
             get
             {
                 if (index < 0 || index >= _length)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 fixed (char* p = &_firstChar)
                 {
@@ -50,7 +52,7 @@ namespace System
             set
             {
                 if (index < 0 || index >= _length)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 fixed (char* p = &_firstChar)
                 {
@@ -400,24 +402,6 @@ namespace System
             return 0;
         }
 
-        public static string Concat(string a, string b)
-        {
-            int Length = a.Length + b.Length;
-            char* ptr = stackalloc char[Length];
-            int currentIndex = 0;
-            for (int i = 0; i < a.Length; i++)
-            {
-                ptr[currentIndex] = a[i];
-                currentIndex++;
-            }
-            for (int i = 0; i < b.Length; i++)
-            {
-                ptr[currentIndex] = b[i];
-                currentIndex++;
-            }
-            return new string(ptr, 0, Length);
-        }
-
         public int IndexOf(char j)
         {
             for (int i = 0; i < Length; i++)
@@ -528,7 +512,6 @@ namespace System
         {
             string p1 = a + b;
             string p2 = p1 + c;
-            p1.Dispose();
             return p2;
         }
 
@@ -537,241 +520,241 @@ namespace System
             string p1 = a + b;
             string p2 = p1 + c;
             string p3 = p2 + d;
-            p1.Dispose();
-            p2.Dispose();
             return p3;
         }
 
-        public static string Concat(params string[] vs)
+        // Maneja la concatenación de dos objetos
+        public static string Concat(object a, object b)
         {
-            string s = "";
-            for (int i = 0; i < vs.Length; i++)
-            {
-                string tmp = s + vs[i];
-                s.Dispose();
-                s = tmp;
-            }
-            vs.Dispose();
-            return s;
+            string strA = a?.ToString() ?? "";
+            string strB = b?.ToString() ?? "";
+            return Concat(strA, strB);
         }
 
+        /// <summary>
+        /// Concatena tres objetos
+        /// </summary>
+        public static string Concat(object obj0, object obj1, object obj2)
+        {
+            return Concat(
+                obj0?.ToString() ?? "",
+                obj1?.ToString() ?? "",
+                obj2?.ToString() ?? ""
+            );
+        }
+
+        /// <summary>
+        /// Concatena cuatro objetos
+        /// </summary>
+        public static string Concat(object obj0, object obj1, object obj2, object obj3)
+        {
+            return Concat(
+                obj0?.ToString() ?? "",
+                obj1?.ToString() ?? "",
+                obj2?.ToString() ?? "",
+                obj3?.ToString() ?? ""
+            );
+        }
+
+        /// <summary>
+        /// Método de formato para dos argumentos
+        /// </summary>
+        public static string Format(string format, object arg0, object arg1)
+        {
+            string result = format.Replace("{0}", arg0?.ToString() ?? "");
+            return result.Replace("{1}", arg1?.ToString() ?? "");
+        }
+
+        /// <summary>
+        /// Método de formato para tres argumentos
+        /// </summary>
+        public static string Format(string format, object arg0, object arg1, object arg2)
+        {
+            string result = format.Replace("{0}", arg0?.ToString() ?? "");
+            result = result.Replace("{1}", arg1?.ToString() ?? "");
+            return result.Replace("{2}", arg2?.ToString() ?? "");
+        }
+
+        /// <summary>
+        /// Método simplificado para formato de strings
+        /// </summary>
+        public static string Format(string format, object arg0)
+        {
+            // Implementación muy básica, solo reemplaza {0}
+            return format.Replace("{0}", arg0?.ToString() ?? "");
+        }
+
+        // Implementación base para strings
+        public static string Concat(string a, string b)
+        {
+            if (a == null) a = "";
+            if (b == null) b = "";
+
+            int length = a.Length + b.Length;
+            char* ptr = stackalloc char[length];
+            int currentIndex = 0;
+
+            for (int i = 0; i < a.Length; i++)
+            {
+                ptr[currentIndex] = a[i];
+                currentIndex++;
+            }
+
+            for (int i = 0; i < b.Length; i++)
+            {
+                ptr[currentIndex] = b[i];
+                currentIndex++;
+            }
+
+            return new string(ptr, 0, length);
+        }
+
+        // Implementación corregida para el array de objetos
+        public static string Concat(params object[] vs)
+        {
+            if (vs == null || vs.Length == 0)
+                return "";
+
+            if (vs.Length == 1)
+                return vs[0]?.ToString() ?? "";
+
+            // Calcula la longitud total primero
+            int totalLength = 0;
+            for (int i = 0; i < vs.Length; i++)
+            {
+                string str = vs[i]?.ToString() ?? "";
+                totalLength += str.Length;
+            }
+
+            // Crea el buffer para el resultado
+            char* buffer = stackalloc char[totalLength];
+            int position = 0;
+
+            // Copia cada cadena al buffer
+            for (int i = 0; i < vs.Length; i++)
+            {
+                string str = vs[i]?.ToString() ?? "";
+                for (int j = 0; j < str.Length; j++)
+                {
+                    buffer[position++] = str[j];
+                }
+            }
+
+            return new string(buffer, 0, totalLength);
+        }
+
+        // Método para manejar la interpolación de cadenas
+        public static string Format(FormattableString formattable)
+        {
+            if (formattable == null)
+                ThrowHelpers.ArgumentNullException(nameof(formattable));
+
+            string format = formattable.Format;
+            object[] args = formattable.GetArguments();
+
+            return Format(format, args);
+        }
+
+        // Método principal de formato que procesa los marcadores de posición
         public static string Format(string format, params object[] args)
         {
             if (format == null)
-                return null;
+                ThrowHelpers.ArgumentNullException(nameof(format));
 
             if (args == null || args.Length == 0)
                 return format;
 
-            // Estimar el tamaño máximo necesario
-            int maxLength = format.Length * 2; // Estimación conservadora
-            char[] result = new char[maxLength];
-            int resultIndex = 0;
+            // Calculamos la longitud aproximada del resultado para evitar múltiples ampliaciones
+            int estimatedLength = format.Length * 2;
+            char[] buffer = new char[estimatedLength];
+            int bufferPosition = 0;
 
             for (int i = 0; i < format.Length; i++)
             {
-                // Buscar el inicio de un marcador de formato
-                if (i + 1 < format.Length && format[i] == '{')
+                // Buscamos los marcadores de formato {n}
+                if (format[i] == '{')
                 {
-                    // Comprobar si es un escape {{
+                    // Comprobar si es una llave escapada {{
                     if (i + 1 < format.Length && format[i + 1] == '{')
                     {
-                        result[resultIndex++] = '{';
-                        i++; // Saltar el segundo {
+                        if (bufferPosition >= buffer.Length - 1)
+                            ResizeBuffer(ref buffer);
+
+                        buffer[bufferPosition++] = '{';
+                        i++; // Saltar la segunda llave
                         continue;
                     }
 
-                    // Buscar el cierre del marcador
-                    int indexStart = i + 1;
-                    int indexEnd = indexStart;
+                    // Encontrar el número del argumento
+                    int argIndex = 0;
+                    int j = i + 1;
 
-                    while (indexEnd < format.Length && format[indexEnd] != '}')
+                    // Buscar dígitos para el índice
+                    while (j < format.Length && char.IsDigit(format[j]))
                     {
-                        indexEnd++;
+                        argIndex = argIndex * 10 + (format[j] - '0');
+                        j++;
                     }
 
-                    // Si encontramos el cierre y hay espacio para al menos un dígito
-                    if (indexEnd < format.Length && indexEnd > indexStart)
+                    // Saltar cualquier formato de especificación hasta encontrar el cierre }
+                    while (j < format.Length && format[j] != '}')
+                        j++;
+
+                    if (j < format.Length && format[j] == '}')
                     {
-                        bool isValidIndex = true;
-                        int argIndex = 0;
-
-                        // Parsear el índice
-                        for (int j = indexStart; j < indexEnd; j++)
+                        // Validar el índice del argumento
+                        if (argIndex >= 0 && argIndex < args.Length)
                         {
-                            char digit = format[j];
-                            if (digit >= '0' && digit <= '9')
-                            {
-                                argIndex = argIndex * 10 + (digit - '0');
-                            }
-                            else
-                            {
-                                isValidIndex = false;
-                                break;
-                            }
-                        }
+                            // Convertir el argumento a string
+                            string argStr = args[argIndex]?.ToString() ?? "null";
 
-                        // Si el índice es válido y está dentro del rango
-                        if (isValidIndex && argIndex >= 0 && argIndex < args.Length)
-                        {
-                            object arg = args[argIndex];
-                            
-                            string argStr;
+                            // Asegurarse de que hay suficiente espacio en el buffer
+                            if (bufferPosition + argStr.Length >= buffer.Length)
+                                ResizeBuffer(ref buffer, bufferPosition + argStr.Length);
 
-                            // Manejar diferentes tipos de argumentos
-                            if (arg == null)
-                            {
-                                argStr = "";
-                            }
-                            else
-                            {
-                                // Manejar tipos específicos para asegurar representación correcta
-                                if (arg is int)
-                                {
-                                    // Manejar enteros explícitamente
-                                    int intValue = (int)arg;
-                                    argStr = IntToString(intValue);
-                                }
-                                else if (arg is bool)
-                                {
-                                    // Manejar booleanos explícitamente
-                                    bool boolValue = (bool)arg;
-                                    argStr = boolValue ? "True" : "False";
-                                }
-                                else if (arg is char)
-                                {
-                                    // Manejar caracteres explícitamente
-                                    char charValue = (char)arg;
-                                    // Crear un array con un solo carácter
-                                    char[] charArray = new char[1];
-                                    charArray[0] = charValue;
-                                    argStr = new string(charArray);
-                                }
-                                else if (arg is string)
-                                {
-                                    // Si ya es un string, usarlo directamente
-                                    argStr = (string)arg;
-                                }
-                                else
-                                {
-                                    // Para otros tipos, llamar a ToString()
-                                    argStr = arg.ToString();
-
-                                    // Si ToString devuelve null, usar una cadena vacía
-                                    if (argStr == null)
-                                    {
-                                        argStr = "";
-                                    }
-                                }
-                            }
-
-                            // Asegurarse de que hay suficiente espacio
-                            if (resultIndex + argStr.Length > result.Length)
-                            {
-                                // Ampliar el buffer
-                                int newSize = result.Length * 2;
-                                while (resultIndex + argStr.Length > newSize)
-                                {
-                                    newSize *= 2;
-                                }
-
-                                char[] newResult = new char[newSize];
-                                for (int k = 0; k < resultIndex; k++)
-                                {
-                                    newResult[k] = result[k];
-                                }
-                                result = newResult;
-                            }
-
-                            // Copiar el string del argumento
+                            // Copiar el string del argumento al buffer
                             for (int k = 0; k < argStr.Length; k++)
-                            {
-                                result[resultIndex++] = argStr[k];
-                            }
-
-                            // Avanzar después del marcador de cierre
-                            i = indexEnd;
-                            continue;
+                                buffer[bufferPosition++] = argStr[k];
                         }
+
+                        i = j; // Saltar al cierre }
+                        continue;
                     }
                 }
-                else if (i + 1 < format.Length && format[i] == '}' && format[i + 1] == '}')
+                else if (format[i] == '}')
                 {
-                    // Escape para }
-                    result[resultIndex++] = '}';
-                    i++; // Saltar el segundo }
-                    continue;
-                }
-
-                // Si llegamos aquí, es un carácter normal o un marcador inválido
-                // Asegurarse de que hay suficiente espacio
-                if (resultIndex >= result.Length)
-                {
-                    // Ampliar el buffer
-                    char[] newResult = new char[result.Length * 2];
-                    for (int k = 0; k < resultIndex; k++)
+                    // Comprobar si es una llave escapada }}
+                    if (i + 1 < format.Length && format[i + 1] == '}')
                     {
-                        newResult[k] = result[k];
+                        if (bufferPosition >= buffer.Length - 1)
+                            ResizeBuffer(ref buffer);
+
+                        buffer[bufferPosition++] = '}';
+                        i++; // Saltar la segunda llave
+                        continue;
                     }
-                    result = newResult;
                 }
 
-                result[resultIndex++] = format[i];
+                // Carácter normal, agregarlo al buffer
+                if (bufferPosition >= buffer.Length)
+                    ResizeBuffer(ref buffer);
+
+                buffer[bufferPosition++] = format[i];
             }
 
-            // Crear el string final con el tamaño exacto
-            char[] finalResult = new char[resultIndex];
-            for (int i = 0; i < resultIndex; i++)
-            {
-                finalResult[i] = result[i];
-            }
-
-            return new string(finalResult);
+            return new string(buffer, 0, bufferPosition);
         }
 
-        // Método auxiliar para convertir int a string manualmente
-        private static string IntToString(int value)
+        // Método auxiliar para redimensionar el buffer si es necesario
+        private static void ResizeBuffer(ref char[] buffer, int minSize = 0)
         {
-            // Manejar el caso especial de 0
-            if (value == 0)
-                return "0";
+            int newSize = buffer.Length * 2;
+            if (minSize > 0 && newSize < minSize)
+                newSize = minSize;
 
-            // Manejar el caso especial de Int32.MinValue
-            if (value == int.MinValue)
-                return "-2147483648";
-
-            bool isNegative = value < 0;
-            if (isNegative)
-                value = -value;
-
-            // Determinar la longitud del resultado
-            int length = 0;
-            int temp = value;
-            while (temp > 0)
-            {
-                temp /= 10;
-                length++;
-            }
-
-            if (isNegative)
-                length++; // Para el signo -
-
-            // Crear el array de caracteres para el resultado
-            char[] chars = new char[length];
-
-            // Llenar el array desde el final
-            int index = length - 1;
-            while (value > 0)
-            {
-                chars[index--] = (char)('0' + (value % 10));
-                value /= 10;
-            }
-
-            // Añadir el signo negativo si es necesario
-            if (isNegative)
-                chars[0] = '-';
-
-            return new string(chars);
+            char[] newBuffer = new char[newSize];
+            Array.Copy(buffer, ref newBuffer, buffer.Length);
+            buffer = newBuffer;
         }
 
 
@@ -1121,5 +1104,16 @@ namespace System
             }
             return result;
         }
+
+        // Operador para concatenar un string y un objeto
+        public static string operator +(string left, object right)
+        {
+            // Asegúrate de convertir el objeto a string correctamente
+            string rightStr = right == null ? "" : right.ToString();
+
+            // Usa Concat para unir las cadenas
+            return Concat(left, rightStr);
+        }
+
     }
 }

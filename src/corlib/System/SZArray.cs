@@ -27,7 +27,7 @@ namespace System
             get
             {
                 if ((uint)index >= (uint)_numComponents)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 // Calcular puntero al array de datos
                 ref T firstElement = ref Unsafe.As<int, T>(ref Unsafe.AddByteOffset(ref _numComponents, sizeof(int)));
@@ -40,7 +40,7 @@ namespace System
             set
             {
                 if ((uint)index >= (uint)_numComponents)
-                    ThrowHelpers.ThrowIndexOutOfRangeException();
+                    ThrowHelpers.IndexOutOfRangeException();
 
                 // Calcular puntero al array de datos
                 ref T firstElement = ref Unsafe.As<int, T>(ref Unsafe.AddByteOffset(ref _numComponents, sizeof(int)));
@@ -54,7 +54,7 @@ namespace System
         public override object GetValue(int index)
         {
             if ((uint)index >= (uint)_numComponents)
-                ThrowHelpers.ThrowIndexOutOfRangeException();
+                ThrowHelpers.IndexOutOfRangeException();
 
             return this[index];
         }
@@ -63,7 +63,7 @@ namespace System
         public override void SetValue(object value, int index)
         {
             if ((uint)index >= (uint)_numComponents)
-                ThrowHelpers.ThrowIndexOutOfRangeException();
+                ThrowHelpers.IndexOutOfRangeException();
 
             if (!(value is T) && (value != null || typeof(T).IsValueType))
                 ThrowHelpers.ThrowArgumentException("Tipo incompatible");

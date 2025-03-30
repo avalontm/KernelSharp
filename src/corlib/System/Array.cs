@@ -125,6 +125,108 @@ namespace System
 
             return sum;
         }
+
+        public static void Copy(byte[] sourceArray, int sourceIndex, ref byte[] destinationArray, int destinationIndex, int length)
+        {
+            int x = 0;
+            byte[] temp = new byte[length];
+            for (int i = sourceIndex; i < sourceArray.Length; i++)
+            {
+                temp[x] = sourceArray[i];
+                x++;
+            }
+            destinationArray = temp;
+        }
+
+
+        public static void Copy(Array sourceArray, ref Array destinationArray)
+        {
+            Copy(sourceArray, ref destinationArray, 0);
+        }
+
+        public static void Copy<T>(T[] sourceArray, ref T[] destinationArray)
+        {
+            Copy(sourceArray, ref destinationArray, 0);
+        }
+
+        public static void Copy(Array sourceArray, ref Array destinationArray, int startIndex)
+        {
+            Copy(sourceArray, ref destinationArray, startIndex, sourceArray.Length);
+        }
+
+        public static void Copy<T>(T[] sourceArray, ref T[] destinationArray, int startIndex)
+        {
+            Copy(sourceArray, ref destinationArray, startIndex, destinationArray.Length);
+        }
+
+        public static void Copy(Array sourceArray, ref Array destinationArray, int startIndex, int count)
+        {
+            
+			if (sourceArray == null)
+			{
+				ThrowHelpers.ThrowArgumentException("sourceArray");
+			}
+			if (destinationArray == null)
+			{
+				ThrowHelpers.ThrowArgumentException("destinationArray");
+			}
+			if (startIndex < 0)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex");
+			}
+			if (destinationArray.Length < sourceArray.Length - count)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("sourceArray.Length - count");
+			}
+			if (count <= 0)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("count");
+			}
+			
+
+            int x = 0;
+            object[] temp = new object[count];
+            for (int i = startIndex; i < sourceArray.Length; i++)
+            {
+                temp[x] = sourceArray[i];
+                x++;
+            }
+            destinationArray = temp;
+        }
+
+        public static void Copy<T>(T[] sourceArray, ref T[] destinationArray, int startIndex, int count)
+        {
+            
+			if (sourceArray == null)
+			{
+				ThrowHelpers.ThrowArgumentException("sourceArray");
+			}
+			if (destinationArray == null)
+			{
+				ThrowHelpers.ThrowArgumentException("destinationArray");
+			}
+			if (startIndex < 0)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex");
+			}
+			if (destinationArray.Length > sourceArray.Length - count)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("sourceArray.Length - count");
+			}
+			if (count <= 0)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("count");
+			}
+
+            int x = 0;
+            T[] temp = new T[count];
+            for (int i = startIndex; i < sourceArray.Length; i++)
+            {
+                temp[x] = sourceArray[i];
+                x++;
+            }
+            destinationArray = temp;
+        }
     }
 
     // Implementación específica para arrays unidimensionales de tipo T

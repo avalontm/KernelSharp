@@ -1,6 +1,7 @@
 using Internal.Runtime;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace System
@@ -9,12 +10,6 @@ namespace System
     {
         // The layout of object is a contract with the compiler.
         internal unsafe EEType* m_pEEType;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private class RawData
-        {
-            public byte Data;
-        }
 
         internal ref byte GetRawData()
         {
@@ -89,40 +84,9 @@ namespace System
 
         public virtual string ToString()
         {
-            // Obtener el tipo real del objeto
-            string typeName = GetType();
-            /*
-            // Comprobar si es uno de los tipos primitivos y proporcionar una representación especial
-            if (this.m_pEEType != null)
-            {
-                switch (this.m_pEEType->ElementType)
-                {
-                    case EETypeElementType.Int32:
-                        // Para enteros, convertir el valor a cadena
-                        return ((Int32)this).ToString();
-                    case EETypeElementType.Double:
-                        // Para enteros, convertir el valor a cadena
-                        return ((Double)this).ToString();
-                    case EETypeElementType.Boolean:
-                        // Para booleanos, devolver "True" o "False"
-                        return ((Boolean)this).ToString();
-                    case EETypeElementType.Char:
-                        // Alternativa sin usar el constructor string(char, int)
-                        char c = (Char)this;
-                        // Crear un array de un solo carácter
-                        char[] charArray = new char[1];
-                        charArray[0] = c;
-                        return new string(charArray);
-
-                    case EETypeElementType.String:
-                        // Para strings, devolver el string mismo
-                        return (string)this;
-                }
-            }
-            */
-            // Para otros tipos, devolver el nombre del tipo
-            return typeName;
+            return GetType();
         }
+
         public virtual void Dispose()
         {
             var obj = this;

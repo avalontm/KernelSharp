@@ -76,5 +76,10 @@ namespace System
         {
             return ((UIntPtr)this).ToString();
         }
+
+        internal void* ToPointer()
+        {
+            return (void*)this;
+        }
     }
 }

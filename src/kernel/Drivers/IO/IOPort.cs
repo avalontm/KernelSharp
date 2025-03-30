@@ -99,5 +99,25 @@ namespace Kernel.Drivers.IO
             }
             return data;
         }
+
+        /// <summary>
+        /// Escribe un byte en un puerto de salida (alias para OutByte)
+        /// </summary>
+        /// <param name="port">Número de puerto (0-65535)</param>
+        /// <param name="value">Valor a escribir (0-255)</param>
+        public static void Write8(ushort port, byte value)
+        {
+            OutByte(port, value);
+        }
+
+        /// <summary>
+        /// Lee un byte desde un puerto de entrada (alias para InByte)
+        /// </summary>
+        /// <param name="port">Número de puerto (0-65535)</param>
+        /// <returns>Valor leído (0-255)</returns>
+        public static byte Read8(ushort port)
+        {
+            return InByte(port);
+        }
     }
 }

@@ -4,12 +4,8 @@
     {
         public unsafe override string ToString()
         {
-            return ((ulong)this).ToString();
+            return ((uint)this).ToString();
         }
 
-        public string ToString(string format)
-        {
-            return ((ulong)this).ToString(format);
-        }
     }
 }
