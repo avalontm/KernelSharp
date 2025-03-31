@@ -5,6 +5,19 @@ global _Movsb
 global _Memcpy
 global _Memset
 
+
+; Función para obtener el valor del registro CR2 (dirección que causó la falta de página)
+global _GetCR2
+_GetCR2:
+    mov eax, cr2    ; Mueve el contenido de CR2 a EAX (valor de retorno)
+    ret
+
+; Función para detener el CPU (instrucción HLT)
+global _Halt
+_Halt:
+    hlt            ; Detiene el CPU hasta la próxima interrupción
+    ret
+    
 ; void _Stosb(void* p, byte value, unsigned int count)
 _Stosb:
     ; Prólogo estándar para función x86 de 32 bits

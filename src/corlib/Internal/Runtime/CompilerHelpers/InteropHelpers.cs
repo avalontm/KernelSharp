@@ -46,56 +46,5 @@ namespace Internal.Runtime.CompilerHelpers
         {
             //TO-DO
         }
-
-        public static unsafe IntPtr AllocMemoryForAnsiCharArray(char[] managedArray, bool bestFit, bool throwOnUnmappableChar)
-        {
-            if (managedArray == null)
-                return IntPtr.Zero;
-
-            // For now, just return a pointer to the original array
-            // In a full implementation, this would convert to ANSI and allocate memory
-            fixed (char* ptr = managedArray)
-            {
-                return (IntPtr)ptr;
-            }
-        }
-
-        // Additional method to free allocated memory
-        public static void FreeAnsiCharArray(IntPtr nativeArray)
-        {
-            // In this minimal implementation, we don't actually free anything
-            // In a real implementation, you would use Marshal.FreeHGlobal or similar
-        }
-
-        // Struct to track ANSI conversion metadata
-        [StructLayout(LayoutKind.Sequential)]
-        public struct AnsiCharArrayMarshaller
-        {
-            public IntPtr Pointer;
-            public int Length;
-        }
-
-        public static unsafe char[] WideCharArrayToAnsiCharArray(
-            char[] managedArray,
-            bool bestFit,
-            bool throwOnUnmappableChar)
-        {
-            if (managedArray == null)
-                return null;
-
-            // In a minimal implementation, we'll just return the original array
-            // In a full implementation, this would convert to ANSI encoding
-            char[] ansiArray = new char[managedArray.Length];
-
-            // Simple copy of characters
-            for (int i = 0; i < managedArray.Length; i++)
-            {
-                // For now, just do a direct copy
-                // In a real implementation, you'd handle ANSI conversion
-                ansiArray[i] = managedArray[i];
-            }
-
-            return ansiArray;
-        }
     }
 }

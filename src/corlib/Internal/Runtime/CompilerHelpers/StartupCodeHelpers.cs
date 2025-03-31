@@ -2,22 +2,52 @@ using Internal.Runtime.CompilerServices;
 using System;
 using System.Diagnostics;
 using System.Runtime;
+using System.Runtime.InteropServices;
 
 namespace Internal.Runtime.CompilerHelpers
 {
     internal unsafe class StartupCodeHelpers
     {
-        [RuntimeExport("RhpReversePInvoke")]
-        static void RhpReversePInvoke(IntPtr frame) { }
-        [RuntimeExport("RhpReversePInvokeReturn")]
-        static void RhpReversePInvokeReturn(IntPtr frame) { }
-        [RuntimeExport("RhpPInvoke")]
-        static void RhpPInvoke(IntPtr frame) { }
-        [RuntimeExport("RhpPInvokeReturn")]
-        static void RhpPInvokeReturn(IntPtr frame) { }
-        [RuntimeExport("RhpFallbackFailFast")]
-        static void RhpFallbackFailFast() { while (true) ; }
+        [RuntimeExport("RhpLdelemaRef")]
+        public static unsafe ref object LdelemaRef(Array array, int index, IntPtr elementType)
+        {
+            //Debug.Assert(array.EEType->IsArray, "first argument must be an array");
 
+            EEType* elemType = (EEType*)elementType;
+            EEType* arrayElemType = array.m_pEEType->RelatedParameterType;
+
+            if (!AreTypesEquivalent(elemType, arrayElemType))
+            {
+                // Throw the array type mismatch exception defined by the classlib, using the input array's EEType* 
+                // to find the correct classlib.
+
+                // throw array.EEType->GetClasslibException(ExceptionIDs.ArrayTypeMismatch);
+            }
+
+            ref object rawData = ref Unsafe.As<byte, object>(ref Unsafe.As<RawArrayData>(array).Data);
+            return ref Unsafe.Add(ref rawData, index);
+        }
+
+        [RuntimeExport("RhTypeCast_AreTypesEquivalent")]
+        public static unsafe bool AreTypesEquivalent(EEType* pType1, EEType* pType2)
+        {
+            if (pType1 == pType2)
+                return true;
+
+            if (pType1->IsCloned)
+                pType1 = pType1->CanonicalEEType;
+
+            if (pType2->IsCloned)
+                pType2 = pType2->CanonicalEEType;
+
+            if (pType1 == pType2)
+                return true;
+
+            if (pType1->IsParameterizedType && pType2->IsParameterizedType)
+                return AreTypesEquivalent(pType1->RelatedParameterType, pType2->RelatedParameterType) && pType1->ParameterizedTypeShape == pType2->ParameterizedTypeShape;
+
+            return false;
+        }
 
         // [RuntimeExport("RhpStelemRef")]
         static unsafe void RhpStelemRef(Array array, int index, object obj)
@@ -43,6 +73,7 @@ namespace Internal.Runtime.CompilerHelpers
 
             var bt = obj.m_pEEType->RawBaseType;
 
+
             while (true)
             {
                 if (bt == null)
@@ -55,8 +86,7 @@ namespace Internal.Runtime.CompilerHelpers
             }
         }
 
-
-        // [RuntimeExport("RhpNewFast")]
+        [RuntimeExport("RhpNewFast")]
         internal static unsafe object RhpNewFast(EEType* pEEType)
         {
             uint size = pEEType->BaseSize;
@@ -67,7 +97,7 @@ namespace Internal.Runtime.CompilerHelpers
 
             var data = MemoryHelpers.Malloc(size);
             var obj = Unsafe.As<IntPtr, object>(ref data);
-            MemoryHelpers.MemSet(data, 0, size);
+            MemoryHelpers.MemSet((byte*)data, 0, (int)size);
             *(IntPtr*)data = (IntPtr)pEEType;
 
             return obj;
@@ -138,6 +168,41 @@ namespace Internal.Runtime.CompilerHelpers
             return false;
         }
 
+        [RuntimeExport("__imp_GetCurrentThreadId")]
+        public static int __imp_GetCurrentThreadId() => 0;
+
+        [RuntimeExport("__CheckForDebuggerJustMyCode")]
+        public static int __CheckForDebuggerJustMyCode() => 0;
+
+        [RuntimeExport("__fail_fast")]
+        static void FailFast() { while (true) ; }
+
+        [RuntimeExport("RhpFallbackFailFast")]
+        static void RhpFallbackFailFast() { while (true) ; }
+
+        [RuntimeExport("RhpReversePInvoke2")]
+        static void RhpReversePInvoke2(IntPtr frame) { }
+
+        [RuntimeExport("RhpReversePInvokeReturn2")]
+        static void RhpReversePInvokeReturn2(IntPtr frame) { }
+
+        [RuntimeExport("RhpReversePInvoke")]
+        static void RhpReversePInvoke(IntPtr frame) { }
+
+        [RuntimeExport("RhpReversePInvokeReturn")]
+        static void RhpReversePInvokeReturn(IntPtr frame) { }
+
+        [RuntimeExport("RhpPInvoke")]
+        static void RhpPinvoke(IntPtr frame) { }
+
+        [RuntimeExport("RhpPInvokeReturn")]
+        static void RhpPinvokeReturn(IntPtr frame) { }
+
+        public static void Test()
+        {
+            Debug.WriteLine("InitializeModules");
+        }
+
         public static void InitializeModules(IntPtr Modules)
         {
             for (int i = 0; ; i++)
@@ -162,7 +227,7 @@ namespace Internal.Runtime.CompilerHelpers
                         RunEagerClassConstructors(sections[k].Start, sections[k].End);
                 }
             }
-            Debug.WriteLine("InitializeModules");
+            //Debug.WriteLine("InitializeModules");
         }
 
         static unsafe void RunEagerClassConstructors(IntPtr cctorTableStart, IntPtr cctorTableEnd)
@@ -189,7 +254,7 @@ namespace Internal.Runtime.CompilerHelpers
                         IntPtr pPreInitDataAddr = *(pBlock + 1);
                         fixed (byte* p = &obj.GetRawData())
                         {
-                            Buffer.Memcpy(p, (byte*)pPreInitDataAddr, obj.GetRawDataSize());
+                            Buffer.MemCpy(p, (byte*)pPreInitDataAddr, obj.GetRawDataSize());
                         }
                     }
 

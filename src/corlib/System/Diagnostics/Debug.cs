@@ -3,7 +3,6 @@ using System.Text;
 
 namespace System.Diagnostics
 {
-
     public static unsafe class Debug
     {
         // Core method for writing debug output
@@ -12,32 +11,26 @@ namespace System.Diagnostics
             if (string.IsNullOrEmpty(message))
                 return;
 
-            // Convert to UTF-8 bytes with newline
-            byte[] bytes = Encoding.UTF8.GetBytes(message + "\n");
+            // Agregar salto de línea
+            message += "\n";
 
-            // Use fixed to get pointer
-            fixed (byte* ptr = bytes)
+            // Obtener la longitud del mensaje para reservar buffer
+            int length = message.Length;
+            byte* buffer = stackalloc byte[length];
+
+            // Convertir cada carácter directamente a byte
+            // Esto funciona para ASCII pero trunca caracteres Unicode
+            for (int i = 0; i < length; i++)
             {
-                NativeDebugWrite(ptr, bytes.Length);
+                buffer[i] = (byte)message[i];
             }
-        }
 
-        // Overload for byte array
-        public static void WriteLine(byte[] bytes)
-        {
-            if (bytes == null || bytes.Length == 0)
-                return;
-
-            fixed (byte* ptr = bytes)
-            {
-                NativeDebugWrite(ptr, bytes.Length);
-            }
+            // Enviar al método nativo
+            NativeDebugWrite(buffer, length);
         }
 
         // Native method for output
-        [DllImport("*", EntryPoint = "_DebugWrite",
-            CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("*", EntryPoint = "_DebugWrite")]
         private static extern unsafe void NativeDebugWrite(byte* text, int length);
     }
-
 }

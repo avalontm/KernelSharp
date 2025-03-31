@@ -149,18 +149,9 @@ namespace System.Runtime.InteropServices
             return ptr;
         }
 
-        // Free memory allocated by CoTaskMemAlloc
         [RuntimeExport("FreeCoTaskMem")]
         public static void FreeCoTaskMem(IntPtr ptr)
         {
-            // In a typical CoreLib, this would free unmanaged memory
-            // For a minimal implementation, we'll just do a no-op
-            // In a real system, this would call the appropriate memory free method
-            if (ptr == IntPtr.Zero)
-                return;
-
-            // Placeholder for actual memory freeing
-            // In a full implementation, this would use system-specific memory management
         }
 
         // Allocate memory using CoTaskMemAlloc

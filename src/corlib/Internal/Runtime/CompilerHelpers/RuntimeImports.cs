@@ -1,6 +1,4 @@
-﻿using Internal.Runtime;
-using Internal.Runtime.CompilerHelpers;
-using Internal.Runtime.CompilerServices;
+﻿using Internal.Runtime.CompilerServices;
 using System;
 using System.Runtime;
 
@@ -18,56 +16,22 @@ namespace Internal.Runtime.CompilerHelpers
         [RuntimeExport("RhpNewArray")]
         public static unsafe object RhpNewArray(EEType* pEEType, int length)
         {
-            // Validaciones básicas
-            if (pEEType == null || length < 0)
-                return null;
+            var size = pEEType->BaseSize + (uint)length * pEEType->ComponentSize;
 
-            // Obtener el tamaño del componente
-            uint componentSize = pEEType->ComponentSize;
+            // Round to next power of 8
+            if (size % 8 > 0)
+                size = ((size / 8) + 1) * 8;
 
-            // Calcular el tamaño total necesario
-            uint headerSize = (uint)(sizeof(IntPtr) + sizeof(int)); // EEType* + length
+            var data = MemoryHelpers.Malloc(size);
+            var obj = Unsafe.As<IntPtr, object>(ref data);
+            MemoryHelpers.MemSet((byte*)data, 0, (int)size);
+            *(IntPtr*)data = (IntPtr)pEEType;
 
-            // Prevenir desbordamiento en el cálculo
-            if (componentSize > 0 && (uint)length > (uint.MaxValue - headerSize) / componentSize)
-                return null;
+            var b = (byte*)data;
+            b += sizeof(IntPtr);
+            MemoryHelpers.MemCpy(b, (byte*)(&length), sizeof(int));
 
-            uint dataSize = componentSize * (uint)length;
-            uint totalSize = headerSize + dataSize;
-
-            // Alinear a 8 bytes
-            totalSize = (totalSize + 7) & ~7U;
-
-            // Asignar memoria
-            IntPtr memory = (IntPtr)MemoryHelpers.Malloc(totalSize);
-            if (memory == IntPtr.Zero)
-                return null;
-
-            // Limpiar completamente la memoria (importante para valores correctos)
-            byte* memoryPtr = (byte*)memory;
-            for (uint i = 0; i < totalSize; i++)
-            {
-                memoryPtr[i] = 0;
-            }
-
-            // Configurar el objeto
-            object arrayObj = Unsafe.As<IntPtr, object>(ref memory);
-
-            // Establecer el EEType
-            Unsafe.As<object, IntPtr>(ref arrayObj) = (IntPtr)pEEType;
-
-            // Establecer la longitud
-            int* lengthField = (int*)(memoryPtr + sizeof(IntPtr));
-            *lengthField = length;
-
-            return arrayObj;
-        }
-
-        [RuntimeExport("RhpNewFast")]
-        public static void* RhpNewFast(void* type)
-        {
-            // Asignar un objeto básico (asumimos un tamaño fijo para todos los objetos por simplicidad)
-            return (void*)MemoryHelpers.Malloc(16); // 16 bytes como mínimo para un objeto
+            return obj;
         }
 
         [RuntimeExport("RhpReportExceptionForCatch")]
@@ -121,28 +85,34 @@ namespace Internal.Runtime.CompilerHelpers
         }
 
         [RuntimeExport("RhpCopyObjectContents")]
-        public static void RhpCopyObjectContents(void* destination, void* source)
+        public static unsafe void RhpCopyObjectContents(void* destination, void* source, int size)
         {
-            // Implementación simplificada - no copia realmente
+            byte* dest = (byte*)destination;
+            byte* src = (byte*)source;
+
+            for (int i = 0; i < size; i++)
+            {
+                dest[i] = src[i];
+            }
         }
 
+
         [RuntimeExport("RhpAssignRef")]
-        public static void RhpAssignRef(void* address, void* obj)
+        public static unsafe void RhpAssignRef(void** address, void* obj)
         {
-            // Asignación simple de referencias
-            *(void**)address = obj;
+            *address = obj;
         }
 
         [RuntimeExport("RhpByRefAssignRef")]
-        public static void RhpByRefAssignRef(void* address, void* obj)
+        public static unsafe void RhpByRefAssignRef(void** address, void* obj)
         {
-            *(void**)address = obj;
+            *address = obj;
         }
 
-       // [RuntimeExport("RhpCheckedAssignRef")]
-        public static void RhpCheckedAssignRef(void* address, void* obj)
+        // [RuntimeExport("RhpCheckedAssignRef")]
+        public static void RhpCheckedAssignRef(void** address, void* obj)
         {
-            *(void**)address = obj;
+            *address = obj;
         }
 
         [RuntimeExport("RhpStelemRef")]

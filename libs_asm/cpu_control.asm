@@ -7,6 +7,8 @@ global _GetCR0              ; Lee el registro CR0
 global _SetCR0              ; Escribe en el registro CR0
 global _GetCR3              ; Lee el registro CR3 (directorio de páginas)
 global _SetCR3              ; Escribe en el registro CR3
+global _SetCR3 
+
 
 ; Lee el valor del registro CR0
 ; uint _GetCR0()

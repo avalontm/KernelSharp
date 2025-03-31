@@ -507,6 +507,71 @@ namespace System
             return _indice;
         }
 
+        /// <summary>
+        /// Método de formato para dos argumentos
+        /// </summary>
+        public static string Format(string format, object arg0, object arg1)
+        {
+            string result = format.Replace("{0}", arg0?.ToString() ?? "");
+            return result.Replace("{1}", arg1?.ToString() ?? "");
+        }
+
+        /// <summary>
+        /// Método de formato para tres argumentos
+        /// </summary>
+        public static string Format(string format, object arg0, object arg1, object arg2)
+        {
+            string result = format.Replace("{0}", arg0?.ToString() ?? "");
+            result = result.Replace("{1}", arg1?.ToString() ?? "");
+            return result.Replace("{2}", arg2?.ToString() ?? "");
+        }
+
+        /// <summary>
+        /// Método simplificado para formato de strings
+        /// </summary>
+        public static string Format(string format, object arg0)
+        {
+            // Implementación muy básica, solo reemplaza {0}
+            return format.Replace("{0}", arg0?.ToString() ?? "");
+        }
+
+        /// <summary>
+        /// Concatena dos cadenas
+        /// </summary>
+        public static string Concat(string str1, string str2)
+        {
+            if (str1 == null) str1 = "";
+            if (str2 == null) str2 = "";
+
+            int len1 = str1.Length;
+            int len2 = str2.Length;
+
+            // Si ambas cadenas están vacías, devuelve cadena vacía
+            if (len1 == 0 && len2 == 0)
+                return "";
+
+            // Si una de las cadenas está vacía, devuelve la otra
+            if (len1 == 0) return str2;
+            if (len2 == 0) return str1;
+
+            // Crea una nueva cadena con la longitud combinada
+            int totalLength = len1 + len2;
+            char* buffer = stackalloc char[totalLength];
+
+            // Copia la primera cadena
+            for (int i = 0; i < len1; i++)
+            {
+                buffer[i] = str1[i];
+            }
+
+            // Copia la segunda cadena
+            for (int i = 0; i < len2; i++)
+            {
+                buffer[len1 + i] = str2[i];
+            }
+
+            return new string(buffer, 0, totalLength);
+        }
 
         public static string Concat(string a, string b, string c)
         {
@@ -555,74 +620,25 @@ namespace System
                 obj3?.ToString() ?? ""
             );
         }
-
-        /// <summary>
-        /// Método de formato para dos argumentos
-        /// </summary>
-        public static string Format(string format, object arg0, object arg1)
-        {
-            string result = format.Replace("{0}", arg0?.ToString() ?? "");
-            return result.Replace("{1}", arg1?.ToString() ?? "");
-        }
-
-        /// <summary>
-        /// Método de formato para tres argumentos
-        /// </summary>
-        public static string Format(string format, object arg0, object arg1, object arg2)
-        {
-            string result = format.Replace("{0}", arg0?.ToString() ?? "");
-            result = result.Replace("{1}", arg1?.ToString() ?? "");
-            return result.Replace("{2}", arg2?.ToString() ?? "");
-        }
-
-        /// <summary>
-        /// Método simplificado para formato de strings
-        /// </summary>
-        public static string Format(string format, object arg0)
-        {
-            // Implementación muy básica, solo reemplaza {0}
-            return format.Replace("{0}", arg0?.ToString() ?? "");
-        }
-
-        // Implementación base para strings
-        public static string Concat(string a, string b)
-        {
-            if (a == null) a = "";
-            if (b == null) b = "";
-
-            int length = a.Length + b.Length;
-            char* ptr = stackalloc char[length];
-            int currentIndex = 0;
-
-            for (int i = 0; i < a.Length; i++)
-            {
-                ptr[currentIndex] = a[i];
-                currentIndex++;
-            }
-
-            for (int i = 0; i < b.Length; i++)
-            {
-                ptr[currentIndex] = b[i];
-                currentIndex++;
-            }
-
-            return new string(ptr, 0, length);
-        }
-
-        // Implementación corregida para el array de objetos
-        public static string Concat(params object[] vs)
+        // Implementación corregida para el array de strings
+        public static string Concat(params string[] vs)
         {
             if (vs == null || vs.Length == 0)
                 return "";
-
             if (vs.Length == 1)
-                return vs[0]?.ToString() ?? "";
+            {
+                if (vs[0] == null)
+                    return "";
+                return vs[0];
+            }
 
             // Calcula la longitud total primero
             int totalLength = 0;
             for (int i = 0; i < vs.Length; i++)
             {
-                string str = vs[i]?.ToString() ?? "";
+                string str = vs[i];
+                if (str == null)
+                    str = "";
                 totalLength += str.Length;
             }
 
@@ -633,7 +649,58 @@ namespace System
             // Copia cada cadena al buffer
             for (int i = 0; i < vs.Length; i++)
             {
-                string str = vs[i]?.ToString() ?? "";
+                string str = vs[i];
+                if (str == null)
+                    str = "";
+
+                for (int j = 0; j < str.Length; j++)
+                {
+                    buffer[position++] = str[j];
+                }
+            }
+
+            return new string(buffer, 0, totalLength);
+        }
+
+        // Implementación corregida para el array de objetos
+        public static string Concat(params object[] vs)
+        {
+            if (vs == null || vs.Length == 0)
+                return "";
+
+            if (vs.Length == 1)
+            {
+                if (vs[0] == null)
+                    return "";
+                return vs[0].ToString();
+            }
+
+            // Calcula la longitud total primero
+            int totalLength = 0;
+            for (int i = 0; i < vs.Length; i++)
+            {
+                string str;
+                if (vs[i] == null)
+                    str = "";
+                else
+                    str = vs[i].ToString();
+
+                totalLength += str.Length;
+            }
+
+            // Crea el buffer para el resultado
+            char* buffer = stackalloc char[totalLength];
+            int position = 0;
+
+            // Copia cada cadena al buffer
+            for (int i = 0; i < vs.Length; i++)
+            {
+                string str;
+                if (vs[i] == null)
+                    str = "";
+                else
+                    str = vs[i].ToString();
+
                 for (int j = 0; j < str.Length; j++)
                 {
                     buffer[position++] = str[j];

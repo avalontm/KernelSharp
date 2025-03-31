@@ -4,7 +4,7 @@
     {
         public override string ToString()
         {
-            return ((long)this).ToString();
+            return ((int)this).ToString();
         }
     }
 }

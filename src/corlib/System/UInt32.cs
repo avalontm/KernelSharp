@@ -31,5 +31,30 @@
             // Create string from the buffer
             return new string(buffer + position, 0, 10 - position);
         }
+
+        /// <summary>
+        /// Convierte este entero de 32 bits a su representación hexadecimal.
+        /// </summary>
+        /// <returns>Representación hexadecimal del valor</returns>
+        public unsafe string ToHexString()
+        {
+            // Un UInt32 necesita 8 caracteres hexadecimales para representarse
+            char* result = stackalloc char[8];
+
+            // Convertir cada grupo de 4 bits a un carácter hexadecimal
+            for (int i = 0; i < 8; i++)
+            {
+                // Extraer 4 bits y obtener el valor hexadecimal
+                uint hexDigit = (m_value >> (28 - i * 4)) & 0xF;
+
+                // Convertir el dígito a carácter
+                if (hexDigit < 10)
+                    result[i] = (char)('0' + hexDigit);
+                else
+                    result[i] = (char)('A' + (hexDigit - 10));
+            }
+
+            return new string(result, 0, 8);
+        }
     }
 }

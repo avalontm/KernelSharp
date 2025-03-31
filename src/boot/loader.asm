@@ -1,574 +1,290 @@
-; loader.asm - Enhanced loader for CoreLib initialization with improved multiboot handling
-; Modified to give full memory control to the kernel instead of the loader
+; loader.asm - Bootloader completo para KernelSharp
 bits 32
-extern Entry                ; External entry point from C#
+extern Entry                ; Punto de entrada externo desde C#
 global _start
 
-; Multiboot Constants
-MODULEALIGN       equ     1<<0    ; Align modules on page boundaries
-MEMINFO           equ     1<<1    ; Provide memory map
-FLAGS             equ     MODULEALIGN | MEMINFO  ; Only request essential info
-MODS_FLAG         equ     1<<3    ; Multiboot provides module info (checked later)
-MAGIC             equ     0x1BADB002  ; Multiboot magic number
-CHECKSUM          equ     -(MAGIC + FLAGS)  ; Checksum required by multiboot
+; Constantes Multiboot
+MODULEALIGN       equ     1<<0    ; Alinear módulos en límites de página
+MEMINFO           equ     1<<1    ; Proporcionar mapa de memoria
+FLAGS             equ     MODULEALIGN | MEMINFO  ; Solicitar info esencial
+MAGIC             equ     0x1BADB002  ; Número mágico Multiboot
+CHECKSUM          equ     -(MAGIC + FLAGS)  ; Checksum requerido por multiboot
 
-; Memory management constants - removed heap constants as kernel will manage memory
-PAGE_SIZE       equ     0x1000         ; 4KB - Page size (kept for reference)
+; Constantes para manejo de memoria
+PAGE_SIZE       equ     0x1000         ; 4KB - Tamaño de página
 
-section .data
-    ; Debug messages
-    init_msg db "KernelSharp: Initializing loader...", 0
-    sse_msg db "SSE enabled successfully", 0
-    entry_msg db "Calling Entry function...", 0
-    modules_msg db "CoreLib address: ", 0
-    error_msg db "Error: ", 0
-    modules_prep_msg db "Preparing modules...", 0
-    modules_done_msg db "Modules prepared successfully", 0
-    multiboot_info_msg db "MultibootInfo: ", 0
-    multiboot_mods_msg db "Multiboot Modules found: ", 0
-    multiboot_mods_addr_msg db "Multiboot Modules address: ", 0
-    multiboot_mods_count_msg db "Multiboot Modules count: ", 0
-    trampoline_msg db "Trampoline address: ", 0
-    debug_msg db "Debugging address: ", 0
-    no_mods_msg db "No Multiboot modules found", 0
-    ebx_msg db "Original EBX value: ", 0
-    multiboot_data_msg db "Multiboot flags: ", 0
-    magic_msg db "Possible magic value: ", 0
-    success_msg db "Operation completed successfully", 0
-    multiboot_flag_check_msg db "Checking multiboot flags: ", 0
-    memory_msg db "Multiboot memory map passed to kernel", 0
-
-section .rodata
-    ; CoreLib module definition
-    corelib_module_def:
-        dd 0x52523A52       ; Magic signature 'RR:R'
-        dd 2                ; Number of sections
-        dd corelib_sections ; Pointer to sections
-
-    ; CoreLib sections
-    corelib_sections:
-        dd 0x01             ; SectionId for GCStaticRegion
-        dd gc_static_data   ; Region start
-        dd gc_static_data + 1024  ; Region end
-
-        dd 0x02             ; SectionId for EagerCctor
-        dd cctor_data       ; Constructor start
-        dd cctor_data + 1024 ; Constructor end
-        
-        dd 0                ; Section terminator
-
-section .bss
-    ; Module initialization areas
-    gc_static_data: resb 1024  ; 1KB for GC statics
-    cctor_data: resb 1024      ; 1KB for constructors
-    
-    ; Important pointers
-    multiboot_ptr: resd 1    ; Store multiboot info pointer
-    modules_ptr: resd 1      ; Store modules pointer
-    modules_count: resd 1    ; Store modules count
-    trampoline_ptr: resd 1   ; Store return address
-    
-    ; Screen pointer for output
-    screen_ptr: resd 1      ; Current screen position
-    
-    ; Stack space
-    resb 8192               ; 8KB for stack
-stack_space:
-
-section .text
-    ; Multiboot header - must be in first 8KB of the file
+section .multiboot_header
+    ; Encabezado Multiboot - debe estar en los primeros 8KB del archivo
     align 4                
     dd MAGIC               ; 0x1BADB002
-    dd FLAGS               ; Multiboot flags
+    dd FLAGS               ; Flags Multiboot
     dd CHECKSUM            ; Checksum
 
+section .data
+    ; Mensajes de depuración
+    init_msg db "KernelSharp: Inicializando loader...", 0
+    stack_msg db "Configurando pila...", 0
+    multiboot_msg db "Guardando informacion Multiboot...", 0
+    gdt_setup_msg db "Configurando GDT...", 0
+    gdt_success_msg db "GDT configurado correctamente", 0
+    idt_setup_msg db "Configurando IDT...", 0
+    idt_success_msg db "IDT configurado correctamente", 0
+    a20_msg db "Verificando linea A20...", 0
+    a20_enabled_msg db "Linea A20 habilitada", 0
+    sse_setup_msg db "Configurando SSE...", 0
+    sse_enabled_msg db "SSE habilitado correctamente", 0
+    entry_msg db "Llamando a la funcion Entry...", 0
+    error_msg db "ERROR: ", 0
+    halt_msg db "Sistema detenido", 0
+
+section .bss
+    ; Punteros importantes
+    multiboot_ptr: resd 1    ; Almacenar puntero de información multiboot
+    
+    ; Puntero de pantalla para salida
+    screen_ptr: resd 1      ; Posición actual de la pantalla
+    screen_col: resb 1      ; Columna actual
+    screen_row: resb 1      ; Fila actual
+    
+    ; Espacio para la pila
+    align 16
+    stack_bottom: resb 32768 ; 32KB para la pila
+    stack_space:            ; Apunta al tope de la pila
+
+section .text
 _start:
-    ; Store EBX (multiboot info pointer) immediately
-    mov dword [multiboot_ptr], ebx
+    ; Deshabilitar interrupciones al inicio
+    cli
     
-    ; Set up the stack
-    cli                     ; Disable interrupts
-    mov esp, stack_space    ; Set up stack pointer
+    ; Salvar inmediatamente el puntero Multiboot
+    mov [multiboot_ptr], ebx
     
-    ; Initialize screen pointer
+    ; Inicializar pantalla
     mov dword [screen_ptr], 0xB8000
+    mov byte [screen_col], 0
+    mov byte [screen_row], 0
     
-    ; Display initialization message
+    ; Limpiar pantalla
+    call clear_screen
+    
+    ; Mostrar mensaje de inicialización
     mov esi, init_msg
     call print_string
     call print_newline
     
-    ; Show the original EBX value
-    mov esi, ebx_msg
+    ; Mostrar mensaje de configuración de pila
+    mov esi, stack_msg
     call print_string
-    mov eax, ebx
-    call print_hex_eax
     call print_newline
     
-    ; Show the saved multiboot_ptr value
-    mov esi, multiboot_info_msg
+    ; Configurar la pila
+    mov esp, stack_space    ; Configurar puntero de pila
+    
+    ; Mostrar mensaje sobre información multiboot
+    mov esi, multiboot_msg
     call print_string
-    mov eax, [multiboot_ptr]
-    call print_hex_eax
     call print_newline
     
-    ; Check and enable SSE
+    ; Verificar si tenemos información Multiboot válida
+    cmp dword [multiboot_ptr], 0
+    je .no_multiboot
+    
+    ; Configurar GDT
+    mov esi, gdt_setup_msg
+    call print_string
+    call print_newline
+    call setup_gdt
+    mov esi, gdt_success_msg
+    call print_string
+    call print_newline
+    
+    ; Verificar y habilitar SSE
+    mov esi, sse_setup_msg
+    call print_string
+    call print_newline
     call enable_sse
-    jc error_handler        ; If CF=1, SSE enable failed
-
-    ; Properly detect and validate multiboot info
-    call validate_multiboot_info
-    
-    ; Detect multiboot modules
-    call detect_multiboot_modules
-    
-    ; Prepare CoreLib modules
-    call prepare_corelib_modules
-    
-    ; Select the best modules pointer to use
-    call select_best_modules
-    
-    ; Setup trampoline address
-    mov eax, kernel_return
-    mov [trampoline_ptr], eax
-    
-    ; Show module address
-    mov esi, modules_msg
+    mov esi, sse_enabled_msg
     call print_string
-    mov eax, [modules_ptr]
-    call print_hex_eax
     call print_newline
     
-    ; Show trampoline address
-    mov esi, trampoline_msg
-    call print_string
-    mov eax, [trampoline_ptr]
-    call print_hex_eax
-    call print_newline
-    
-    ; Message before calling Entry
+    ; Mostrar mensaje antes de llamar a Entry
     mov esi, entry_msg
     call print_string
     call print_newline
     
-    ; Show memory management message - memory control now passed to kernel
-    mov esi, memory_msg
-    call print_string
-    call print_newline
-
-    ; Prepare to call Entry with determined values
-    push dword [trampoline_ptr]  ; IntPtr Trampoline
-    push dword [modules_ptr]     ; IntPtr Modules
-    push dword [multiboot_ptr]   ; MultibootInfo* Info - Includes memory map for kernel
+    ; Preparar argumentos para Entry
+    ; Recordar que en la convención cdecl, los argumentos se pasan de derecha a izquierda
+    push dword 0x2BADB002           ; Pasar magic number como segundo argumento
+    push dword [multiboot_ptr]      ; Pasar el puntero Multiboot como primer argumento
     
-    ; Call Entry - kernel will initialize its own memory management
+    ; Llamar a la función Entry en C#
     call Entry
     
-    ; Clean up stack if we return
-    add esp, 12             ; Clean up 3 parameters (4 bytes each)
-
-kernel_return:
-    ; Check return code in eax
-    test eax, eax
-    jnz error_handler
+    ; Limpiar la pila si regresamos (aunque normalmente no deberíamos regresar)
+    add esp, 8                      ; Limpiar 2 parámetros (8 bytes)
     
-    ; All correct, jump to system_halt
+    ; Si llegamos aquí, algo salió mal, mostrar mensaje de error y detener
     jmp system_halt
 
-error_handler:
-    ; Handle errors
-    mov esi, error_msg
-    call print_string
-    
-    ; If eax contains an error message, display it
-    test eax, eax          ; If eax is 0, no message
-    jz .no_message
-    mov esi, eax
-    call print_string
-    
-.no_message:
-    call print_newline
-    jmp system_halt
-
-system_halt:
-    cli                     ; Disable interrupts
-    hlt                     ; Stop CPU
-    jmp system_halt         ; In case of unexpected interrupt
-
-; Validate multiboot information structure
-validate_multiboot_info:
-    push eax
-    push ebx
-    push ecx
-    
-    ; Check if we have a valid multiboot pointer
-    mov ebx, [multiboot_ptr]
-    test ebx, ebx
-    jz .invalid_multiboot
-    
-    ; Check multiboot magic value if present
-    ; Some bootloaders store it at a negative offset
-    mov esi, magic_msg
-    call print_string
-    mov eax, [ebx-4]     ; Check 4 bytes before flags
-    call print_hex_eax
-    call print_newline
-    
-    ; Display multiboot flags (first dword)
-    mov esi, multiboot_flag_check_msg
-    call print_string
-    mov eax, [ebx]       ; Load flags
-    call print_hex_eax
-    call print_newline
-    
-    ; Print structure size if available (some bootloaders provide this)
-    add ebx, 4           ; Skip flags field
-    mov esi, multiboot_data_msg
-    call print_string
-    mov eax, [ebx]       ; May contain structure size or other data
-    call print_hex_eax
-    call print_newline
-    
-    ; Success - structure exists even if format may vary
-    pop ecx
-    pop ebx
-    pop eax
-    ret
-    
-.invalid_multiboot:
-    mov esi, error_msg
-    call print_string
-    mov esi, multiboot_info_msg
-    call print_string
-    call print_newline
-    
-    ; Continue anyway - we'll use default module if needed
-    pop ecx
-    pop ebx
-    pop eax
-    ret
-
-; Function to detect multiboot modules with flexible structure handling
-detect_multiboot_modules:
-    push eax
-    push ebx
-    push ecx
-    push edx
-    
-    ; Verify we have multiboot info
-    mov ebx, [multiboot_ptr]
-    test ebx, ebx
-    jz .no_multiboot
-    
-    ; Print the first 32 bytes of the multiboot structure for debugging
-    ; This helps identify the actual structure format provided by your bootloader
-    mov ecx, 8           ; Print 8 dwords (32 bytes)
-    mov esi, ebx         ; Start of multiboot structure
-    
-    mov esi, debug_msg
-    call print_string
-    call print_newline
-    
-    mov esi, ebx
-.debug_loop:
-    mov eax, [esi]
-    call print_hex_eax
-    call print_newline
-    add esi, 4
-    loop .debug_loop
-    
-    ; Try to find modules - first check flags
-    mov eax, [ebx]         ; Get flags
-    
-    ; Check both known locations for mods_count
-    ; Standard multiboot: offset 20
-    mov ecx, [ebx + 20]
-    mov esi, multiboot_mods_count_msg
-    call print_string
-    mov eax, ecx
-    call print_hex_eax
-    call print_newline
-    
-    ; Check standard location for mods_addr
-    mov eax, [ebx + 24]
-    mov esi, multiboot_mods_addr_msg
-    call print_string
-    call print_hex_eax
-    call print_newline
-    
-    ; If we found modules at standard offset, use them
-    test ecx, ecx
-    jz .check_alternative
-    test eax, eax
-    jz .check_alternative
-    
-    mov [modules_count], ecx
-    jmp .done
-    
-.check_alternative:
-    ; Try alternative offsets - some bootloaders use different structure layouts
-    ; Alternative layout 1: mods at offset 12/16
-    mov ecx, [ebx + 12]
-    mov esi, multiboot_mods_count_msg
-    call print_string
-    mov eax, ecx
-    call print_string
-    call print_hex_eax
-    call print_newline
-    
-    ; Check alternative mods_addr
-    mov eax, [ebx + 16]
-    mov esi, multiboot_mods_addr_msg
-    call print_string
-    call print_hex_eax
-    call print_newline
-    
-    ; If this looks valid, use it
-    test ecx, ecx
-    jz .no_modules
-    test eax, eax
-    jz .no_modules
-    
-    mov [modules_count], ecx
-    jmp .done
-    
 .no_multiboot:
     mov esi, error_msg
     call print_string
-    mov esi, debug_msg
+    mov esi, multiboot_msg
     call print_string
     call print_newline
-    jmp .done
+    jmp system_halt
+
+; Función para limpiar la pantalla
+clear_screen:
+    pusha
+    mov ecx, 80*25          ; Total de caracteres en pantalla (80x25)
+    mov edi, 0xB8000        ; Dirección base de la memoria de video
+    mov ax, 0x0720          ; Atributo (7) y espacio (ASCII 32)
+    rep stosw               ; Repetir STOSW ECX veces (llena toda la pantalla)
     
-.no_modules:
-    mov esi, no_mods_msg
-    call print_string
-    call print_newline
+    ; Resetear posición del cursor
+    mov byte [screen_col], 0
+    mov byte [screen_row], 0
+    mov dword [screen_ptr], 0xB8000
+    
+    popa
+    ret
+
+; Función para imprimir strings
+print_string:
+    pusha
+    
+.loop:
+    lodsb                       ; Cargar byte de ESI en AL e incrementar ESI
+    test al, al                 ; Verificar si es fin de cadena (0)
+    jz .done
+    
+    call print_char
+    jmp .loop
     
 .done:
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
+    popa
     ret
 
-; Choose the best module pointer available with more flexibility
-select_best_modules:
-    push eax
-    push ebx
-    push ecx
-    push edx
+; Función para imprimir un carácter
+print_char:
+    pusha
     
-    ; Default to our CoreLib module def (always have a fallback)
-    lea eax, [corelib_module_def]
-    mov [modules_ptr], eax
+    ; Verificar si es un salto de línea
+    cmp al, 10                  ; Salto de línea (ASCII 10)
+    je .newline
     
-    ; Display the default module address
-    mov esi, modules_msg
-    call print_string
-    mov eax, [modules_ptr]
-    call print_hex_eax
-    call print_newline
+    ; Calcular posición en memoria de video
+    movzx edx, byte [screen_row] ; Fila actual
+    imul edx, 80*2              ; 80 caracteres por fila, 2 bytes por carácter
+    movzx ecx, byte [screen_col] ; Columna actual
+    imul ecx, 2                 ; 2 bytes por carácter
+    add edx, ecx                ; Posición total
+    add edx, 0xB8000            ; Sumar dirección base
     
-    ; Check if multiboot info exists at all
-    mov ebx, [multiboot_ptr]
-    test ebx, ebx
-    jz .use_default
+    ; Escribir carácter
+    mov [edx], al               ; Carácter
+    mov byte [edx+1], 0x0F      ; Atributo (blanco sobre negro)
     
-    ; Print first 8 bytes of the multiboot structure
-    mov esi, multiboot_data_msg
-    call print_string
-    mov eax, [ebx]
-    call print_hex_eax
-    call print_newline
+    ; Incrementar columna
+    inc byte [screen_col]
     
-    mov esi, debug_msg
-    call print_string
-    mov eax, [ebx+4]
-    call print_hex_eax
-    call print_newline
+    ; Verificar si llegamos al final de la línea
+    cmp byte [screen_col], 80
+    jl .done
     
-    ; Try both standard and alternative offsets for modules
+.newline:
+    ; Ir a la siguiente línea
+    mov byte [screen_col], 0
+    inc byte [screen_row]
     
-    ; Standard layout: mods at offset 20/24
-    mov ecx, [ebx + 20]    ; mods_count
-    mov edx, [ebx + 24]    ; mods_addr
+    ; Verificar si necesitamos hacer scroll
+    cmp byte [screen_row], 25
+    jl .done
     
-    ; Check if standard offsets have valid data
-    test ecx, ecx
-    jz .try_alternative
-    test edx, edx
-    jz .try_alternative
-    
-    ; Use standard multiboot modules
-    mov [modules_ptr], edx
-    mov esi, modules_msg
-    call print_string
-    mov eax, [modules_ptr]
-    call print_hex_eax
-    call print_string
-    call print_newline
-    jmp .done
-    
-.try_alternative:
-    ; Alternative layout: try offset 12/16
-    mov ecx, [ebx + 12]    ; alt mods_count
-    mov edx, [ebx + 16]    ; alt mods_addr
-    
-    ; Check if alternative offsets have valid data
-    test ecx, ecx
-    jz .use_default
-    test edx, edx
-    jz .use_default
-    
-    ; Use alternative multiboot modules
-    mov [modules_ptr], edx
-    mov esi, modules_msg
-    call print_string
-    mov eax, [modules_ptr]
-    call print_hex_eax
-    call print_newline
-    jmp .done
-
-.use_default:
-    ; We're already using the default, just continue
+    ; Hacer scroll (no implementado para simplicidad)
+    ; Generalmente esto implicaría mover todas las líneas hacia arriba
+    mov byte [screen_row], 24
     
 .done:
-    ; Final module address being used
-    mov esi, modules_msg
-    call print_string
-    mov eax, [modules_ptr]
-    call print_hex_eax
-    call print_newline
+    ; Actualizar el puntero de pantalla
+    movzx edx, byte [screen_row] ; Fila actual
+    imul edx, 80*2              ; 80 caracteres por fila, 2 bytes por carácter
+    movzx ecx, byte [screen_col] ; Columna actual
+    imul ecx, 2                 ; 2 bytes por carácter
+    add edx, ecx                ; Posición total
+    add edx, 0xB8000            ; Sumar dirección base
+    mov [screen_ptr], edx
     
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
+    popa
     ret
 
-; Prepare CoreLib modules
-prepare_corelib_modules:
-    push eax
-    push edi
-    push ecx
-    
-    mov esi, modules_prep_msg
-    call print_string
-    call print_newline
-    
-    ; Clear GC Static Data
-    mov edi, gc_static_data
-    mov ecx, 1024
-    xor eax, eax
-    rep stosb
-    
-    ; Clear CCTOR Data
-    mov edi, cctor_data
-    mov ecx, 1024
-    xor eax, eax
-    rep stosb
-    
-    ; Show message after setup
-    mov esi, modules_done_msg
-    call print_string
-    call print_newline
-    
-    pop ecx
-    pop edi
-    pop eax
+; Función para imprimir nueva línea
+print_newline:
+    pusha
+    mov al, 10                  ; Salto de línea
+    call print_char
+    popa
     ret
 
-; Function to enable SSE
+; Función para configurar GDT
+setup_gdt:
+    ; Cargar GDT
+    lgdt [gdt_descriptor]
+    
+    ; Recargar registros de segmento
+    mov ax, 0x10            ; Segmento de datos
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    ; Salto lejano para recargar CS
+    jmp 0x08:.reload_cs
+
+.reload_cs:
+    ret
+
+; Función para habilitar SSE
 enable_sse:
-    ; Check SSE support
+    ; Verificar soporte de SSE
     mov eax, 0x1
     cpuid
     test edx, 1<<25
-    jz .sse_not_supported   ; If SSE not supported, fail
+    jz .sse_not_supported
     
-    ; Enable SSE
+    ; Habilitar SSE
     mov eax, cr0
-    and ax, 0xFFFB          ; Clear coprocessor emulation CR0.EM
-    or ax, 0x2              ; Set coprocessor monitoring CR0.MP
+    and ax, 0xFFFB          ; Limpiar emulación de coprocesador CR0.EM
+    or ax, 0x2              ; Establecer monitoreo de coprocesador CR0.MP
     mov cr0, eax
     mov eax, cr4
-    or ax, 3 << 9           ; Set CR4.OSFXSR and CR4.OSXMMEXCPT
+    or ax, 3 << 9           ; Establecer CR4.OSFXSR y CR4.OSXMMEXCPT
     mov cr4, eax
     
-    ; Show success message
-    mov esi, sse_msg
-    call print_string
-    call print_newline
-    
-    clc                     ; Clear carry flag to indicate success
     ret
     
 .sse_not_supported:
-    ; SSE not supported - show error
-    mov esi, error_msg
-    call print_string
-    call print_newline
-    stc                     ; Set carry flag to indicate error
     ret
 
-; Function to print newline
-print_newline:
-    push eax
-    push ebx
-    push ecx
-    push edx
+; Función para imprimir un valor hexadecimal en EAX
+print_hex:
+    pusha
+    mov ecx, 8              ; 8 dígitos para un valor de 32 bits
     
-    ; Get current position
-    mov ebx, [screen_ptr]
+    ; Imprimir prefijo "0x"
+    mov al, '0'
+    call print_char
+    mov al, 'x'
+    call print_char
     
-    ; Calculate next line position
-    mov eax, ebx
-    sub eax, 0xB8000        ; Subtract video base
-    mov edx, 0              ; Clear high part for division
-    mov ecx, 160            ; 80 characters * 2 bytes per line
-    div ecx                 ; eax = current line, edx = offset in line
-    
-    inc eax                 ; Next line
-    mul ecx                 ; eax = offset of next line
-    add eax, 0xB8000        ; Add base
-    
-    ; Update screen pointer
-    mov [screen_ptr], eax
-    
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
-    ret
-
-; Function to print EAX as hexadecimal
-print_hex_eax:
-    push eax
-    push ebx
-    push ecx
-    push edx
-    
-    mov ecx, 8              ; 8 digits for 32-bit value
-    mov ebx, [screen_ptr]   ; Get current screen position
-    
-    ; Write "0x" prefix
-    mov byte [ebx], '0'
-    mov byte [ebx+1], 0x0F
-    mov byte [ebx+2], 'x'
-    mov byte [ebx+3], 0x0F
-    add ebx, 4
-    
-    ; Save original eax value
-    push eax
-    
-    ; Loop for each digit
 .print_digit:
-    rol eax, 4              ; Rotate left to get most significant digit
+    rol eax, 4              ; Rotar a la izquierda para obtener el dígito más significativo
     mov edx, eax
-    and edx, 0xF            ; Isolate the digit
+    and edx, 0xF            ; Aislar el dígito
     
-    ; Convert to ASCII
+    ; Convertir a ASCII
     cmp edx, 10
     jl .decimal
     add edx, 'A' - 10 - '0'
@@ -576,50 +292,449 @@ print_hex_eax:
 .decimal:
     add edx, '0'
     
-    ; Write the character
-    mov byte [ebx], dl
-    mov byte [ebx+1], 0x0F
-    add ebx, 2
+    ; Imprimir el dígito
+    mov al, dl
+    call print_char
     
     loop .print_digit
     
-    ; Restore original eax value
-    pop eax
-    
-    ; Update screen pointer
-    mov [screen_ptr], ebx
-    
-    pop edx
-    pop ecx
-    pop ebx
-    pop eax
+    popa
     ret
 
-; Function to print strings
-print_string:
-    push eax
-    push ebx
-    push esi
+; Detención del sistema
+system_halt:
+    ; Mostrar mensaje de detención
+    mov esi, halt_msg
+    call print_string
+    call print_newline
     
-    mov ebx, [screen_ptr]   ; Get current screen position
+    ; Deshabilitar interrupciones
+    cli
     
-.loop:
-    mov al, [esi]           ; Load character
-    test al, al             ; Check for end of string
-    jz .done
+    ; Detener CPU
+    hlt
     
-    mov byte [ebx], al      ; Write character
-    mov byte [ebx+1], 0x0F  ; Attribute (white on black)
+    ; Por si acaso, bucle infinito
+    jmp system_halt
+
+; Definición de GDT
+align 8
+gdt_start:
+    ; Descriptor nulo
+    dq 0                    ; 8 bytes de ceros
     
-    inc esi                 ; Next character
-    add ebx, 2              ; Next screen position
-    jmp .loop
+    ; Segmento de código
+    dw 0xFFFF               ; Límite [0:15]
+    dw 0x0000               ; Base [0:15]
+    db 0x00                 ; Base [16:23]
+    db 10011010b            ; Acceso (P=1, DPL=00, S=1, E=1, DC=0, RW=1, A=0)
+    db 11001111b            ; Granularidad (G=1, D=1, L=0, AVL=0) + Límite [16:19]
+    db 0x00                 ; Base [24:31]
+    
+    ; Segmento de datos
+    dw 0xFFFF               ; Límite [0:15]
+    dw 0x0000               ; Base [0:15]
+    db 0x00                 ; Base [16:23]
+    db 10010010b            ; Acceso (P=1, DPL=00, S=1, E=0, DC=0, RW=1, A=0)
+    db 11001111b            ; Granularidad (G=1, D=1, L=0, AVL=0) + Límite [16:19]
+    db 0x00                 ; Base [24:31]
+gdt_end:
+
+; Continuación desde:
+ gdt_descriptor: 
+ dw gdt_end - gdt_start - 1 ; Tamaño de GDT (menos 1) 
+ dd gdt_start ; Dirección de inicio de GDT
+
+; Funciones de manejo PIC (Programmable Interrupt Controller)
+pic_remap:
+    ; Enviar comandos de inicialización a los PICs
+    mov al, 0x11           ; Inicialización en cascada
+    out 0x20, al           ; Enviar a PIC 1
+    out 0xA0, al           ; Enviar a PIC 2
+    
+    ; Establecer los vectores de offset
+    mov al, 0x20           ; El PIC 1 comienza en 0x20 (32)
+    out 0x21, al
+    mov al, 0x28           ; El PIC 2 comienza en 0x28 (40)
+    out 0xA1, al
+    
+    ; Decirle a los PICs cómo están conectados
+    mov al, 0x04           ; PIC 1 tiene el PIC 2 en IRQ 2
+    out 0x21, al
+    mov al, 0x02           ; PIC 2 está conectado a través de IRQ 2
+    out 0xA1, al
+    
+    ; Poner los PICs en modo 8086
+    mov al, 0x01           ; Modo 8086
+    out 0x21, al
+    out 0xA1, al
+    
+    ; Enmascarar todas las interrupciones excepto IRQ 1 (teclado)
+    mov al, 0xFD           ; Habilitar solo IRQ 1
+    out 0x21, al
+    mov al, 0xFF           ; Deshabilitar todos los IRQs del PIC 2
+    out 0xA1, al
+    
+    ret
+
+; Función para verificar y habilitar línea A20
+check_a20:
+    pushad                  ; Guardar todos los registros
+
+    ; Primero intentamos a través del controlador de teclado
+    call .try_keyboard_controller
+    test eax, eax
+    jnz .done              ; Si está habilitado, salir
+    
+    ; Si no funciona, intentamos con el Fast A20 Gate
+    call .try_fast_a20
+    test eax, eax
+    jnz .done              ; Si está habilitado, salir
+    
+    ; Si aún no funciona, reportamos un error
+    mov esi, error_msg
+    call print_string
+    mov esi, a20_msg
+    call print_string
+    call print_newline
+    
+    ; Devolver 0 para indicar fallo
+    mov eax, 0
+    jmp .exit
     
 .done:
-    ; Update screen pointer
-    mov [screen_ptr], ebx
+    ; Línea A20 está habilitada
+    mov esi, a20_enabled_msg
+    call print_string
+    call print_newline
     
-    pop esi
-    pop ebx
-    pop eax
+    ; Devolver 1 para indicar éxito
+    mov eax, 1
+    
+.exit:
+    popad                   ; Restaurar todos los registros
     ret
+
+.try_keyboard_controller:
+    ; Deshabilitar interrupciones
+    cli
+    
+    ; Deshabilitar teclado
+    call .wait_input
+    mov al, 0xAD
+    out 0x64, al
+    
+    ; Leer puerto de salida
+    call .wait_input
+    mov al, 0xD0
+    out 0x64, al
+    
+    ; Leer resultados
+    call .wait_output
+    in al, 0x60
+    push eax
+    
+    ; Escribir puerto de salida
+    call .wait_input
+    mov al, 0xD1
+    out 0x64, al
+    
+    ; Activar línea A20
+    call .wait_input
+    pop eax
+    or al, 2               ; Establecer bit 1 (A20)
+    out 0x60, al
+    
+    ; Habilitar teclado nuevamente
+    call .wait_input
+    mov al, 0xAE
+    out 0x64, al
+    
+    ; Esperar a que esté listo
+    call .wait_input
+    
+    ; Verificar si A20 está habilitada
+    call .check_a20_enabled
+    ret
+
+.try_fast_a20:
+    ; Intento a través del Fast A20 Gate
+    in al, 0x92
+    test al, 2
+    jnz .fast_done         ; Ya está habilitada
+    
+    ; Habilitar A20
+    or al, 2
+    out 0x92, al
+    
+.fast_done:
+    ; Esperar un poco
+    mov ecx, 0x100000
+.delay:
+    loop .delay
+    
+    ; Verificar si A20 está habilitada
+    call .check_a20_enabled
+    ret
+
+.wait_input:
+    ; Esperar hasta que el controlador esté listo para entrada
+    in al, 0x64
+    test al, 2
+    jnz .wait_input
+    ret
+
+.wait_output:
+    ; Esperar hasta que haya datos de salida
+    in al, 0x64
+    test al, 1
+    jz .wait_output
+    ret
+
+.check_a20_enabled:
+    ; Verificar si A20 está habilitada
+    push ds
+    push es
+    push edi
+    push esi
+    
+    ; Configurar segmentos
+    xor ax, ax             ; AX = 0
+    mov ds, ax             ; DS = 0
+    
+    not ax                 ; AX = 0xFFFF
+    mov es, ax             ; ES = 0xFFFF
+    
+    ; Establecer direcciones para la prueba
+    mov edi, 0x00500       ; ES:DI = 0xFFFF:0x0500 = 0x100500
+    mov esi, 0x00510       ; DS:SI = 0x0000:0x0510 = 0x000510
+    
+    ; Guardar datos originales
+    mov dl, [es:edi]
+    mov dh, [ds:esi]
+    
+    ; Cambiar datos
+    mov byte [es:edi], 0x00
+    mov byte [ds:esi], 0xFF
+    
+    ; Verificar si se afectan entre sí (si A20 está deshabilitada)
+    cmp byte [es:edi], 0xFF
+    
+    ; Restaurar datos originales
+    mov byte [ds:esi], dh
+    mov byte [es:edi], dl
+    
+    ; Restaurar registros
+    pop esi
+    pop edi
+    pop es
+    pop ds
+    
+    ; Si son iguales, A20 está deshabilitada
+    mov eax, 0
+    je .check_done
+    
+    ; Si son diferentes, A20 está habilitada
+    mov eax, 1
+    
+.check_done:
+    ret
+
+; Tabla de descriptores de interrupción (IDT)
+align 8
+idt_start:
+    times 256 dq 0         ; 256 entradas vacías
+idt_end:
+
+idt_descriptor:
+    dw idt_end - idt_start - 1   ; Tamaño de IDT (menos 1)
+    dd idt_start                 ; Dirección de inicio de IDT
+
+; Función para configurar la IDT
+setup_idt:
+    ; Cargar IDT
+    lidt [idt_descriptor]
+    ret
+
+; Función para probar si podemos escribir en memoria
+test_memory:
+    pusha
+    
+    ; Prueba simple: intentar escribir en algunas direcciones
+    ; y verificar si se mantiene el valor
+    
+    ; Dirección base
+    mov edi, 0x100000      ; 1MB
+    
+    ; Guardar valor original
+    mov edx, [edi]
+    
+    ; Escribir un patrón
+    mov dword [edi], 0xAA55AA55
+    
+    ; Verificar si se mantuvo el valor
+    cmp dword [edi], 0xAA55AA55
+    jne .failed
+    
+    ; Restaurar valor original
+    mov [edi], edx
+    
+    ; Prueba exitosa
+    mov esi, memory_test_success
+    call print_string
+    call print_newline
+    
+    popa
+    ret
+    
+.failed:
+    ; Prueba fallida
+    mov esi, memory_test_failed
+    call print_string
+    call print_newline
+    
+    popa
+    ret
+
+; Mensajes adicionales
+section .data
+memory_test_success db "Prueba de memoria exitosa", 0
+memory_test_failed db "Prueba de memoria fallida", 0
+paging_setup_msg db "Configurando paginacion...", 0
+paging_enabled_msg db "Paginacion habilitada", 0
+
+; Función para habilitar paginación básica (identidad)
+; Nota: Esta función es opcional y puede no ser necesaria para un kernel C#
+; que maneja su propia paginación
+setup_paging:
+    ; Mostrar mensaje
+    mov esi, paging_setup_msg
+    call print_string
+    call print_newline
+    
+    ; Reservar espacio para las tablas de páginas
+    ; Esta es una configuración muy básica para una paginación de identidad
+    ; (cada dirección virtual mapea a la misma dirección física)
+    
+    ; 1. Limpiar el directorio de páginas
+    mov edi, 0x100000      ; Directorio en 1MB
+    mov ecx, 1024          ; 1024 entradas
+    xor eax, eax           ; Valor 0
+    rep stosd              ; Repetir STOSD (store doubleword) ECX veces
+    
+    ; 2. Configurar la primera tabla de páginas (0-4MB)
+    mov edi, 0x101000      ; Primera tabla de páginas (después del directorio)
+    mov eax, 0x003         ; Present + Read/Write
+    mov ecx, 1024          ; 1024 entradas
+    
+.setup_page_table:
+    stosd                  ; Guardar EAX y avanzar EDI
+    add eax, 0x1000        ; Siguiente página (4KB)
+    loop .setup_page_table
+    
+    ; 3. Apuntar la primera entrada del directorio a la tabla de páginas
+    mov dword [0x100000], 0x101003   ; Present + Read/Write + tabla en 0x101000
+    
+    ; 4. Cargar CR3 con la dirección del directorio
+    mov eax, 0x100000
+    mov cr3, eax
+    
+    ; 5. Habilitar paginación
+    mov eax, cr0
+    or eax, 0x80000000     ; Establecer bit PG
+    mov cr0, eax
+    
+    ; Mostrar mensaje de éxito
+    mov esi, paging_enabled_msg
+    call print_string
+    call print_newline
+    
+    ret
+
+; Función para leer configuración del CPUID
+get_cpu_info:
+    pusha
+    
+    ; Verificar si CPUID está disponible
+    pushfd                 ; Guardar EFLAGS
+    pop eax                ; Cargar EFLAGS en EAX
+    mov ecx, eax           ; Guardar original
+    xor eax, 0x200000      ; Invertir bit de ID (bit 21)
+    push eax               ; Guardar modificado
+    popfd                  ; Cargar EFLAGS modificado
+    pushfd                 ; Guardar resultado
+    pop eax                ; Cargar en EAX
+    push ecx               ; Restaurar EFLAGS original
+    popfd
+    
+    ; Comparar para ver si el bit se mantuvo cambiado
+    xor eax, ecx
+    test eax, 0x200000
+    jz .no_cpuid           ; Si no cambió, CPUID no está disponible
+    
+    ; CPUID disponible, obtener información
+    mov eax, 0             ; Función 0: Obtener vendor ID
+    cpuid
+    
+    ; Guardar vendor ID
+    mov [cpu_vendor], ebx
+    mov [cpu_vendor+4], edx
+    mov [cpu_vendor+8], ecx
+    mov byte [cpu_vendor+12], 0 ; Asegurar NULL-terminated
+    
+    ; Obtener características del CPU
+    mov eax, 1             ; Función 1: Obtener características
+    cpuid
+    
+    ; Guardar características
+    mov [cpu_features], edx
+    
+    ; Imprimir información
+    mov esi, cpu_info_msg
+    call print_string
+    mov esi, cpu_vendor
+    call print_string
+    call print_newline
+    
+    ; Verificar características específicas
+    test edx, 1<<0
+    jz .no_fpu
+    mov esi, cpu_fpu_msg
+    call print_string
+    call print_newline
+.no_fpu:
+    
+    test edx, 1<<25
+    jz .no_sse
+    mov esi, cpu_sse_msg
+    call print_string
+    call print_newline
+.no_sse:
+    
+    test edx, 1<<26
+    jz .no_sse2
+    mov esi, cpu_sse2_msg
+    call print_string
+    call print_newline
+.no_sse2:
+    
+    popa
+    ret
+    
+.no_cpuid:
+    mov esi, cpu_no_cpuid_msg
+    call print_string
+    call print_newline
+    
+    popa
+    ret
+
+; Variables para información del CPU
+section .data
+cpu_vendor: times 16 db 0      ; Espacio para vendor ID + NULL
+cpu_features: dd 0             ; Características del CPU
+cpu_info_msg db "CPU: ", 0
+cpu_fpu_msg db "FPU disponible", 0
+cpu_sse_msg db "SSE disponible", 0
+cpu_sse2_msg db "SSE2 disponible", 0
+cpu_no_cpuid_msg db "CPUID no disponible", 0                ; Dirección de inicio de GDT
