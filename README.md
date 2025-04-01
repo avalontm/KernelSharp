@@ -1,95 +1,103 @@
 # KernelSharp
 
-KernelSharp es una implementación de un núcleo minimalista en C# orientado a sistemas de 32 bits. Este proyecto busca crear un núcleo moderno que aprovecha las capacidades de C# mientras mantiene un rendimiento eficiente.
+KernelSharp is a minimalist kernel implementation in C# aimed at 32-bit systems. This project seeks to create a modern kernel that leverages C# capabilities while maintaining efficient performance.
 
-## Características
+## Features
 
-El proyecto incluye una implementación de CoreLib que proporciona las funcionalidades básicas necesarias para el sistema operativo:
+The project includes a CoreLib implementation that provides the basic functionalities required for the operating system:
 
-| Categoría | Componentes | Estado |
+| Category | Components | Status |
 |-----------|------------|--------|
-| **Tipos primitivos** | Int32, Int64, UInt32, UInt64, Byte, SByte, Boolean, Char, Double, Single | ✅ Implementado |
-| **Tipos fundamentales** | String, Array, Object | ✅ Implementado |
-| **Memoria** | Buffer, SpanHelpers, Unsafe, Allocator | ✅ Implementado |
-| **Colecciones** | List (básica) | ✅ Parcial |
-| **Estructuras de sistema** | DateTime, TimeSpan, Random | ✅ Implementado |
-| **Runtime** | EEType, RuntimeType | ✅ Implementado |
-| **Soporte nativo** | Interoperabilidad nativa para manejo de memoria | ✅ Implementado |
-| **Gestión de excepciones** | Manejo de excepciones básico | ⚠️ Básico |
-| **Gestión de memoria** | GC estático, arranque, inicialización | ✅ Implementado |
-| **Multiboot** | Soporte para Multiboot (GRUB) | ✅ Implementado |
+| **Primitive Types** | Int32, Int64, UInt32, UInt64, Byte, SByte, Boolean, Char, Double, Single | ✅ Implemented |
+| **Fundamental Types** | String, Array, Object | ✅ Implemented |
+| **Memory** | Buffer, SpanHelpers, Unsafe, Allocator | ✅ Implemented |
+| **Collections** | List (basic) | ✅ Partial |
+| **System Structures** | DateTime, TimeSpan, Random | ✅ Implemented |
+| **Runtime** | EEType, RuntimeType | ✅ Implemented |
+| **Native Support** | Native interoperability for memory management | ✅ Implemented |
+| **Exception Handling** | Basic exception handling | ⚠️ Basic |
+| **Memory Management** | Static GC, bootstrapping, initialization | ✅ Implemented |
+| **Multiboot** | Support for Multiboot (GRUB) | ✅ Implemented |
 
-## Arquitectura
+## Architecture
 
-El proyecto está estructurado en varias capas:
+The project is structured into several layers:
 
-1. **Capa de bajo nivel (Ensamblador)**
-   - Configuración inicial del hardware
-   - Inicialización de SSE
-   - Gestión básica de memoria
+1. **Low-Level Layer (Assembly)**
+   - Initial hardware setup
+   - SSE initialization
+   - Basic memory management
 
-2. **CoreLib (Implementación de .NET)**
-   - Tipos primitivos y fundamentales
-   - Estructuras de sistema
-   - Soporte para runtime
+2. **CoreLib (.NET Implementation)**
+   - Primitive and fundamental types
+   - System structures
+   - Runtime support
 
 3. **Kernel**
-   - Inicialización del sistema
-   - Manejo de consola
-   - Gestión de memoria paginada
+   - System initialization
+   - Console management
+   - Paged memory management
 
 ## Loader
 
-El sistema utiliza un cargador personalizado que:
+The system uses a custom loader that:
 
-- Inicializa el heap
-- Maneja la información de Multiboot
-- Configura los módulos CoreLib
-- Habilita SSE para operaciones de punto flotante
+- Initializes the heap
+- Handles Multiboot information
+- Configures CoreLib modules
+- Enables SSE for floating-point operations
 
-## Implementación de Tipos
+## Type Implementation
 
-El CoreLib implementa tipos fundamentales que son necesarios para el funcionamiento del núcleo:
+CoreLib implements fundamental types necessary for kernel operation:
 
-- **String**: Implementación completa con métodos para manipulación de cadenas
-- **Array**: Soporte para arreglos unidimensionales con métodos de manipulación
-- **Object**: Base para el sistema de tipos de .NET
-- **DateTime**: Manejo de fechas y horas
-- **Estructuras numéricas**: Implementación de tipos enteros y de punto flotante
+- **String**: Complete implementation with string manipulation methods
+- **Array**: Support for one-dimensional arrays with manipulation methods
+- **Object**: Base for the .NET type system
+- **DateTime**: Date and time handling
+- **Numeric Structures**: Implementation of integer and floating-point types
 
-## Características de Runtime
+## Runtime Features
 
-- **EEType**: Sistema de tipos en tiempo de ejecución
-- **Unsafe**: Operaciones de memoria de bajo nivel
-- **StartupCodeHelpers**: Ayudantes para la inicialización
-- **ThrowHelpers**: Soporte para manejo de excepciones
+- **EEType**: Runtime type system
+- **Unsafe**: Low-level memory operations
+- **StartupCodeHelpers**: Helpers for initialization
+- **ThrowHelpers**: Exception handling support
 
-## Memoria y Asignación
+## Memory and Allocation
 
-- Implementación de un heap simple
-- Sistema de paginación
-- Asignación de memoria alineada
+- Implementation of a simple heap
+- Paging system
+- Aligned memory allocation
 
-## Consola
+## Console
 
-Implementación de una consola básica con:
-- Soporte para colores
-- Funciones de impresión 
-- Manipulación del buffer de pantalla
+Basic console implementation with:
+- Color support
+- Print functions
+- Screen buffer manipulation
 
-## Estado del proyecto
+## Project Status
 
-Este proyecto está en desarrollo activo. La implementación actual provee la funcionalidad básica para ejecutar código C# en un entorno bare-metal.
+This project is under active development. The current implementation provides basic functionality for executing C# code in a bare-metal environment.
 
-## Requisitos de compilación
+## Build Requirements
 
-Para compilar el proyecto se necesita:
+To compile the project, you need:
 
-- .NET SDK 7.0 o superior
-- NASM para el código ensamblador
-- Herramienta de construcción del sistema (cmoos)
-- Herramientas esenciales (nams, ld, objcopy)
+- .NET SDK 8.0 or higher
+- NASM for assembly code
+- System build tool (cmoos)
+- Essential tools (nasm, ld, objcopy)
 
-## Licencia
+## Usage
 
-Este proyecto está licenciado bajo la licencia MIT.
+To build the project, use:
+
+```sh
+cmoos.exe build --debug
+```
+
+## License
+
+This project is licensed under the MIT license.
