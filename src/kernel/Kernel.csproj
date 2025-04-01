@@ -36,6 +36,7 @@
 			<ReferencePath Remove="@(ReferencePath)" />
 		</ItemGroup>
 	</Target>
+
 	<ItemGroup>
 	  <ProjectReference Include="..\corlib\Corlib.csproj" />
 	</ItemGroup>

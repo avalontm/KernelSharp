@@ -174,9 +174,6 @@ namespace Kernel
         [DllImport("*", EntryPoint = "_SetEFlags")]
         public static extern void SetEFlags(uint flags);
 
-        [DllImport("*", EntryPoint = "_Memset")]
-        internal static extern void Memset(byte* frameBuffer, byte color, uint v);
-        [DllImport("*", EntryPoint = "_Memcpy")]
-        internal static extern void Memcpy(byte* v1, byte* v2, uint v3);
+
     }
 }

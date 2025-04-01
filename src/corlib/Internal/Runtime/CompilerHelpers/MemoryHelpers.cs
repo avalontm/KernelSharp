@@ -26,7 +26,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// <param name="ptr">Puntero donde comenzar</param>
         /// <param name="value">Valor byte para establecer</param>
         /// <param name="size">Número de bytes a establecer</param>
-        public static unsafe void MemSet(byte* ptr, int c, int count)
+        public static unsafe void MemSet(byte* ptr, int c, uint count)
         {
             for (byte* p = ptr; p < ptr + count; p++)
                 *p = (byte)c;
@@ -39,7 +39,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// <param name="dest">Puntero de destino</param>
         /// <param name="src">Puntero de origen</param>
         /// <param name="size">Número de bytes a copiar</param>
-        public static unsafe void MemCpy(byte* dest, byte* src, ulong count)
+        public static unsafe void MemCpy(byte* dest, byte* src, uint count)
         {
             for (ulong i = 0; i < count; i++) dest[i] = src[i];
         }

@@ -3,6 +3,7 @@ using Internal.Runtime.CompilerServices;
 
 namespace System.Runtime.InteropServices
 {
+
     public static partial class MemoryMarshal
     {
         /// <summary>

@@ -161,28 +161,28 @@ namespace System
 
         public static void Copy(Array sourceArray, ref Array destinationArray, int startIndex, int count)
         {
-            
-			if (sourceArray == null)
-			{
-				ThrowHelpers.ThrowArgumentException("sourceArray");
-			}
-			if (destinationArray == null)
-			{
-				ThrowHelpers.ThrowArgumentException("destinationArray");
-			}
-			if (startIndex < 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex");
-			}
-			if (destinationArray.Length < sourceArray.Length - count)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("sourceArray.Length - count");
-			}
-			if (count <= 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("count");
-			}
-			
+
+            if (sourceArray == null)
+            {
+                ThrowHelpers.ThrowArgumentException("sourceArray");
+            }
+            if (destinationArray == null)
+            {
+                ThrowHelpers.ThrowArgumentException("destinationArray");
+            }
+            if (startIndex < 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex");
+            }
+            if (destinationArray.Length < sourceArray.Length - count)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("sourceArray.Length - count");
+            }
+            if (count <= 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("count");
+            }
+
 
             int x = 0;
             object[] temp = new object[count];
@@ -196,27 +196,27 @@ namespace System
 
         public static void Copy<T>(T[] sourceArray, ref T[] destinationArray, int startIndex, int count)
         {
-            
-			if (sourceArray == null)
-			{
-				ThrowHelpers.ThrowArgumentException("sourceArray");
-			}
-			if (destinationArray == null)
-			{
-				ThrowHelpers.ThrowArgumentException("destinationArray");
-			}
-			if (startIndex < 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex");
-			}
-			if (destinationArray.Length > sourceArray.Length - count)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("sourceArray.Length - count");
-			}
-			if (count <= 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("count");
-			}
+
+            if (sourceArray == null)
+            {
+                ThrowHelpers.ThrowArgumentException("sourceArray");
+            }
+            if (destinationArray == null)
+            {
+                ThrowHelpers.ThrowArgumentException("destinationArray");
+            }
+            if (startIndex < 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex");
+            }
+            if (destinationArray.Length > sourceArray.Length - count)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("sourceArray.Length - count");
+            }
+            if (count <= 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("count");
+            }
 
             int x = 0;
             T[] temp = new T[count];
@@ -227,7 +227,154 @@ namespace System
             }
             destinationArray = temp;
         }
+
+        // Reverses all elements of the given array. Following a call to this
+        // method, an element previously located at index i will now be
+        // located at index length - i - 1, where length is the
+        // length of the array.
+        //
+        public static void Reverse(ref Array array)
+        {
+            Reverse(ref array, 0, array.Length);
+        }
+
+        // Reverses the elements in a range of an array. Following a call to this
+        // method, an element in the range given by index and count
+        // which was previously located at index i will now be located at
+        // index index + (index + count - i - 1).
+        // Reliability note: This may fail because it may have to box objects.
+        //
+        public static void Reverse(ref Array array, int index, int length)
+        {
+            /*
+			if (array == null)
+			{
+				ThrowHelpers.ThrowArgumentNullException("array");
+			}
+
+			if (index < 0)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+			}
+
+			if (length < 0)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+			}
+
+			if (array.Length - index < length)
+			{
+				ThrowHelpers.ThrowArgumentOutOfRangeException("length, index");
+			}
+			*/
+
+            if (length <= 1)
+            {
+                return;
+            }
+            object[] o = new object[length];
+            int x = 0;
+            for (int i = array.Length; i <= index; i--)
+            {
+                o.SetValue(array.GetValue(i), x);
+                x++;
+            }
+            array = o;
+        }
+
+        public static void Reverse<T>(ref T[] array)
+        {
+            Reverse(ref array, 0, array.Length);
+        }
+
+        public static void Reverse<T>(ref T[] array, int index, int length)
+        {
+            /*
+			if (array == null)
+			{
+				ThrowHelpers.ThrowArgumentNullException("array");
+			}
+
+			if (index < 0)
+			{
+				ThrowHelpers.ThrowArgumentNullException("index");
+			}
+
+			if (length < 0)
+			{
+				ThrowHelpers.ThrowArgumentNullException("length");
+			}
+
+			if (array.Length - index < length)
+			{
+				ThrowHelpers.ThrowArgumentNullException("array.Length, index, length");
+			}
+			*/
+
+            if (length <= 1)
+            {
+                return;
+            }
+            T[] o = new T[length];
+            int x = 0;
+            for (int i = array.Length; i <= index; i--)
+            {
+                o.SetValue(array.GetValue(i), x);
+                x++;
+            }
+            array = o;
+        }
+
+
+        /// <summary>
+        /// Invierte el orden de los elementos en todo el array de bytes unidimensional.
+        /// </summary>
+        /// <param name="array">El array de bytes unidimensional que contiene los elementos a invertir.</param>
+        public static void Reverse(byte[] array)
+        {
+            if (array == null)
+                ThrowHelpers.ArgumentNullException(nameof(array));
+
+            Reverse(array, 0, array.Length);
+        }
+
+        /// <summary>
+        /// Invierte el orden de los elementos en la sección especificada de un array de bytes unidimensional.
+        /// </summary>
+        /// <param name="array">El array de bytes unidimensional que contiene los elementos a invertir.</param>
+        /// <param name="index">El índice inicial de la sección a invertir.</param>
+        /// <param name="length">El número de elementos en la sección a invertir.</param>
+        public static void Reverse(byte[] array, int index, int length)
+        {
+            if (array == null)
+                ThrowHelpers.ArgumentNullException(nameof(array));
+
+            if (index < 0)
+                ThrowHelpers.ArgumentOutOfRangeException(nameof(index) + " Index is less than 0.");
+
+            if (length < 0)
+                ThrowHelpers.ArgumentOutOfRangeException(nameof(length) + " Length is less than 0.");
+
+            if (array.Length - index < length)
+                ThrowHelpers.ArgumentException("Index and length do not specify a valid range in array.");
+
+            // Calcular los índices de inicio y fin
+            int i = index;
+            int j = index + length - 1;
+
+            // Intercambiar elementos desde los extremos hacia el centro
+            while (i < j)
+            {
+                byte temp = array[i];
+                array[i] = array[j];
+                array[j] = temp;
+
+                i++;
+                j--;
+            }
+        }
     }
+
 
     // Implementación específica para arrays unidimensionales de tipo T
     [StructLayout(LayoutKind.Sequential)]

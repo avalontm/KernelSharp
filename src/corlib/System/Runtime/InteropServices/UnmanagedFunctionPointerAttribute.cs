@@ -1,4 +1,6 @@
-﻿namespace System.Runtime.InteropServices
+﻿using System.Runtime.CompilerServices;
+
+namespace System.Runtime.InteropServices
 {
     public sealed class UnmanagedFunctionPointerAttribute : Attribute
     {

@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Internal.Runtime.CompilerHelpers
@@ -251,6 +253,21 @@ namespace Internal.Runtime.CompilerHelpers
 
         internal static void NotImplementedException()
         {
+            Panic("NotImplementedException");
+        }
+
+        internal static void InternalException(string message)
+        {
+            Panic("InternalException: " + message);
+        }
+
+        /// <summary>
+        /// Throws a BadImageFormatException with the specified message.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowBadImageFormatException(string message)
+        {
+            Panic("InternalException: " + message);
         }
     }
 }

@@ -199,8 +199,6 @@ namespace Internal.Runtime.CompilerHelpers
                 case EETypeElementType.UIntPtr: return "System.UIntPtr";
                 case EETypeElementType.Single: return "System.Single";
                 case EETypeElementType.Double: return "System.Double";
-                case EETypeElementType.String: return "System.String";
-                case EETypeElementType.Enum: return "System.Enum";
                 case EETypeElementType.Nullable: return "System.Nullable";
                 case EETypeElementType.Class: return "class";
                 case EETypeElementType.ValueType: return "struct";

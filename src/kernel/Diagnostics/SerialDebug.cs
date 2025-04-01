@@ -1,4 +1,5 @@
-﻿using Internal.Runtime.CompilerHelpers;
+﻿using System.Runtime.CompilerServices;
+using Internal.Runtime.CompilerHelpers;
 using Kernel.Drivers.IO;
 using System;
 using System.Runtime;
@@ -406,16 +407,23 @@ namespace Kernel.Diagnostics
             }
         }
 
+       
+
         [RuntimeExport("_DebugWrite")]
-        public static unsafe void WriteCharToSerial(byte* value, int length)
+        public static void WriteCharToSerial(byte* value, int length)
         {
             if (value == null || length <= 0)
                 return;
 
+            Console.WriteLine("Serial: " + length.ToString());
             // Opcional: puedes comentar el prefijo si está causando confusión
             // En su lugar, podemos agregar un contador para debug
             WriteByteToSerial((byte)'[');
-            WriteByteToSerial((byte)length); // Enviar la longitud real como un byte
+            WriteByteToSerial((byte)'D');
+            WriteByteToSerial((byte)'E');
+            WriteByteToSerial((byte)'B');
+            WriteByteToSerial((byte)'U');
+            WriteByteToSerial((byte)'G');
             WriteByteToSerial((byte)']');
             WriteByteToSerial((byte)' ');
 

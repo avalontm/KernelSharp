@@ -408,7 +408,7 @@ namespace System.Text
                 result[i] = _buffer[startIndex + i];
             }
 
-            return new string(result);
+            return  new string(result);
         }
     }
 }

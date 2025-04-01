@@ -1,6 +1,7 @@
 ﻿using Kernel.Diagnostics;
 using System;
 using System.Runtime;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Kernel.Memory
@@ -27,7 +28,7 @@ namespace Kernel.Memory
 
         // En vez de usar delegados, definir punteros a funciones directamente
         // Esto evita problemas con el escáner de IL
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
         public delegate void RawInterruptHandler();
 
         // Tabla de punteros a funciones (inicialmente nulos)

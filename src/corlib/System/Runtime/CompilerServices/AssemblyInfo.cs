@@ -1,5 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿// Assembly-level attributes
 
-// Este atributo permite que el ensamblado Kernel acceda a los tipos y miembros 
-// marcados como internal en este ensamblado (CoreLib)
+using System.Runtime.CompilerServices;
+
 [assembly: InternalsVisibleTo("Kernel")]

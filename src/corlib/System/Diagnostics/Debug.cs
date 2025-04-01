@@ -1,6 +1,5 @@
-﻿using System.Runtime.InteropServices;
-using System.Text;
-
+﻿using Internal.Runtime.CompilerHelpers;
+using System.Runtime.InteropServices;
 namespace System.Diagnostics
 {
     public static unsafe class Debug
@@ -10,9 +9,6 @@ namespace System.Diagnostics
         {
             if (string.IsNullOrEmpty(message))
                 return;
-
-            // Agregar salto de línea
-            message += "\n";
 
             // Obtener la longitud del mensaje para reservar buffer
             int length = message.Length;
@@ -27,10 +23,12 @@ namespace System.Diagnostics
 
             // Enviar al método nativo
             NativeDebugWrite(buffer, length);
+
         }
 
         // Native method for output
-        [DllImport("*", EntryPoint = "_DebugWrite")]
-        private static extern unsafe void NativeDebugWrite(byte* text, int length);
+        [DllImport("*", EntryPoint = "_DebugWrite", PreserveSig = true, CallingConvention = CallingConvention.ThisCall)]
+        private static extern void NativeDebugWrite(byte* value, int length);
     }
+
 }

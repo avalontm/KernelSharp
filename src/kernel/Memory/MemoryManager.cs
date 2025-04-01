@@ -29,13 +29,13 @@ namespace Kernel.Memory
             if (multibootInfo != null && (multibootInfo->Flags & MultibootFlags.MEMORY) != 0)
             {
                 // Obtener memoria desde la información Multiboot
-                //uint memLowKB = multibootInfo->MemLow;
-                //uint memHighKB = multibootInfo->MemHigh;
+                uint memLowKB = multibootInfo->MemLow;
+                uint memHighKB = multibootInfo->MemHigh;
 
-                // Memoria total = memoria baja + memoria alta
-                //_totalMemory = (memLowKB + memHighKB) * 1024;
+                 // total = memoria baja + memoria alta
+                _totalMemory = (memLowKB + memHighKB) * 1024;
 
-                //SerialDebug.Info($"Memoria detectada por Multiboot: {memLowKB.ToString()}KB baja + {memHighKB.ToString()}KB alta");
+                SerialDebug.Info($"Memoria detectada por Multiboot: {memLowKB.ToString()}KB baja {memHighKB.ToString()}KB alta");
             }
             else
             {
@@ -81,7 +81,7 @@ namespace Kernel.Memory
             // Inicializar el administrador de memoria nativa
             NativeMemory.Initialize((byte*)KERNEL_HEAP_ADDRESS, heapSize);
 
-            //SerialDebug.Info($"Heap inicializado en 0x{KERNEL_HEAP_ADDRESS.ToHexString()}, tamaño: {(heapSize / 1024 / 1024).ToString()}MB");
+            SerialDebug.Info($"Heap inicializado en 0x{KERNEL_HEAP_ADDRESS.ToHexString()}, tamaño: {(heapSize / 1024 / 1024).ToString()}MB");
             SerialDebug.Info("InitializeHeap");
         }
 
@@ -91,12 +91,12 @@ namespace Kernel.Memory
         private static void PrintMemoryInfo()
         {
             SerialDebug.Info("===== INFORMACION DE MEMORIA =====");
-            //SerialDebug.Info($"Memoria total: {(_totalMemory / 1024 / 1024).ToString()}MB ({(_totalMemory / 1024).ToString()}KB)");
-            //SerialDebug.Info($"Memoria usada: {(_usedMemory / 1024 / 1024).ToString()}MB ({(_usedMemory / 1024).ToString()}KB)");
-            //SerialDebug.Info($"Memoria libre: {((_totalMemory - _usedMemory) / 1024 / 1024).ToString()}MB ({((_totalMemory - _usedMemory) / 1024).ToString()}KB)");
-            //SerialDebug.Info($"Base del kernel: 0x{KERNEL_BASE_ADDRESS.ToString()}");
-            // Console.WriteLine($"Base del heap: 0x{KERNEL_HEAP_ADDRESS.ToHexString()}");
-            //SerialDebug.Info($"Tamaño del heap: {(INITIAL_HEAP_SIZE / 1024 / 1024).ToString()}MB");
+            SerialDebug.Info($"Memoria total: {(_totalMemory / 1024 / 1024).ToString()}MB ({(_totalMemory / 1024).ToString()}KB)");
+            SerialDebug.Info($"Memoria usada: {(_usedMemory / 1024 / 1024).ToString()}MB ({(_usedMemory / 1024).ToString()}KB)");
+            SerialDebug.Info($"Memoria libre: {((_totalMemory - _usedMemory) / 1024 / 1024).ToString()}MB ({((_totalMemory - _usedMemory) / 1024).ToString()}KB)");
+            SerialDebug.Info($"Base del kernel: 0x{KERNEL_BASE_ADDRESS.ToString()}");
+            SerialDebug.Info($"Base del heap: 0x{KERNEL_HEAP_ADDRESS.ToHexString()}");
+            SerialDebug.Info($"Tamaño del heap: {(INITIAL_HEAP_SIZE / 1024 / 1024).ToString()}MB");
             SerialDebug.Info("===============================");
         }
 

@@ -535,6 +535,7 @@ namespace System
             return format.Replace("{0}", arg0?.ToString() ?? "");
         }
 
+
         /// <summary>
         /// Concatena dos cadenas
         /// </summary>

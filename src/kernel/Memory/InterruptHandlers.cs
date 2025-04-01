@@ -2,6 +2,7 @@
 using System.Runtime;
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace Kernel.Memory
 {
@@ -41,7 +42,7 @@ namespace Kernel.Memory
         /// <summary>
         /// Define un manejador de interrupcion
         /// </summary>
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
         public delegate void InterruptHandlerDelegate(InterruptFrame* frame);
 
         // Array para almacenar punteros a funciones nativas que implementan los manejadores

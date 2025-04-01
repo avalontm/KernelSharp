@@ -1,25 +1,42 @@
-using System;
-using System.Runtime;
-
 namespace System
 {
+    /// <summary>
+    /// Specifies the usage of another attribute class.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class, Inherited = true)]
     public sealed class AttributeUsageAttribute : Attribute
     {
-        public AttributeTargets ValidOn { get; set; }
-        public bool AllowMultiple { get; set; }
-        public bool Inherited { get; set; }
+        private readonly AttributeTargets _attributeTarget;
+        private bool _allowMultiple;
+        private bool _inherited;
+
+        internal static readonly AttributeUsageAttribute Default = new AttributeUsageAttribute(AttributeTargets.All);
 
         public AttributeUsageAttribute(AttributeTargets validOn)
         {
-            ValidOn = validOn;
-            Inherited = true;
+            _attributeTarget = validOn;
+            _inherited = true;
         }
 
-        public AttributeUsageAttribute(AttributeTargets validOn, bool allowMultiple, bool inherited)
+        internal AttributeUsageAttribute(AttributeTargets validOn, bool allowMultiple, bool inherited)
         {
-            ValidOn = validOn;
-            AllowMultiple = allowMultiple;
-            Inherited = inherited;
+            _attributeTarget = validOn;
+            _allowMultiple = allowMultiple;
+            _inherited = inherited;
+        }
+
+        public AttributeTargets ValidOn => _attributeTarget;
+
+        public bool AllowMultiple
+        {
+            get => _allowMultiple;
+            set => _allowMultiple = value;
+        }
+
+        public bool Inherited
+        {
+            get => _inherited;
+            set => _inherited = value;
         }
     }
 }

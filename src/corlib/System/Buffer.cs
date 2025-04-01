@@ -19,14 +19,14 @@ namespace System
         {
             fixed (byte* bytePointer = &b)
             {
-                MemoryHelpers.MemSet(bytePointer, 0, (int)byteLength);
+                MemoryHelpers.MemSet(bytePointer, 0, byteLength);
             }
         }
 
 
         public static unsafe void MemCpy(byte* dest, byte* src, uint count)
         {
-            for (ulong i = 0; i < count; i++) dest[i] = src[i];
+            MemoryHelpers.MemCpy(dest, src, count);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

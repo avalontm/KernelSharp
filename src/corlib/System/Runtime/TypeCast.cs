@@ -44,7 +44,7 @@ namespace System.Runtime
             return result;
         }
 
-        [RuntimeExport("RhTypeCast_CheckCastArray")]
+       // [RuntimeExport("RhTypeCast_CheckCastArray")]
         public static unsafe object CheckCastArray(EEType* pTargetEEType, object obj)
         {
             // a null value can be cast to anything

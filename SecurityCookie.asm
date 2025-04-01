@@ -5,7 +5,7 @@
 section .data
 ; Variable global para almacenar el valor de la cookie
 global __security_cookie
-__security_cookie dd 0xBB40E64E ; Valor inicial predeterminado (se actualizará)
+__security_cookie dd 0xBEEFCAFE ; Valor inicial predeterminado (se actualizará)
 
 ; Variable para verificar si ya ha sido inicializada
 global __security_cookie_initialized

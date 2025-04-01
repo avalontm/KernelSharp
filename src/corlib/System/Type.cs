@@ -1,6 +1,7 @@
 using Internal.Runtime;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace System
@@ -9,7 +10,7 @@ namespace System
     /// Representa información de tipo en el sistema de tipos.
     /// Esta es una implementación simplificada para tu CoreLib.
     /// </summary>
-    public unsafe class Type
+    public unsafe class Type : IType
     {
         // EETypePtr para este tipo
         private EETypePtr _eeTypePtr;
@@ -78,7 +79,7 @@ namespace System
         /// </summary>
         public static Type GetTypeFromHandle(RuntimeTypeHandle handle)
         {
-            return new Type(new EETypePtr(handle.Value));
+            return new Type(new EETypePtr(handle.m_pEEType));
         }
 
         /// <summary>
@@ -140,6 +141,78 @@ namespace System
             }
 
         }
+
+        string IType.Name { get => Name; set => throw new System.NotImplementedException(); }
+
+        public Type DeclaringType => throw new System.NotImplementedException();
+
+        public Type ReflectedType => throw new System.NotImplementedException();
+
+        public Assembly Assembly => throw new System.NotImplementedException();
+
+        public string Namespace => throw new System.NotImplementedException();
+
+        public string AssemblyQualifiedName => throw new System.NotImplementedException();
+
+        public Type BaseType => throw new System.NotImplementedException();
+
+        public Type UnderlyingSystemType => throw new System.NotImplementedException();
+
+        public bool IsNotPublic => throw new System.NotImplementedException();
+
+        public bool IsPublic => throw new System.NotImplementedException();
+
+        public bool IsNestedPublic => throw new System.NotImplementedException();
+
+        public bool IsNestedPrivate => throw new System.NotImplementedException();
+
+        public bool IsNestedFamily => throw new System.NotImplementedException();
+
+        public bool IsNestedAssembly => throw new System.NotImplementedException();
+
+        public bool IsNestedFamANDAssem => throw new System.NotImplementedException();
+
+        public bool IsNestedFamORAssem => throw new System.NotImplementedException();
+
+        public bool IsAutoLayout => throw new System.NotImplementedException();
+
+        public bool IsLayoutSequential => throw new System.NotImplementedException();
+
+        public bool IsExplicitLayout => throw new System.NotImplementedException();
+
+        public bool IsClass => throw new System.NotImplementedException();
+
+        public bool IsInterface => throw new System.NotImplementedException();
+
+        public bool IsAbstract => throw new System.NotImplementedException();
+
+        public bool IsSealed => throw new System.NotImplementedException();
+
+        public bool IsEnum => throw new System.NotImplementedException();
+
+        public bool IsSpecialName => throw new System.NotImplementedException();
+
+        public bool IsImport => throw new System.NotImplementedException();
+
+        public bool IsSerializable => throw new System.NotImplementedException();
+
+        public bool IsAnsiClass => throw new System.NotImplementedException();
+
+        public bool IsUnicodeClass => throw new System.NotImplementedException();
+
+        public bool IsAutoClass => throw new System.NotImplementedException();
+
+        public bool IsByRef => throw new System.NotImplementedException();
+
+        public bool IsPrimitive => throw new System.NotImplementedException();
+
+        public bool IsCOMObject => throw new System.NotImplementedException();
+
+        public bool HasElementType => throw new System.NotImplementedException();
+
+        public bool IsContextful => throw new System.NotImplementedException();
+
+        public bool IsMarshalByRef => throw new System.NotImplementedException();
 
         /// <summary>
         /// Obtiene el tipo de elemento si este tipo es un array.
@@ -230,45 +303,6 @@ namespace System
             // Esta es una implementación simplificada
             return pEEType->ElementType == (byte)EETypeElementType.Class &&
                    pEEType->ComponentSize == sizeof(char);
-        }
-    }
-
-    /// <summary>
-    /// Representa un identificador de tiempo de ejecución para un tipo.
-    /// </summary>
-    public struct RuntimeTypeHandle
-    {
-        // El valor del handle
-        private IntPtr _value;
-
-        // Constructor
-        internal RuntimeTypeHandle(IntPtr value)
-        {
-            _value = value;
-        }
-
-        // Constructor para EETypePtr
-        internal RuntimeTypeHandle(EETypePtr eeTypePtr)
-        {
-            _value = eeTypePtr;
-        }
-
-        // Propiedad para obtener el valor del handle
-        public IntPtr Value => _value;
-
-        // Comparación de igualdad
-        public override bool Equals(object obj)
-        {
-            if (!(obj is RuntimeTypeHandle))
-                return false;
-
-            return _value == ((RuntimeTypeHandle)obj)._value;
-        }
-
-        // Obtener código hash
-        public override int GetHashCode()
-        {
-            return _value.GetHashCode();
         }
     }
 }

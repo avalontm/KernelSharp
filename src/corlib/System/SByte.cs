@@ -4,7 +4,7 @@
     {
         public override string ToString()
         {
-            return ((int)this).ToString();
+            return ((ulong)this).ToString();
         }
     }
 }

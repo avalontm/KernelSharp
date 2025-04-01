@@ -1,5 +1,6 @@
 ﻿namespace System.Helpers
 {
+
     /// <summary>
     /// Array Helper class (contains useful functions about array manipulation).
     /// </summary>

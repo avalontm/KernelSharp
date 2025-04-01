@@ -20,6 +20,7 @@ global _Reset                ; Reinicio del sistema
 global _GetEFlags            ; Obtiene EFLAGS
 global _SetEFlags            ; Establece EFLAGS
 
+
 ; Carga la GDT y actualiza los registros de segmento
 ; void _LoadGDT(void* gdtPointer)
 _LoadGDT:

@@ -2,12 +2,13 @@ using Internal.Runtime.CompilerServices;
 using System;
 using System.Diagnostics;
 using System.Runtime;
-using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 namespace Internal.Runtime.CompilerHelpers
 {
     internal unsafe class StartupCodeHelpers
     {
+        /*
         [RuntimeExport("RhpLdelemaRef")]
         public static unsafe ref object LdelemaRef(Array array, int index, IntPtr elementType)
         {
@@ -27,8 +28,8 @@ namespace Internal.Runtime.CompilerHelpers
             ref object rawData = ref Unsafe.As<byte, object>(ref Unsafe.As<RawArrayData>(array).Data);
             return ref Unsafe.Add(ref rawData, index);
         }
-
-        [RuntimeExport("RhTypeCast_AreTypesEquivalent")]
+        
+        //[RuntimeExport("RhTypeCast_AreTypesEquivalent")]
         public static unsafe bool AreTypesEquivalent(EEType* pType1, EEType* pType2)
         {
             if (pType1 == pType2)
@@ -48,8 +49,8 @@ namespace Internal.Runtime.CompilerHelpers
 
             return false;
         }
-
-        // [RuntimeExport("RhpStelemRef")]
+        
+         [RuntimeExport("RhpStelemRef")]
         static unsafe void RhpStelemRef(Array array, int index, object obj)
         {
             fixed (int* n = &array._numComponents)
@@ -61,6 +62,7 @@ namespace Internal.Runtime.CompilerHelpers
                 *pp = Unsafe.As<object, IntPtr>(ref obj);
             }
         }
+        */
 
         [RuntimeExport("RhTypeCast_IsInstanceOfClass")]
         public static unsafe object RhTypeCast_IsInstanceOfClass(EEType* pTargetType, object obj)
@@ -97,37 +99,11 @@ namespace Internal.Runtime.CompilerHelpers
 
             var data = MemoryHelpers.Malloc(size);
             var obj = Unsafe.As<IntPtr, object>(ref data);
-            MemoryHelpers.MemSet((byte*)data, 0, (int)size);
+            MemoryHelpers.MemSet((byte*)data, 0, size);
             *(IntPtr*)data = (IntPtr)pEEType;
 
             return obj;
         }
-
-        // También necesitarás probablemente estos otros helpers relacionados
-        [RuntimeExport("RhpCheckedAssignRefArithmetic")]
-        private static unsafe void RhpCheckedAssignRefArithmetic(ref object dest, object src)
-        {
-            dest = src;
-        }
-
-        //[RuntimeExport("RhpCheckedAssignRefECX")]
-        private static unsafe void RhpCheckedAssignRefECX(ref object dest, object src)
-        {
-            dest = src;
-        }
-
-        //[RuntimeExport("RhpAssignRef")]
-        private static unsafe void RhpAssignRef(ref object dest, object src)
-        {
-            dest = src;
-        }
-
-        // [RuntimeExport("RhpByRefAssignRef")]
-        private static unsafe void RhpByRefAssignRef(ref object dest, ref object src)
-        {
-            dest = src;
-        }
-
 
         [RuntimeExport("RhUnbox2")]
         public static unsafe ref byte RhUnbox2(EEType* pUnboxToEEType, object obj)
@@ -135,20 +111,29 @@ namespace Internal.Runtime.CompilerHelpers
             if ((obj == null) || !UnboxAnyTypeCompare(obj.m_pEEType, pUnboxToEEType))
             {
                 ExceptionIDs exID = obj == null ? ExceptionIDs.NullReference : ExceptionIDs.InvalidCast;
-                ThrowHelpers.ArgumentNullException("RhUnbox2");
+                //throw pUnboxToEEType->GetClasslibException(exID);
             }
             return ref obj.GetRawData();
         }
 
-        static unsafe bool UnboxAnyTypeCompare(EEType* pEEType, EEType* ptrUnboxToEEType)
+        /// <summary>
+        /// Compara tipos para determinar si se permite el unboxing de uno a otro.
+        /// </summary>
+        /// <param name="pEEType">EEType del objeto que se está desempaquetando</param>
+        /// <param name="ptrUnboxToEEType">EEType al que se quiere convertir</param>
+        /// <returns>true si los tipos son compatibles para unboxing</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe bool UnboxAnyTypeCompare(EEType* pEEType, EEType* ptrUnboxToEEType)
         {
+            // Si los tipos son exactamente iguales, siempre es válido
             if (TypeCast.AreTypesEquivalent(pEEType, ptrUnboxToEEType))
                 return true;
 
+            // Si tienen el mismo tipo de elemento, podemos hacer comprobaciones adicionales
             if (pEEType->ElementType == ptrUnboxToEEType->ElementType)
             {
-                // Enum's and primitive types should pass the UnboxAny exception cases
-                // if they have an exactly matching cor element type.
+                // Enums y tipos primitivos deben pasar las verificaciones de UnboxAny 
+                // si tienen exactamente el mismo tipo de elemento fundamental
                 switch (ptrUnboxToEEType->ElementType)
                 {
                     case EETypeElementType.Byte:
@@ -161,6 +146,10 @@ namespace Internal.Runtime.CompilerHelpers
                     case EETypeElementType.UInt64:
                     case EETypeElementType.IntPtr:
                     case EETypeElementType.UIntPtr:
+                    case EETypeElementType.Single:
+                    case EETypeElementType.Double:
+                    case EETypeElementType.Boolean:
+                    case EETypeElementType.Char:
                         return true;
                 }
             }
@@ -227,7 +216,6 @@ namespace Internal.Runtime.CompilerHelpers
                         RunEagerClassConstructors(sections[k].Start, sections[k].End);
                 }
             }
-            //Debug.WriteLine("InitializeModules");
         }
 
         static unsafe void RunEagerClassConstructors(IntPtr cctorTableStart, IntPtr cctorTableEnd)

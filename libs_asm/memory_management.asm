@@ -1,7 +1,6 @@
 ; Asegúrate de que estas funciones estén expuestas globalmente
 global _malloc
 global _free
-global free
 ; Constantes para heap
 HEAP_START      equ 0x00800000     ; 8MB - Inicio del heap
 HEAP_SIZE       equ 0x00800000     ; 8MB - Tamaño del heap
@@ -49,7 +48,6 @@ _malloc:
 ; Parámetros:
 ;   [ESP+4] - Dirección del bloque a liberar
 ; ===================================================================
-free:
 _free:
     push ebp
     mov ebp, esp

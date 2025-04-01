@@ -11,40 +11,22 @@ namespace Kernel
 {
     unsafe class Program
     {
-        // Método para habilitar interrupciones (invocará STI)
         [DllImport("*", EntryPoint = "_STI")]
         private static extern void EnableInterrupts();
 
+
         [RuntimeExport("Entry")]
-        unsafe static void KernelEntry(MultibootInfo* multibootInfo, uint magicNumber)
+        public static void Entry(MultibootInfo* multibootInfo)
         {
             // Inicializar depuración por puerto serie
             SerialDebug.Initialize();
             SerialDebug.Info("Kernel iniciando... ");
-  
-        // Verificar el magic number de Multiboot
-            if (magicNumber != 0x2BADB002)
-            {
-                SerialDebug.Error($"Magic number inválido: 0x{magicNumber.ToHexString()}");
-                SerialDebug.Error("No se recibió información correcta del bootloader");
-                // Continuar con valores predeterminados
-            }
-            else
-            {
-                SerialDebug.Info($"Magic number correcto: 0x{magicNumber.ToHexString()}");
-            }
-    
 
-            if (multibootInfo == null)
-            {
-                SerialDebug.Error("MultibootInfo es NULL - Error crítico");
-                SerialDebug.Info("Usando valores predeterminados para memoria");
-                return;
-            }
+            //StartupCodeHelpers.InitializeModules((IntPtr)magic);
 
-            SerialDebug.Info(multibootInfo->MemLower.ToString());
+            SerialDebug.Info($"multibootInfo: 0x{((int)multibootInfo).ToHexString()}");
 
-            //MemoryDetection.InitializeMemoryDetection();
+            SerialDebug.Info($"Flag: {multibootInfo->Flags.ToString()}");
 
             // Inicializar GDT antes que nada
             SerialDebug.Info("Inicializando GDT...");
@@ -111,6 +93,7 @@ namespace Kernel
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("\nInicializacion completada!");
             Console.ForegroundColor = ConsoleColor.White;
+
 
             // Entrar en el bucle principal
             Main();
@@ -185,7 +168,8 @@ namespace Kernel
                 SerialDebug.Info(elemento.Value.ToString());
                 SerialDebug.Info(elemento.Value + " " + elemento.Name);
                 SerialDebug.Info(elemento.Name + " " + elemento.Value);
-                SerialDebug.Info($"{elemento.Name} {elemento.Value.ToString()}");
+                SerialDebug.Info($"{elemento.Name} {elemento.Value}");
+
                 SerialDebug.Info(21 + " " + 534);
             }
         }

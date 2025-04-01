@@ -1,15 +1,9 @@
-using System.Runtime.InteropServices;
-
 namespace System.Runtime
 {
-    [AttributeUsage(AttributeTargets.Method)]
-    internal sealed class RuntimeExportAttribute : Attribute
+    // Custom attribute that the compiler understands that instructs it
+    // to export the method under the given symbolic name.
+    public sealed class RuntimeExportAttribute : Attribute
     {
-        public string ExportName { get; }
-        public CallingConvention CallingConvention { get; set; } = CallingConvention.Cdecl;
-        public RuntimeExportAttribute(string entry)
-        {
-            ExportName = entry;
-        }
+        public RuntimeExportAttribute(string entry) { }
     }
 }
