@@ -89,6 +89,8 @@ To compile the project, you need:
 - NASM for assembly code
 - System build tool (cmoos)
 - Essential tools (nasm, ld, objcopy)
+- Microsoft.DotNet.ILCompiler 8.0.0
+- Vscode
 
 ## Usage
 
