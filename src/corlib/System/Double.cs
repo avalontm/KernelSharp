@@ -1,4 +1,6 @@
-﻿namespace System
+﻿using System.Runtime.CompilerServices;
+
+namespace System
 {
     public unsafe struct Double
     {
@@ -150,6 +152,28 @@
 
             // Convert to string
             return new string(buffer, 0, position);
+        }
+
+        /// <summary>
+        /// Determines whether the specified value is infinite.
+        /// </summary>
+        /// <param name="value">The double-precision floating-point number to test.</param>
+        /// <returns>true if value is positive or negative infinity; otherwise, false.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsInfinity(double value)
+        {
+            // Obtener representación en bits para verificar el patrón de bits de infinito
+            long bits = BitConverter.DoubleToInt64Bits(value);
+
+            // Máscara para los bits de exponente
+            long exponentMask = 0x7FF0000000000000L;
+
+            // Máscara para la fracción
+            long fractionMask = 0x000FFFFFFFFFFFFFL;
+
+            // Verificar si los bits de exponente están completamente establecidos 
+            // y la fracción es cero
+            return (bits & exponentMask) == exponentMask && (bits & fractionMask) == 0;
         }
     }
 }

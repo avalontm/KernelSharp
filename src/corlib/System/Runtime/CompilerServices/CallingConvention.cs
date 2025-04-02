@@ -5,6 +5,7 @@
     /// </summary>
     public enum CallingConvention
     {
+
         /// <summary>
         /// Use the default calling convention (typically Winapi/StdCall on Windows).
         /// </summary>
@@ -31,21 +32,4 @@
         FastCall = 5
     }
 
-    // Agregar soporte para FastCall
-    internal static class CallingConventionHelper
-    {
-        public static bool IsSupportedConvention(CallingConvention convention)
-        {
-            return convention == CallingConvention.Winapi ||
-                   convention == CallingConvention.StdCall ||
-                   convention == CallingConvention.Cdecl;
-        }
-
-        public static CallingConvention NormalizeFastCall(CallingConvention convention)
-        {
-            return convention == CallingConvention.FastCall
-                ? CallingConvention.StdCall
-                : convention;
-        }
-    }
 }

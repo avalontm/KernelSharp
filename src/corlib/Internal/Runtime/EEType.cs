@@ -348,7 +348,13 @@ namespace Internal.Runtime
                 return ElementType < EETypeElementType.Class;
             }
         }
-
+        internal bool IsEnum
+        {
+            get
+            {
+                return ElementType < EETypeElementType.Enum;
+            }
+        }
         internal bool HasGCPointers
         {
             get

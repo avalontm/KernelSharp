@@ -3,12 +3,60 @@ using System;
 using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Internal.Runtime.CompilerHelpers
 {
     internal unsafe class StartupCodeHelpers
     {
-        /*
+
+        [RuntimeExport("RhpCheckedAssignRef")]
+        internal static unsafe void RhpCheckedAssignRef(ref object target, object value)
+        {
+            // Primero, verificamos si el valor es nulo, si lo es, asignamos directamente
+            if (value == null)
+            {
+                target = null;
+                return;
+            }
+
+            // Obtenemos los tipos de los objetos (EEType* es el tipo de la instancia)
+            EEType* targetType = target.m_pEEType;
+            EEType* valueType = value.m_pEEType;
+
+            // Comprobamos que los tipos sean compatibles
+            if (!AreTypesEquivalent(targetType, valueType))
+            {
+                // Si no son equivalentes, lanzamos una excepciÛn (o cualquier mecanismo de control de errores)
+               ThrowHelpers.InvalidCastException("Cannot assign value of incompatible type.");
+            }
+
+            // Si son compatibles, realizamos la asignaciÛn
+            target = value;
+        }
+
+        [RuntimeExport("RhTypeCast_AreTypesEquivalent")]
+        public static unsafe bool AreTypesEquivalent(EEType* pType1, EEType* pType2)
+        {
+            if (pType1 == pType2)
+                return true;
+
+            if (pType1->IsCloned)
+                pType1 = pType1->CanonicalEEType;
+
+            if (pType2->IsCloned)
+                pType2 = pType2->CanonicalEEType;
+
+            if (pType1 == pType2)
+                return true;
+
+            if (pType1->IsParameterizedType && pType2->IsParameterizedType)
+                return AreTypesEquivalent(pType1->RelatedParameterType, pType2->RelatedParameterType) && pType1->ParameterizedTypeShape == pType2->ParameterizedTypeShape;
+
+            return false;
+        }
+
+
         [RuntimeExport("RhpLdelemaRef")]
         public static unsafe ref object LdelemaRef(Array array, int index, IntPtr elementType)
         {
@@ -29,132 +77,22 @@ namespace Internal.Runtime.CompilerHelpers
             return ref Unsafe.Add(ref rawData, index);
         }
         
-        //[RuntimeExport("RhTypeCast_AreTypesEquivalent")]
-        public static unsafe bool AreTypesEquivalent(EEType* pType1, EEType* pType2)
-        {
-            if (pType1 == pType2)
-                return true;
-
-            if (pType1->IsCloned)
-                pType1 = pType1->CanonicalEEType;
-
-            if (pType2->IsCloned)
-                pType2 = pType2->CanonicalEEType;
-
-            if (pType1 == pType2)
-                return true;
-
-            if (pType1->IsParameterizedType && pType2->IsParameterizedType)
-                return AreTypesEquivalent(pType1->RelatedParameterType, pType2->RelatedParameterType) && pType1->ParameterizedTypeShape == pType2->ParameterizedTypeShape;
-
-            return false;
-        }
-        
-         [RuntimeExport("RhpStelemRef")]
-        static unsafe void RhpStelemRef(Array array, int index, object obj)
-        {
-            fixed (int* n = &array._numComponents)
-            {
-                var ptr = (byte*)n;
-                ptr += sizeof(void*);   // Array length is padded to 8 bytes on 64-bit
-                ptr += index * array.m_pEEType->ComponentSize;  // Component size should always be 8, seeing as it's a pointer...
-                var pp = (IntPtr*)ptr;
-                *pp = Unsafe.As<object, IntPtr>(ref obj);
-            }
-        }
-        */
-
-        [RuntimeExport("RhTypeCast_IsInstanceOfClass")]
-        public static unsafe object RhTypeCast_IsInstanceOfClass(EEType* pTargetType, object obj)
-        {
-            if (obj == null)
-                return null;
-
-            if (pTargetType == obj.m_pEEType)
-                return obj;
-
-            var bt = obj.m_pEEType->RawBaseType;
-
-
-            while (true)
-            {
-                if (bt == null)
-                    return null;
-
-                if (pTargetType == bt)
-                    return obj;
-
-                bt = bt->RawBaseType;
-            }
-        }
-
+ 
         [RuntimeExport("RhpNewFast")]
         internal static unsafe object RhpNewFast(EEType* pEEType)
         {
-            uint size = pEEType->BaseSize;
+            var size = pEEType->BaseSize;
 
             // Round to next power of 8
             if (size % 8 > 0)
-                size = (size / 8 + 1) * 8;
+                size = ((size / 8) + 1) * 8;
 
             var data = MemoryHelpers.Malloc(size);
             var obj = Unsafe.As<IntPtr, object>(ref data);
-            MemoryHelpers.MemSet((byte*)data, 0, size);
+            MemoryHelpers.MemSet((byte*)data, 0, (int)size);
             *(IntPtr*)data = (IntPtr)pEEType;
 
             return obj;
-        }
-
-        [RuntimeExport("RhUnbox2")]
-        public static unsafe ref byte RhUnbox2(EEType* pUnboxToEEType, object obj)
-        {
-            if ((obj == null) || !UnboxAnyTypeCompare(obj.m_pEEType, pUnboxToEEType))
-            {
-                ExceptionIDs exID = obj == null ? ExceptionIDs.NullReference : ExceptionIDs.InvalidCast;
-                //throw pUnboxToEEType->GetClasslibException(exID);
-            }
-            return ref obj.GetRawData();
-        }
-
-        /// <summary>
-        /// Compara tipos para determinar si se permite el unboxing de uno a otro.
-        /// </summary>
-        /// <param name="pEEType">EEType del objeto que se est√° desempaquetando</param>
-        /// <param name="ptrUnboxToEEType">EEType al que se quiere convertir</param>
-        /// <returns>true si los tipos son compatibles para unboxing</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe bool UnboxAnyTypeCompare(EEType* pEEType, EEType* ptrUnboxToEEType)
-        {
-            // Si los tipos son exactamente iguales, siempre es v√°lido
-            if (TypeCast.AreTypesEquivalent(pEEType, ptrUnboxToEEType))
-                return true;
-
-            // Si tienen el mismo tipo de elemento, podemos hacer comprobaciones adicionales
-            if (pEEType->ElementType == ptrUnboxToEEType->ElementType)
-            {
-                // Enums y tipos primitivos deben pasar las verificaciones de UnboxAny 
-                // si tienen exactamente el mismo tipo de elemento fundamental
-                switch (ptrUnboxToEEType->ElementType)
-                {
-                    case EETypeElementType.Byte:
-                    case EETypeElementType.SByte:
-                    case EETypeElementType.Int16:
-                    case EETypeElementType.UInt16:
-                    case EETypeElementType.Int32:
-                    case EETypeElementType.UInt32:
-                    case EETypeElementType.Int64:
-                    case EETypeElementType.UInt64:
-                    case EETypeElementType.IntPtr:
-                    case EETypeElementType.UIntPtr:
-                    case EETypeElementType.Single:
-                    case EETypeElementType.Double:
-                    case EETypeElementType.Boolean:
-                    case EETypeElementType.Char:
-                        return true;
-                }
-            }
-
-            return false;
         }
 
         [RuntimeExport("__imp_GetCurrentThreadId")]
@@ -190,6 +128,40 @@ namespace Internal.Runtime.CompilerHelpers
         public static void Test()
         {
             Debug.WriteLine("InitializeModules");
+        }
+
+        [RuntimeExport("RhpDbl2Int")]
+        internal static int RhpDbl2Int(double value)
+        {
+            // Manejo de casos especiales
+            if (double.IsNaN(value))
+                return 0;
+
+            if (value >= int.MaxValue)
+                return int.MaxValue;
+
+            if (value <= int.MinValue)
+                return int.MinValue;
+
+            // Redondeo hacia cero (truncamiento)
+            return (int)Math.Truncate(value);
+        }
+
+        [RuntimeExport("RhpDbl2Lng")]
+        internal static long RhpDbl2Lng(double value)
+        {
+            // Manejo de casos especiales
+            if (double.IsNaN(value))
+                return 0;
+
+            if (value >= long.MaxValue)
+                return long.MaxValue;
+
+            if (value <= long.MinValue)
+                return long.MinValue;
+
+            // Redondeo hacia cero (truncamiento)
+            return (long)Math.Truncate(value);
         }
 
         public static void InitializeModules(IntPtr Modules)

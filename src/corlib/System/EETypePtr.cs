@@ -187,7 +187,7 @@ namespace System
         {
             if (_value == null)
                 return "null EETypePtr";
-            return $"EETypePtr: 0x{((int)_value).ToHexString()}";
+            return $"EETypePtr: 0x{((ulong)_value).ToStringHex()}";
         }
 
     }

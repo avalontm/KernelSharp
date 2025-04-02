@@ -1,9 +1,6 @@
-﻿using System.Runtime.CompilerServices;
-using Internal.Runtime.CompilerHelpers;
-using Kernel.Drivers.IO;
+﻿using Kernel.Drivers.IO;
 using System;
 using System.Runtime;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Kernel.Diagnostics
@@ -407,49 +404,15 @@ namespace Kernel.Diagnostics
             }
         }
 
-       
+
 
         [RuntimeExport("_DebugWrite")]
-        public static void WriteCharToSerial(byte* value, int length)
+        public static void WriteCharToSerial(char* value, int length)
         {
             if (value == null || length <= 0)
                 return;
 
-            Console.WriteLine("Serial: " + length.ToString());
-            // Opcional: puedes comentar el prefijo si está causando confusión
-            // En su lugar, podemos agregar un contador para debug
-            WriteByteToSerial((byte)'[');
-            WriteByteToSerial((byte)'D');
-            WriteByteToSerial((byte)'E');
-            WriteByteToSerial((byte)'B');
-            WriteByteToSerial((byte)'U');
-            WriteByteToSerial((byte)'G');
-            WriteByteToSerial((byte)']');
-            WriteByteToSerial((byte)' ');
-
-            // Enviar los bytes uno por uno
-            for (int i = 0; i < length; i++)
-            {
-                byte b = value[i];
-                if (useSerialPort)
-                {
-                    WriteByteToSerial(b);
-                }
-                if (useDebugPort)
-                {
-                    WriteByteToDebugPort(b);
-                }
-            }
-
-            // Agregar nueva línea al final
-            if (useSerialPort)
-            {
-                WriteByteToSerial(CHAR_NEWLINE);
-            }
-            if (useDebugPort)
-            {
-                WriteByteToDebugPort(CHAR_NEWLINE);
-            }
+            Info(new string(value, 0, length));
         }
     }
 }

@@ -38,8 +38,6 @@ namespace Internal.Runtime.CompilerServices
                 return 4;
             if (typeof(T) == typeof(long) || typeof(T) == typeof(ulong) || typeof(T) == typeof(double))
                 return 8;
-            if (typeof(T) == typeof(decimal))
-                return 16;
             if (typeof(T) == typeof(IntPtr) || typeof(T) == typeof(UIntPtr) || typeof(T).IsPointer)
                 return IntPtr.Size;
 

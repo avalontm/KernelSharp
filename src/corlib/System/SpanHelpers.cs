@@ -1,7 +1,7 @@
 ﻿using Internal.Runtime.CompilerServices;
 
 #pragma warning disable SA1121 // explicitly using type aliases instead of built-in types
-using nuint = System.UInt32;
+using nuint = System.UInt64;
 
 namespace System
 {
@@ -12,14 +12,6 @@ namespace System
             if (byteLength == 0)
                 return;
 
-#if TARGET_AMD64 || TARGET_ARM64
-            // The exact matrix on when ZeroMemory is faster than InitBlockUnaligned is very complex. The factors to consider include
-            // type of hardware and memory aligment. This threshold was chosen as a good balance accross different configurations.
-            if (byteLength > 768)
-                goto PInvoke;
-            Unsafe.InitBlockUnaligned(ref b, 0, (uint)byteLength);
-            return;
-#else
             // TODO: Optimize other platforms to be on par with AMD64 CoreCLR
             // Note: It's important that this switch handles lengths at least up to 22.
             // See notes below near the main loop for why.
@@ -236,7 +228,6 @@ namespace System
             }
 
             return;
-#endif
 
         PInvoke:
             Buffer._ZeroMemory(ref b, byteLength);
@@ -315,6 +306,253 @@ namespace System
 
             // Write only element.
             ip = default;
+        }
+
+        /// <summary>
+        /// Moves a specified number of bytes from a source block of memory to a destination block of memory.
+        /// </summary>
+        /// <param name="destination">A pointer to the destination block of memory to copy to.</param>
+        /// <param name="source">A pointer to the source block of memory to copy from.</param>
+        /// <param name="byteCount">The number of bytes to copy.</param>
+        public static unsafe void Memmove(ref byte destination, ref byte source, nuint byteCount)
+        {
+            if (byteCount == 0)
+                return;
+
+            // Get pointers to source and destination
+            byte* dest = (byte*)Unsafe.AsPointer(ref destination);
+            byte* src = (byte*)Unsafe.AsPointer(ref source);
+
+            // Handle small copies with direct assignment
+            if (byteCount <= 22)
+            {
+                switch (byteCount)
+                {
+                    case 1:
+                        dest[0] = src[0];
+                        return;
+                    case 2:
+                        *((short*)dest) = *((short*)src);
+                        return;
+                    case 3:
+                        *((short*)dest) = *((short*)src);
+                        dest[2] = src[2];
+                        return;
+                    case 4:
+                        *((int*)dest) = *((int*)src);
+                        return;
+                    case 5:
+                        *((int*)dest) = *((int*)src);
+                        dest[4] = src[4];
+                        return;
+                    case 6:
+                        *((int*)dest) = *((int*)src);
+                        *((short*)(dest + 4)) = *((short*)(src + 4));
+                        return;
+                    case 7:
+                        *((int*)dest) = *((int*)src);
+                        *((short*)(dest + 4)) = *((short*)(src + 4));
+                        dest[6] = src[6];
+                        return;
+                    case 8:
+                        *((long*)dest) = *((long*)src);
+                        return;
+                    // ... (add cases 9-22 following similar pattern as in ClearWithoutReferences)
+                    default:
+                        // For larger small copies, do manual byte-by-byte copy
+                        for (nuint i = 0; i < byteCount; i++)
+                        {
+                            dest[i] = src[i];
+                        }
+                        return;
+                }
+            }
+
+            // For larger copies, handle potential overlap
+            if (dest < src)
+            {
+                // Copy from low to high addresses
+                for (nuint i = 0; i < byteCount; i++)
+                {
+                    dest[i] = src[i];
+                }
+            }
+            else if (dest > src)
+            {
+                // Copy from high to low addresses to prevent overwriting source
+                for (nuint i = byteCount; i > 0; i--)
+                {
+                    dest[i - 1] = src[i - 1];
+                }
+            }
+        }
+
+        /// <summary>
+        /// Moves a specified number of pointers from a source block of memory to a destination block of memory.
+        /// </summary>
+        /// <param name="destination">A pointer to the destination block of memory to copy to.</param>
+        /// <param name="source">A pointer to the source block of memory to copy from.</param>
+        /// <param name="pointerSizeLength">The number of pointers to copy.</param>
+        public static unsafe void Memmove(ref IntPtr destination, ref IntPtr source, nuint pointerSizeLength)
+        {
+            if (pointerSizeLength == 0)
+                return;
+
+            // Get pointers to source and destination
+            IntPtr* dest = (IntPtr*)Unsafe.AsPointer(ref destination);
+            IntPtr* src = (IntPtr*)Unsafe.AsPointer(ref source);
+
+            // Simple forward copy for small lengths
+            if (pointerSizeLength <= 8)
+            {
+                for (nuint i = 0; i < pointerSizeLength; i++)
+                {
+                    dest[i] = src[i];
+                }
+                return;
+            }
+
+            // For larger copies, handle potential overlap
+            if (dest < src)
+            {
+                // Copy from low to high addresses
+                for (nuint i = 0; i < pointerSizeLength; i++)
+                {
+                    dest[i] = src[i];
+                }
+            }
+            else if (dest > src)
+            {
+                // Copy from high to low addresses to prevent overwriting source
+                for (nuint i = pointerSizeLength; i > 0; i--)
+                {
+                    dest[i - 1] = src[i - 1];
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fills a block of memory with a specific byte value.
+        /// </summary>
+        /// <param name="dest">Pointer to the destination memory block.</param>
+        /// <param name="value">Byte value to fill the memory with.</param>
+        /// <param name="byteCount">Number of bytes to fill.</param>
+        public static unsafe void Fill(ref byte dest, byte value, nuint byteCount)
+        {
+            if (byteCount == 0)
+                return;
+
+            byte* destPtr = (byte*)Unsafe.AsPointer(ref dest);
+
+            // Handle small fills with direct assignment
+            if (byteCount <= 16)
+            {
+                switch (byteCount)
+                {
+                    case 1:
+                        destPtr[0] = value;
+                        return;
+                    case 2:
+                        *((short*)destPtr) = (short)((value << 8) | value);
+                        return;
+                    case 3:
+                        *((short*)destPtr) = (short)((value << 8) | value);
+                        destPtr[2] = value;
+                        return;
+                    case 4:
+                        *((int*)destPtr) = (int)((value << 24) | (value << 16) | (value << 8) | value);
+                        return;
+                    case 5:
+                        *((int*)destPtr) = (int)((value << 24) | (value << 16) | (value << 8) | value);
+                        destPtr[4] = value;
+                        return;
+                    case 6:
+                        *((int*)destPtr) = (int)((value << 24) | (value << 16) | (value << 8) | value);
+                        *((short*)(destPtr + 4)) = (short)((value << 8) | value);
+                        return;
+                    case 7:
+                        *((int*)destPtr) = (int)((value << 24) | (value << 16) | (value << 8) | value);
+                        *((short*)(destPtr + 4)) = (short)((value << 8) | value);
+                        destPtr[6] = value;
+                        return;
+                    case 8:
+                        *((long*)destPtr) = (long)((ulong)value * 0x0101010101010101UL);
+                        return;
+                    default:
+                        // For 9-16 bytes, do manual fill
+                        for (nuint a = 0; a < byteCount; a++)
+                        {
+                            destPtr[a] = value;
+                        }
+                        return;
+                }
+            }
+
+            // For larger fills, use repeated long/int writes
+            long longValue = (long)((ulong)value * 0x0101010101010101UL);
+            nuint i = 0;
+            nuint end = byteCount - 8;
+
+            // Fill 8 bytes at a time
+            while (i <= end)
+            {
+                *((long*)(destPtr + i)) = longValue;
+                i += 8;
+            }
+
+            // Fill remaining bytes
+            for (; i < byteCount; i++)
+            {
+                destPtr[i] = value;
+            }
+        }
+
+        /// <summary>
+        /// Fills a block of memory with a specific pointer value.
+        /// </summary>
+        /// <param name="dest">Pointer to the destination memory block.</param>
+        /// <param name="value">Pointer value to fill the memory with.</param>
+        /// <param name="pointerSizeLength">Number of pointers to fill.</param>
+        public static unsafe void Fill(ref IntPtr dest, IntPtr value, nuint pointerSizeLength)
+        {
+            if (pointerSizeLength == 0)
+                return;
+
+            IntPtr* destPtr = (IntPtr*)Unsafe.AsPointer(ref dest);
+
+            // For small fills, do direct assignment
+            if (pointerSizeLength <= 8)
+            {
+                for (nuint b = 0; b < pointerSizeLength; b++)
+                {
+                    destPtr[b] = value;
+                }
+                return;
+            }
+
+            // For larger fills, use repeated writes
+            nuint i = 0;
+            nuint end = pointerSizeLength - 8;
+
+            // Fill 8 pointers at a time
+            while (i <= end)
+            {
+                destPtr[i] = value;
+                destPtr[i + 1] = value;
+                destPtr[i + 2] = value;
+                destPtr[i + 3] = value;
+                destPtr[i + 4] = value;
+                destPtr[i + 5] = value;
+                destPtr[i + 6] = value;
+                destPtr[i + 7] = value;
+                i += 8;
+            }
+
+            // Fill remaining pointers
+            for (; i < pointerSizeLength; i++)
+            {
+                destPtr[i] = value;
+            }
         }
     }
 }

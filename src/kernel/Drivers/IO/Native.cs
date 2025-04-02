@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime;
 using System.Runtime.InteropServices;
 
 namespace Kernel
@@ -13,56 +14,56 @@ namespace Kernel
         /// </summary>
         /// <returns>Valor actual del registro CR0</returns>
         [DllImport("*", EntryPoint = "_ReadCR0")]
-        public static extern uint ReadCR0();
+        public static extern ulong ReadCR0();
 
         /// <summary>
         /// Escribe un valor en el registro CR0
         /// </summary>
         /// <param name="value">Valor a escribir en CR0</param>
         [DllImport("*", EntryPoint = "_WriteCR0")]
-        public static extern void WriteCR0(uint value);
+        public static extern void WriteCR0(ulong value);
 
         /// <summary>
         /// Lee el valor del registro CR2 (dirección que causó una falla de página)
         /// </summary>
         /// <returns>Valor actual del registro CR2</returns>
         [DllImport("*", EntryPoint = "_ReadCR2")]
-        public static extern uint ReadCR2();
+        public static extern ulong ReadCR2();
 
         /// <summary>
         /// Lee el valor del registro CR3 (directorio de páginas)
         /// </summary>
         /// <returns>Valor actual del registro CR3</returns>
         [DllImport("*", EntryPoint = "_ReadCR3")]
-        public static extern uint ReadCR3();
+        public static extern ulong ReadCR3();
 
         /// <summary>
         /// Escribe un valor en el registro CR3 (carga un nuevo directorio de páginas)
         /// </summary>
         /// <param name="value">Valor a escribir en CR3</param>
         [DllImport("*", EntryPoint = "_WriteCR3")]
-        public static extern void WriteCR3(uint value);
+        public static extern void WriteCR3(ulong value);
 
         /// <summary>
         /// Lee el valor del registro CR4
         /// </summary>
         /// <returns>Valor actual del registro CR4</returns>
         [DllImport("*", EntryPoint = "_ReadCR4")]
-        public static extern uint ReadCR4();
+        public static extern ulong ReadCR4();
 
         /// <summary>
         /// Escribe un valor en el registro CR4
         /// </summary>
         /// <param name="value">Valor a escribir en CR4</param>
         [DllImport("*", EntryPoint = "_WriteCR4")]
-        public static extern void WriteCR4(uint value);
+        public static extern void WriteCR4(ulong value);
 
         /// <summary>
         /// Invalida una entrada en la TLB para una dirección específica
         /// </summary>
         /// <param name="address">Dirección virtual a invalidar</param>
         [DllImport("*", EntryPoint = "_Invlpg")]
-        public static extern void Invlpg(void* address);
+        public static extern void Invlpg(ulong address);
 
         /// <summary>
         /// Deshabilita las interrupciones
@@ -114,7 +115,7 @@ namespace Kernel
         /// <param name="port">Puerto de E/S</param>
         /// <returns>Doble palabra leída</returns>
         [DllImport("*", EntryPoint = "_InDWord")]
-        public static extern uint InDWord(ushort port);
+        public static extern ulong InDWord(ushort port);
 
         /// <summary>
         /// Escribe una doble palabra (32 bits) en un puerto de E/S
@@ -122,7 +123,7 @@ namespace Kernel
         /// <param name="port">Puerto de E/S</param>
         /// <param name="value">Valor a escribir</param>
         [DllImport("*", EntryPoint = "_OutDWord")]
-        public static extern void OutDWord(ushort port, uint value);
+        public static extern void OutDWord(ushort port, ulong value);
 
         /// <summary>
         /// Rellena un bloque de memoria con un valor específico (similar a memset)
@@ -165,15 +166,14 @@ namespace Kernel
         /// </summary>
         /// <returns>Valor actual de EFLAGS</returns>
         [DllImport("*", EntryPoint = "_GetEFlags")]
-        public static extern uint GetEFlags();
+        public static extern ulong GetEFlags();
 
         /// <summary>
         /// Establece el estado de las banderas (EFLAGS)
         /// </summary>
         /// <param name="flags">Valor a establecer en EFLAGS</param>
         [DllImport("*", EntryPoint = "_SetEFlags")]
-        public static extern void SetEFlags(uint flags);
-
+        public static extern void SetEFlags(ulong flags);
 
     }
 }

@@ -35,5 +35,5 @@
 			<ReferencePath Remove="@(ReferencePath)" />
 		</ItemGroup>
 	</Target>
-	
+
 </Project>

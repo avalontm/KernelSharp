@@ -6,43 +6,50 @@ global _InWord
 global _OutDWord
 global _InDWord
 
-; void OutByte(ushort port, byte value)
+; void _OutByte(ushort port, byte value)
+; RCX = port, RDX = value
 _OutByte:
-    mov dx, [esp + 4]    ; port
-    mov al, [esp + 8]    ; value
-    out dx, al
+    mov rax, rdx        ; Valor a RAX
+    mov rdx, rcx        ; Puerto a RDX
+    out dx, al          ; Escribir byte (AL) a puerto DX
     ret
 
-; byte InByte(ushort port)
+; byte _InByte(ushort port)
+; RCX = port, retorno en RAX (AL)
 _InByte:
-    mov dx, [esp + 4]    ; port
-    xor eax, eax
-    in al, dx
+    mov rdx, rcx        ; Puerto a RDX
+    xor rax, rax        ; Limpiar RAX
+    in al, dx           ; Leer byte de puerto DX a AL
     ret
 
-; void OutWord(ushort port, ushort value)
+; void _OutWord(ushort port, ushort value)
+; RCX = port, RDX = value
 _OutWord:
-    mov dx, [esp + 4]    ; port
-    mov ax, [esp + 8]    ; value
-    out dx, ax
+    mov rax, rdx        ; Valor a RAX
+    mov rdx, rcx        ; Puerto a RDX
+    out dx, ax          ; Escribir word (AX) a puerto DX
     ret
 
-; ushort InWord(ushort port)
+; ushort _InWord(ushort port)
+; RCX = port, retorno en RAX (AX)
 _InWord:
-    mov dx, [esp + 4]    ; port
-    xor eax, eax
-    in ax, dx
+    mov rdx, rcx        ; Puerto a RDX
+    xor rax, rax        ; Limpiar RAX
+    in ax, dx           ; Leer word de puerto DX a AX
     ret
 
-; void OutDWord(ushort port, uint value)
+; void _OutDWord(ushort port, uint value)
+; RCX = port, RDX = value
 _OutDWord:
-    mov dx, [esp + 4]    ; port
-    mov eax, [esp + 8]   ; value
-    out dx, eax
+    mov rax, rdx        ; Valor a RAX
+    mov rdx, rcx        ; Puerto a RDX
+    out dx, eax         ; Escribir dword (EAX) a puerto DX
     ret
 
-; uint InDWord(ushort port)
+; uint _InDWord(ushort port)
+; RCX = port, retorno en RAX (EAX)
 _InDWord:
-    mov dx, [esp + 4]    ; port
-    in eax, dx
+    mov rdx, rcx        ; Puerto a RDX
+    xor rax, rax        ; Limpiar RAX
+    in eax, dx          ; Leer dword de puerto DX a EAX
     ret

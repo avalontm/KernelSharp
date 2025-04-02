@@ -11,6 +11,7 @@ namespace System
         public UIntPtr(ulong value) { _value = (void*)value; }
         public static readonly UIntPtr Zero;
 
+
         public bool Equals(UIntPtr ptr)
             => _value == ptr._value;
 

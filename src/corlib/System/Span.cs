@@ -4,7 +4,7 @@
 using Internal.Runtime.CompilerServices;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using nuint = System.UInt32;
+using nuint = System.UInt64;
 
 #pragma warning disable 0809  //warning CS0809: Obsolete member 'Span<T>.Equals(object)' overrides non-obsolete member 'object.Equals(object)'
 

@@ -53,7 +53,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void Initialize()
         {
-            SerialDebug.Info("Inicializando manejadores de interrupcion...");
+            //SendString.Info("Inicializando manejadores de interrupcion...");
 
             // Alojar memoria para los punteros a manejadores
             _handlerPointers = (IntPtr*)NativeMemory.Alloc((nuint)(sizeof(IntPtr) * 256));
@@ -84,7 +84,7 @@ namespace Kernel.Memory
             SetInterruptHandler(18, &MachineCheckHandler);
             SetInterruptHandler(19, &SIMDFPHandler);
 
-            SerialDebug.Info("Manejadores de interrupcion inicializados");
+            //SendString.Info("Manejadores de interrupcion inicializados");
         }
 
         /// <summary>
@@ -144,7 +144,7 @@ namespace Kernel.Memory
         public static void DefaultHandler(InterruptFrame* frame)
         {
             // Mostrar informacion básica sobre la interrupcion
-            SerialDebug.Warning($"Interrupcion no manejada: {frame->InterruptNumber} en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Warning($"Interrupcion no manejada: {frame->InterruptNumber} en EIP=0x{frame->EIP.ToString()}");
 
             // Si hay un codigo de error, mostrarlo
             if (frame->InterruptNumber == 8 ||
@@ -156,7 +156,7 @@ namespace Kernel.Memory
                 frame->InterruptNumber == 17 ||
                 frame->InterruptNumber == 30)
             {
-                SerialDebug.Warning($"Codigo de error: 0x{frame->ErrorCode.ToString()}");
+                //SendString.Warning($"Codigo de error: 0x{frame->ErrorCode.ToString()}");
             }
 
             // Solo mostrar en consola si es una interrupcion no esperada
@@ -175,7 +175,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void DivideByZeroHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Division por cero en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Division por cero en EIP=0x{frame->EIP.ToString()}");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"ERROR: Division por cero en direccion 0x{frame->EIP.ToString()}");
             Console.ForegroundColor = ConsoleColor.White;
@@ -187,7 +187,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void DebugHandler(InterruptFrame* frame)
         {
-            SerialDebug.Warning($"Excepcion de depuracion en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Warning($"Excepcion de depuracion en EIP=0x{frame->EIP.ToString()}");
         }
 
         /// <summary>
@@ -195,7 +195,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void NMIHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error("EXCEPCIoN: Interrupcion no enmascarable (NMI)");
+            //SendString.Error("EXCEPCIoN: Interrupcion no enmascarable (NMI)");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("ERROR: Interrupcion no enmascarable (NMI)");
             Console.ForegroundColor = ConsoleColor.White;
@@ -206,7 +206,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void BreakpointHandler(InterruptFrame* frame)
         {
-            SerialDebug.Info($"Breakpoint en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Info($"Breakpoint en EIP=0x{frame->EIP.ToString()}");
             Console.WriteLine($"Breakpoint alcanzado en 0x{frame->EIP.ToString()}");
         }
 
@@ -215,7 +215,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void OverflowHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Desbordamiento en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Desbordamiento en EIP=0x{frame->EIP.ToString()}");
         }
 
         /// <summary>
@@ -223,7 +223,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void BoundRangeHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Límite excedido en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Límite excedido en EIP=0x{frame->EIP.ToString()}");
         }
 
         /// <summary>
@@ -231,7 +231,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void InvalidOpcodeHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Codigo de operacion inválido en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Codigo de operacion inválido en EIP=0x{frame->EIP.ToString()}");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"ERROR: Codigo de operacion inválido en direccion 0x{frame->EIP.ToString()}");
             Console.ForegroundColor = ConsoleColor.White;
@@ -243,7 +243,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void DeviceNotAvailableHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Dispositivo no disponible en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Dispositivo no disponible en EIP=0x{frame->EIP.ToString()}");
         }
 
         /// <summary>
@@ -251,7 +251,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void DoubleFaultHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN CRÍTICA: Doble falta. Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN CRÍTICA: Doble falta. Codigo de error: 0x{frame->ErrorCode.ToString()}");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("ERROR CRÍTICO: Doble falta. El sistema se detendrá.");
             Console.ForegroundColor = ConsoleColor.White;
@@ -263,7 +263,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void InvalidTSSHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: TSS inválido. Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN: TSS inválido. Codigo de error: 0x{frame->ErrorCode.ToString()}");
         }
 
         /// <summary>
@@ -271,7 +271,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void SegmentNotPresentHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Segmento no presente. Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Segmento no presente. Codigo de error: 0x{frame->ErrorCode.ToString()}");
         }
 
         /// <summary>
@@ -279,7 +279,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void StackFaultHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Falta de pila. Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Falta de pila. Codigo de error: 0x{frame->ErrorCode.ToString()}");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"ERROR: Falta de pila. Codigo de error: 0x{frame->ErrorCode.ToString()}");
             Console.ForegroundColor = ConsoleColor.White;
@@ -291,7 +291,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void GeneralProtectionHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Falta de proteccion general en EIP=0x{frame->EIP.ToString()}. Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Falta de proteccion general en EIP=0x{frame->EIP.ToString()}. Codigo de error: 0x{frame->ErrorCode.ToString()}");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"ERROR: Falta de proteccion general en direccion 0x{frame->EIP.ToString()}");
             Console.WriteLine($"Codigo de error: 0x{frame->ErrorCode.ToString()}");
@@ -314,8 +314,8 @@ namespace Kernel.Memory
             bool reserved = (frame->ErrorCode & 8) != 0;        // Bits reservados
             bool instruction = (frame->ErrorCode & 16) != 0;    // Fetch de instruccion
 
-            SerialDebug.Error($"EXCEPCIoN: Falta de página en direccion 0x{faultAddress.ToString()}");
-            SerialDebug.Error($"  EIP=0x{frame->EIP.ToString()}, Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Falta de página en direccion 0x{faultAddress.ToString()}");
+            //SendString.Error($"  EIP=0x{frame->EIP.ToString()}, Codigo de error: 0x{frame->ErrorCode.ToString()}");
 
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine($"ERROR: Falta de página en direccion 0x{faultAddress.ToString()}");
@@ -334,7 +334,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void FPUErrorHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Error de punto flotante en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Error de punto flotante en EIP=0x{frame->EIP.ToString()}");
         }
 
         /// <summary>
@@ -342,7 +342,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void AlignmentCheckHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Error de alineacion en EIP=0x{frame->EIP.ToString()}. Codigo de error: 0x{frame->ErrorCode.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Error de alineacion en EIP=0x{frame->EIP.ToString()}. Codigo de error: 0x{frame->ErrorCode.ToString()}");
         }
 
         /// <summary>
@@ -350,7 +350,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void MachineCheckHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error("EXCEPCIoN CRÍTICA: Error de verificacion de máquina. Posible fallo de hardware.");
+            //SendString.Error("EXCEPCIoN CRÍTICA: Error de verificacion de máquina. Posible fallo de hardware.");
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("ERROR CRÍTICO: Error de verificacion de máquina. Posible fallo de hardware.");
             Console.ForegroundColor = ConsoleColor.White;
@@ -362,7 +362,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void SIMDFPHandler(InterruptFrame* frame)
         {
-            SerialDebug.Error($"EXCEPCIoN: Error SIMD de punto flotante en EIP=0x{frame->EIP.ToString()}");
+            //SendString.Error($"EXCEPCIoN: Error SIMD de punto flotante en EIP=0x{frame->EIP.ToString()}");
         }
 
         #endregion

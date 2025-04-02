@@ -42,7 +42,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void Initialize()
         {
-            SerialDebug.Info("Inicializando IDT...");
+            //SendString.Info("Inicializando IDT...");
 
             // Asignar memoria para la IDT
             _idt = (IDTEntry*)NativeMemory.Alloc((nuint)(sizeof(IDTEntry) * IDT_ENTRIES));
@@ -66,7 +66,7 @@ namespace Kernel.Memory
                 LoadIDT(idtPtr);
             }
 
-            SerialDebug.Info("IDT inicializada correctamente.");
+            //SendString.Info("IDT inicializada correctamente.");
         }
 
         // Método para obtener la dirección del manejador por defecto
@@ -124,7 +124,7 @@ namespace Kernel.Memory
         public static void DefaultInterruptHandler()
         {
             // Manejador por defecto que simplemente ignora la interrupción
-            SerialDebug.Warning("Interrupción no manejada recibida.");
+            //SendString.Warning("Interrupción no manejada recibida.");
         }
 
         /// <summary>

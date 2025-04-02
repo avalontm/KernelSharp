@@ -33,7 +33,7 @@ namespace Kernel.Memory
 
         public static void InitializeMemoryDetection()
         {
-            SerialDebug.Info("InitializeMemoryDetection");
+            //SendString.Info("InitializeMemoryDetection");
             // Detect memory
             DetectMemory();
 
@@ -42,9 +42,9 @@ namespace Kernel.Memory
             uint upperMemory = GetUpperMemory();
             ulong totalMemory = GetTotalMemory();
 
-            SerialDebug.Info($"Lower Memory: {lowerMemory.ToString()} KB");
-            SerialDebug.Info($"Upper Memory: {upperMemory.ToString()} KB");
-            SerialDebug.Info($"Total Memory: {(totalMemory / (1024 * 1024)).ToString()} MB");
+            //SendString.Info($"Lower Memory: {lowerMemory.ToString()} KB");
+            //SendString.Info($"Upper Memory: {upperMemory.ToString()} KB");
+            //SendString.Info($"Total Memory: {(totalMemory / (1024 * 1024)).ToString()} MB");
 
             // Get memory map
             int entryCount;
@@ -55,10 +55,10 @@ namespace Kernel.Memory
             for (int i = 0; i < entryCount; i++)
             {
                 MemoryMapEntry entry = entries[i];
-                SerialDebug.Info($"Region {i}: " +
-                    $"Base: 0x{entry.BaseAddress.ToStringHex()}, " +
-                    $"Length: {entry.Length.ToString()} bytes, " +
-                    $"Type: {entry.Type.ToString()}");
+                //SendString.Info($"Region {i}: " +
+                  //  $"Base: 0x{entry.BaseAddress.ToStringHex()}, " +
+                 //   $"Length: {entry.Length.ToString()} bytes, " +
+                 //   $"Type: {entry.Type.ToString()}");
             }
         }
     }

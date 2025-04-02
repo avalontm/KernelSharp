@@ -1,5 +1,5 @@
 ; paging.asm
-; Funciones de bajo nivel para manejo de paginación en x86
+; Funciones de bajo nivel para manejo de paginación en x86-64
 ; Para ser compilado con NASM
 
 section .text
@@ -20,117 +20,98 @@ global _Reset                ; Reinicio del sistema
 global _GetEFlags            ; Obtiene EFLAGS
 global _SetEFlags            ; Establece EFLAGS
 
-
 ; Carga la GDT y actualiza los registros de segmento
 ; void _LoadGDT(void* gdtPointer)
 _LoadGDT:
-    push ebp
-    mov ebp, esp
-    
-    ; Cargar GDT
-    mov eax, [ebp+8]     ; gdtPointer
-    lgdt [eax]
-    
-    ; Recargar CS a través de un far jump
-    jmp 0x08:.reload_cs  ; 0x08 es el selector de código del kernel
-    
+    push rbx
+    mov rbx, [rsp+8]        ; gdtPointer
+    lgdt [rbx]
+
+    ; Saltamos directamente, ya que no es necesario modificar CS en 64 bits
+    jmp .reload_cs
+
 .reload_cs:
     ; Recargar registros de segmento de datos
-    mov ax, 0x10         ; 0x10 es el selector de datos del kernel
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-    
+    mov rax, 0x10           ; 0x10 es el selector de datos del kernel
+    mov ds, rax
+    mov es, rax
+    mov fs, rax
+    mov gs, rax
+    mov ss, rax
+
     ; Retornar
-    pop ebp
+    pop rbx
     ret
 
 ; Carga la IDT
 ; void _LoadIDT(void* idtPointer)
 _LoadIDT:
-    push ebp
-    mov ebp, esp
-    
-    ; Cargar IDT
-    mov eax, [ebp+8]     ; idtPointer
-    lidt [eax]
-    
+    push rbx
+    mov rbx, [rsp+8]        ; idtPointer
+    lidt [rbx]
+
     ; Retornar
-    pop ebp
+    pop rbx
     ret
 
 ; Lee el valor del registro CR0
-; uint _ReadCR0()
+; uint64_t _ReadCR0()
 _ReadCR0:
-    mov eax, cr0
+    mov rax, cr0
     ret
 
 ; Escribe un valor en el registro CR0
-; void _WriteCR0(uint value)
+; void _WriteCR0(uint64_t value)
 _WriteCR0:
-    push ebp
-    mov ebp, esp
-    
-    mov eax, [ebp+8]     ; value
-    mov cr0, eax
-    
-    pop ebp
+    push rbx
+    mov rbx, [rsp+8]        ; value
+    mov cr0, rbx
+    pop rbx
     ret
 
 ; Lee el valor del registro CR2 (dirección que causó una falla de página)
-; uint _ReadCR2()
+; uint64_t _ReadCR2()
 _ReadCR2:
-    mov eax, cr2
+    mov rax, cr2
     ret
 
 ; Lee el valor del registro CR3 (directorio de páginas)
-; uint _ReadCR3()
+; uint64_t _ReadCR3()
 _ReadCR3:
-    mov eax, cr3
+    mov rax, cr3
     ret
 
 ; Escribe un valor en el registro CR3 (carga un nuevo directorio de páginas)
-; void _WriteCR3(uint value)
+; void _WriteCR3(uint64_t value)
 _WriteCR3:
-    push ebp
-    mov ebp, esp
-    
-    mov eax, [ebp+8]     ; value
-    mov cr3, eax
-    
-    pop ebp
+    push rbx
+    mov rbx, [rsp+8]        ; value
+    mov cr3, rbx
+    pop rbx
     ret
 
 ; Lee el valor del registro CR4
-; uint _ReadCR4()
+; uint64_t _ReadCR4()
 _ReadCR4:
-    mov eax, cr4
+    mov rax, cr4
     ret
 
 ; Escribe un valor en el registro CR4
-; void _WriteCR4(uint value)
+; void _WriteCR4(uint64_t value)
 _WriteCR4:
-    push ebp
-    mov ebp, esp
-    
-    mov eax, [ebp+8]     ; value
-    mov cr4, eax
-    
-    pop ebp
+    push rbx
+    mov rbx, [rsp+8]        ; value
+    mov cr4, rbx
+    pop rbx
     ret
 
 ; Invalida una entrada en la TLB para una dirección específica
 ; void _Invlpg(void* address)
 _Invlpg:
-    push ebp
-    mov ebp, esp
-    
-    mov eax, [ebp+8]     ; address
-    invlpg [eax]
-    
-    pop ebp
+    push rbx
+    mov rbx, [rsp+8]        ; address
+    invlpg [rbx]
+    pop rbx
     ret
 
 ; Habilita las interrupciones
@@ -157,26 +138,23 @@ _Reset:
     ; Método 1: Usando el controlador de teclado del 8042
     mov al, 0xFE
     out 0x64, al
-    
+
     ; Si el método anterior falla, intentar con un salto infinito
     jmp _Reset
 
 ; Obtiene el estado actual de las banderas (EFLAGS)
-; uint _GetEFlags()
+; uint64_t _GetEFlags()
 _GetEFlags:
-    pushfd                  ; Empujar EFLAGS a la pila
-    pop eax                 ; Obtener el valor en EAX
+    pushfq                 ; Empujar EFLAGS a la pila
+    pop rax                ; Obtener el valor en RAX
     ret
 
 ; Establece el estado de las banderas (EFLAGS)
-; void _SetEFlags(uint flags)
+; void _SetEFlags(uint64_t flags)
 _SetEFlags:
-    push ebp
-    mov ebp, esp
-    
-    mov eax, [ebp+8]        ; flags
-    push eax                ; Poner el valor en la pila
-    popfd                   ; Cargar EFLAGS desde la pila
-    
-    pop ebp
+    push rbx
+    mov rbx, [rsp+8]        ; flags
+    push rbx                ; Poner el valor en la pila
+    popfq                   ; Cargar EFLAGS desde la pila
+    pop rbx
     ret

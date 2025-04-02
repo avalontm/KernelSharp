@@ -269,5 +269,15 @@ namespace Internal.Runtime.CompilerHelpers
         {
             Panic("InternalException: " + message);
         }
+
+        internal static void ThrowArrayTypeMismatchException()
+        {
+            Panic("ThrowArrayTypeMismatchException");
+        }
+
+        internal static void InvalidCastException(string message)
+        {
+            Panic($"ThrowArrayTypeMismatchException: {message}");
+        }
     }
 }

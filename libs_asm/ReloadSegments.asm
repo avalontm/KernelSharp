@@ -1,23 +1,19 @@
-; ReloadSegments.asm - Función para recargar los selectores de segmento
-
 section .text
-
 global _ReloadSegments
+
 _ReloadSegments:
     ; Recargar CS requiere un salto lejano (far jump)
-    ; jmp 0x08:.reload_CS  ; 0x08 es el selector de código (primer descriptor después del nulo)
-    ; Método alternativo usando push y retf
-    push dword 0x08        ; Selector de código
-    push dword .reload_CS  ; Dirección de retorno
-    retf                   ; Retorno lejano (far return) - cambia CS:IP
+    push qword 0x08        ; Selector de código de 64 bits
+    lea rax, [.reload_CS]  ; Cargar dirección de retorno en RAX
+    push rax               ; Apilar dirección de retorno
+    retfq                  ; Retorno lejano (far return) para cambiar CS
 
 .reload_CS:
-    ; Recargar los otros registros de segmento
-    mov ax, 0x10           ; 0x10 es el selector de datos (segundo descriptor después del nulo)
+    ; En modo largo (64 bits), DS, ES, SS no son necesarios en la mayoría de los casos.
+    ; FS y GS pueden ser utilizados para datos específicos del sistema o de hilos.
+    mov ax, 0x10           ; Selector de datos (debe estar configurado correctamente en la GDT)
     mov ds, ax
     mov es, ax
-    mov fs, ax
-    mov gs, ax
     mov ss, ax
+    ; FS y GS pueden ser configurados según necesidad.
     ret
-

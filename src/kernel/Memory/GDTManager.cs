@@ -33,7 +33,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void Initialize()
         {
-            SerialDebug.Info("Inicializando GDT...");
+            //SendString.Info("Inicializando GDT...");
             // Configurar descriptor nulo (todos los valores en 0)
             _nullEntry = new GDTEntry();
 
@@ -74,7 +74,7 @@ namespace Kernel.Memory
 
             ReloadSegments();
 
-            SerialDebug.Info("GDT inicializada.");
+            //SendString.Info("GDT inicializada.");
         }
 
         /// <summary>

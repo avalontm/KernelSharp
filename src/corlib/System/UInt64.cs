@@ -1,8 +1,10 @@
-﻿namespace System
+﻿
+namespace System
 {
     public struct UInt64
     {
-        public const ulong MaxValue = 18446744073709551615UL;
+        public const long MaxValue = 0x7FFFFFFFFFFFFFFF;
+        public const long MinValue = -0x8000000000000000;
 
         public unsafe override string ToString()
         {

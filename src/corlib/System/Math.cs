@@ -343,6 +343,124 @@ namespace System
             return result;
         }
 
+        // Agrega estos métodos a tu clase Math.cs
+
+        // Versión para int
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int MultiplyChecked(int a, int b)
+        {
+            long result = (long)a * (long)b;
+            if (result > int.MaxValue || result < int.MinValue)
+                ThrowHelpers.ThrowOverflowException("Multiplication overflow");
+            return (int)result;
+        }
+
+        // Versión para long
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static long MultiplyChecked(long a, long b)
+        {
+            // Implementación manual para detectar desbordamientos en multiplicación de long
+            bool overflow = false;
+
+            // Detectar desbordamiento basado en las magnitudes de los operandos
+            if (a > 0 && b > 0)
+            {
+                if (a > long.MaxValue / b)
+                    overflow = true;
+            }
+            else if (a < 0 && b < 0)
+            {
+                if (a < long.MaxValue / b)
+                    overflow = true;
+            }
+            else if (a < 0 && b > 0)
+            {
+                if (a < long.MinValue / b)
+                    overflow = true;
+            }
+            else if (a > 0 && b < 0)
+            {
+                if (b < long.MinValue / a)
+                    overflow = true;
+            }
+
+            if (overflow)
+                ThrowHelpers.ThrowOverflowException("Multiplication overflow");
+
+            return a * b;
+        }
+
+        // Versión para unsigneds
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static uint MultiplyChecked(uint a, uint b)
+        {
+            ulong result = (ulong)a * (ulong)b;
+            if (result > uint.MaxValue)
+                ThrowHelpers.ThrowOverflowException("Multiplication overflow");
+            return (uint)result;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ulong MultiplyChecked(ulong a, ulong b)
+        {
+            // Comprobación simplificada de desbordamiento
+            if (a == 0 || b == 0)
+                return 0;
+
+            if (a > ulong.MaxValue / b)
+                ThrowHelpers.ThrowOverflowException("Multiplication overflow");
+
+            return a * b;
+        }
+
+        // Para nint (IntPtr)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static nint MultiplyChecked(nint a, nint b)
+        {
+            // Para sistemas de 32 bits, convertir a long
+            long result = (long)a * (long)b;
+
+            // Verificar desbordamiento de nint (depende del tamaño del puntero)
+            if (result > (long)int.MaxValue || result < (long)int.MinValue)
+                ThrowHelpers.ThrowOverflowException("Multiplication overflow");
+
+            return (nint)result;
+        }
+
+        // Para nuint (UIntPtr)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static nuint MultiplyChecked(nuint a, nuint b)
+        {
+            // Para sistemas de 32 bits, convertir a ulong
+            ulong result = (ulong)a * (ulong)b;
+
+            // Verificar desbordamiento
+            if (result > (ulong)int.MaxValue)
+                ThrowHelpers.ThrowOverflowException("Multiplication overflow");
+
+            return (nuint)result;
+        }
+
+        /// <summary>
+        /// Truncates the decimal part of a double-precision floating-point number.
+        /// </summary>
+        /// <param name="value">The number to truncate.</param>
+        /// <returns>The integral part of the number, rounded towards zero.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Truncate(double value)
+        {
+            // Manejo de casos especiales
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return value;
+
+            // Casos positivos
+            if (value >= 0)
+                return (double)((long)value);
+
+            // Casos negativos
+            return (double)((long)value);
+        }
+
     }
 }
 

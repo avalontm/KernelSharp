@@ -10,32 +10,6 @@ namespace Internal.Runtime.CompilerHelpers
     public static unsafe class RhTypeCast
     {
         /// <summary>
-        /// Verifica si un objeto se puede convertir a un tipo específico, implementando
-        /// la funcionalidad para casos especiales (como arrays, interfaces y tipos genéricos)
-        /// </summary>
-        /// <param name="object">Objeto a comprobar</param>
-        /// <param name="targetType">Tipo de destino al que se quiere convertir</param>
-        /// <returns>El objeto si la conversión es válida, o lanza una excepción si no lo es</returns>
-        [RuntimeExport("RhTypeCast_CheckCastClassSpecial")]
-        public static object RhTypeCast_CheckCastClassSpecial(object obj, EEType* targetType)
-        {
-            // Si el objeto es null, permitir la conversión (null puede convertirse a cualquier tipo de referencia)
-            if (obj == null)
-                return null;
-
-            // Obtener el EEType del objeto
-            EEType* objectType = GetObjectEEType(obj);
-
-            // Verificar si el tipo del objeto y el tipo de destino son compatibles
-            if (AreTypesAssignable(objectType, targetType))
-                return obj;
-
-            // No se pudo realizar la conversión, lanzar excepción
-            ThrowInvalidCastException(obj, targetType);
-            return null; // Nunca se alcanza, pero el compilador lo requiere
-        }
-
-        /// <summary>
         /// Obtiene el EEType de un objeto
         /// </summary>
         private static unsafe EEType* GetObjectEEType(object obj)

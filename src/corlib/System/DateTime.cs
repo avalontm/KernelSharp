@@ -1,7 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using nuint = System.UInt32;
+using nuint = System.UInt64;
 
 namespace System
 {

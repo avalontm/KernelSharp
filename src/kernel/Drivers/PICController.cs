@@ -36,7 +36,7 @@ namespace Kernel.Drivers
         /// </summary>
         public static void Initialize()
         {
-            SerialDebug.Info("Inicializando PIC...");
+            //SendString.Info("Inicializando PIC...");
 
             // Guardar máscaras actuales
             byte mask1 = InByte(PIC1_DATA);
@@ -72,7 +72,7 @@ namespace Kernel.Drivers
             IOWait();
             OutByte(PIC2_DATA, 0xFF); // 1111 1111 - Deshabilitamos todas las IRQs del PIC2
 
-            SerialDebug.Info("PIC inicializado correctamente");
+            //SendString.Info("PIC inicializado correctamente");
         }
 
         /// <summary>

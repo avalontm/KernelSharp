@@ -11,7 +11,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// <param name="size">Tamaño en bytes a asignar</param>
         /// <returns>Puntero a la memoria asignada o IntPtr.Zero si hay un error</returns>
         [DllImport("*", EntryPoint = "_malloc")]
-        public static extern unsafe IntPtr Malloc(uint size);
+        public static extern unsafe IntPtr Malloc(ulong size);
 
         /// <summary>
         /// Libera memoria previamente asignada
@@ -26,7 +26,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// <param name="ptr">Puntero donde comenzar</param>
         /// <param name="value">Valor byte para establecer</param>
         /// <param name="size">Número de bytes a establecer</param>
-        public static unsafe void MemSet(byte* ptr, int c, uint count)
+        public static unsafe void MemSet(byte* ptr, int c, ulong count)
         {
             for (byte* p = ptr; p < ptr + count; p++)
                 *p = (byte)c;
@@ -39,7 +39,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// <param name="dest">Puntero de destino</param>
         /// <param name="src">Puntero de origen</param>
         /// <param name="size">Número de bytes a copiar</param>
-        public static unsafe void MemCpy(byte* dest, byte* src, uint count)
+        public static unsafe void MemCpy(byte* dest, byte* src, ulong count)
         {
             for (ulong i = 0; i < count; i++) dest[i] = src[i];
         }
@@ -51,7 +51,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// <param name="ptr2">Segundo puntero</param>
         /// <param name="size">Número de bytes a comparar</param>
         /// <returns>0 si son iguales, <0 si ptr1 < ptr2, >0 si ptr1 > ptr2</returns>
-        public static unsafe int MemCmp(void* ptr1, void* ptr2, uint size)
+        public static unsafe int MemCmp(void* ptr1, void* ptr2, ulong size)
         {
             byte* p1 = (byte*)ptr1;
             byte* p2 = (byte*)ptr2;

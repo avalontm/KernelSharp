@@ -1,10 +1,7 @@
-using System.Diagnostics;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 // String.cs - Implementation by AvalonTM
 // Created: March 28, 2025
@@ -539,6 +536,9 @@ namespace System
         /// <summary>
         /// Concatena dos cadenas
         /// </summary>
+        // Reemplaza el método actual de String.Concat con esta implementación
+        // que evita usar MultiplyChecked directamente
+
         public static string Concat(string str1, string str2)
         {
             if (str1 == null) str1 = "";
@@ -546,9 +546,10 @@ namespace System
 
             int len1 = str1.Length;
             int len2 = str2.Length;
+            int totalLength = len1 + len2;
 
             // Si ambas cadenas están vacías, devuelve cadena vacía
-            if (len1 == 0 && len2 == 0)
+            if (totalLength == 0)
                 return "";
 
             // Si una de las cadenas está vacía, devuelve la otra
@@ -556,23 +557,32 @@ namespace System
             if (len2 == 0) return str1;
 
             // Crea una nueva cadena con la longitud combinada
-            int totalLength = len1 + len2;
-            char* buffer = stackalloc char[totalLength];
-
-            // Copia la primera cadena
-            for (int i = 0; i < len1; i++)
+            unsafe
             {
-                buffer[i] = str1[i];
-            }
+                char* buffer = stackalloc char[totalLength];
 
-            // Copia la segunda cadena
-            for (int i = 0; i < len2; i++)
-            {
-                buffer[len1 + i] = str2[i];
-            }
+                // Copia la primera cadena
+                fixed (char* src1 = &str1._firstChar)
+                {
+                    for (int i = 0; i < len1; i++)
+                    {
+                        buffer[i] = src1[i];
+                    }
+                }
 
-            return new string(buffer, 0, totalLength);
+                // Copia la segunda cadena
+                fixed (char* src2 = &str2._firstChar)
+                {
+                    for (int i = 0; i < len2; i++)
+                    {
+                        buffer[len1 + i] = src2[i];
+                    }
+                }
+
+                return new string(buffer, 0, totalLength);
+            }
         }
+
 
         public static string Concat(string a, string b, string c)
         {

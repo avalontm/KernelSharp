@@ -11,101 +11,103 @@ namespace Kernel
 {
     unsafe class Program
     {
-        [DllImport("*", EntryPoint = "_STI")]
-        private static extern void EnableInterrupts();
-
-
         [RuntimeExport("Entry")]
-        public static void Entry(MultibootInfo* multibootInfo)
+        public static void Entry(MultibootInfo* multibootInfo, IntPtr trampoline)
         {
-            // Inicializar depuración por puerto serie
-            SerialDebug.Initialize();
-            SerialDebug.Info("Kernel iniciando... ");
+            // Initialize memory subsystem
+            Allocator.Initialize((IntPtr)0x20000000);
+            StartupCodeHelpers.InitializeModules((IntPtr)0x20000000);
+            PageTable.Initialize();
 
-            //StartupCodeHelpers.InitializeModules((IntPtr)magic);
-
-            SerialDebug.Info($"multibootInfo: 0x{((int)multibootInfo).ToHexString()}");
-
-            SerialDebug.Info($"Flag: {multibootInfo->Flags.ToString()}");
-
-            // Inicializar GDT antes que nada
-            SerialDebug.Info("Inicializando GDT...");
-            GDTManager.Initialize();
-
-            // Mostrar mensaje de bienvenida
+            // Show welcome message
             Console.ForegroundColor = ConsoleColor.Green;
-            string welcomeMessage = "Bienvenido a KernelSharp!";
+            string welcomeMessage = "Welcome to KernelSharp!";
             Console.WriteLine(welcomeMessage);
             Console.ForegroundColor = ConsoleColor.White;
 
-            // Mostrar información básica del sistema
-            SerialDebug.Info("Inicializando sistema...");
-
-            // Detectar arquitectura
-            SerialDebug.Info("Arquitectura del sistema: ");
             if (RuntimeArchitecture.Is32Bit)
             {
-                SerialDebug.Info("32 bits");
+                Console.WriteLine("32 bits");
             }
             else if (RuntimeArchitecture.Is64Bit)
             {
-                SerialDebug.Info("64 bits");
+                Console.WriteLine("64 bits");
             }
+
+            // Validate Multiboot pointer
+            if (multibootInfo == null)
+            {
+                // Handle null pointer error
+                Console.WriteLine("Multiboot info pointer is null!");
+                return;
+            }
+
+            // Initialize serial debug
+            SerialDebug.Initialize();
+
+            // Rest of the kernel initialization...
+            ArrayExamples.DemoArrays();
+
+
+            Console.WriteLine("Multiboot info!");
+            Console.WriteLine($"multibootInfo: 0x" + ((ulong)multibootInfo).ToStringHex());
+
+            Console.WriteLine($"Flag: {multibootInfo->Flags.ToString()}");
+
+            // Initialize GDT first
+            SerialDebug.Info("Initializing GDT...");
+            //GDTManager.Initialize();
+
+            // Show basic system information
+            SerialDebug.Info("Initializing system...");
 
             if (CPUMode.IsInProtectedMode())
             {
-                Console.WriteLine("Sistema en modo protegido");
+                Console.WriteLine("System in protected mode");
             }
             else
             {
-                Console.WriteLine("Sistema en modo real");
+                Console.WriteLine("System in real mode");
             }
 
             if (CPUMode.IsPagingEnabled())
             {
-                Console.WriteLine("Paginación habilitada");
+                Console.WriteLine("Paging enabled");
             }
 
-            // Pruebas de memoria
+            // Memory tests
             MemoryManager.Initialize(multibootInfo);
 
-            // Inicializar IDT después de la memoria
-            IDTManager.Initialize();
+            // Initialize IDT after memory
+            //IDTManager.Initialize();
 
-            // Inicializar manejadores de interrupción
-            InterruptHandlers.Initialize();
+            // Initialize interrupt handlers
+            //InterruptHandlers.Initialize();
 
-            // Inicializar el PIC
-            PICController.Initialize();
+            // Initialize the PIC
+            //PICController.Initialize();
 
-            // Habilitar interrupciones
-            SerialDebug.Info("Habilitando interrupciones...");
-            EnableInterrupts();
-            SerialDebug.Info("interrupciones [OK]");
 
-            // Inicializar otros módulos del kernel
+            // Initialize other kernel modules
             StartupCodeHelpers.Test();
 
-            // El resto de la inicialización del kernel...
-            ArrayExamples.DemoArrays();
-
-            // Mostrar información de la inicialización
+            // Show initialization information
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine("\nInicializacion completada!");
+            Console.WriteLine("\nInitialization completed!");
             Console.ForegroundColor = ConsoleColor.White;
 
 
-            // Entrar en el bucle principal
+            // Enter the main loop
             Main();
         }
 
         /// <summary>
-        /// Método principal del kernel
+        /// Kernel's main method
         /// </summary>
         unsafe static int Main()
         {
             Console.WriteLine("Main Process");
-            // Bucle principal del kernel
+            // Kernel's main loop
             uint idleCounter = 0;
 
             while (true)
@@ -115,11 +117,8 @@ namespace Kernel
 
                 if (idleCounter >= 1)
                 {
-
                     idleCounter = 0;
-
-                    // Mostrar uso de memoria cada cierto tiempo
-                    SerialDebug.Info($"Mem: {MemoryManager.FreeMemory.ToString()}MB free");
+                    // Show memory usage after a certain period
                 }
 
             }
@@ -128,28 +127,28 @@ namespace Kernel
 
         public static class ArrayExamples
         {
-            // Método de ejemplo para crear y usar arrays
+            // Example method to create and use arrays
             public static void DemoArrays()
             {
-                Console.WriteLine("===== EJEMPLO DE ARRAYS =====");
+                Console.WriteLine("===== ARRAY EXAMPLE =====");
 
-                // Crear un array de enteros de forma explícita
+                // Create an array of integers explicitly
                 int[] intArray = new int[4];
                 intArray[0] = 10;
                 intArray[1] = 20;
                 intArray[2] = 30;
                 intArray[3] = 40;
 
-                Console.WriteLine("Array de enteros creado explícitamente:");
+                Console.WriteLine("Array of integers created explicitly:");
                 for (int i = 0; i < intArray.Length; i++)
                 {
                     Console.WriteLine(intArray[i].ToString());
                 }
 
-                // Crear un array de strings
-                string[] stringArray = new string[] { "Hola", "Mundo", "KernelSharp" };
+                // Create an array of strings
+                string[] stringArray = new string[] { "Hello", "World", "KernelSharp" };
 
-                Console.WriteLine("\nArray de strings:");
+                Console.WriteLine("\nArray of strings:");
                 for (int i = 0; i < stringArray.Length; i++)
                 {
                     Console.WriteLine(stringArray[i]);
@@ -163,6 +162,7 @@ namespace Kernel
                     Name = "AvalonTM",
                     Value = 21,
                 };
+
 
                 SerialDebug.Info(elemento.Name);
                 SerialDebug.Info(elemento.Value.ToString());

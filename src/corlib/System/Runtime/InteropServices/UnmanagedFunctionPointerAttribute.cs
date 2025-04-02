@@ -6,7 +6,7 @@ namespace System.Runtime.InteropServices
     {
         public UnmanagedFunctionPointerAttribute()
         {
-            CallingConvention = CallingConvention.Winapi;
+            CallingConvention = CallingConvention.StdCall;
         }
 
         public UnmanagedFunctionPointerAttribute(CallingConvention callingConvention)

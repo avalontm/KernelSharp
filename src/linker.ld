@@ -1,7 +1,4 @@
-/* linker.ld - Generic Linker Script for 32-bit Kernel */
-
-/* Output format and architecture */
-OUTPUT_ARCH(i386)
+/* linker.ld - Generic Linker Script for KernelSharp */
 
 /* Entry point */
 ENTRY(_start)
@@ -112,6 +109,7 @@ SECTIONS
         *(.interp)
         *(.hash)
         *(.note)
+        *(.pdata)
     }
 
     /* Symbol definitions for kernel memory layout */

@@ -1,107 +1,85 @@
 ﻿using Kernel.Boot;
 using Kernel.Diagnostics;
+using System;
 
 namespace Kernel.Memory
 {
     /// <summary>
-    /// Gestor de memoria del sistema
+    /// System memory manager for 64 bits
     /// </summary>
     public static unsafe class MemoryManager
     {
-        // Constantes para gestión de memoria
-        private const uint KERNEL_BASE_ADDRESS = 0x100000;      // 1MB, dirección base del kernel
-        private const uint KERNEL_HEAP_ADDRESS = 0x400000;      // 4MB, dirección base del heap del kernel
-        private const uint INITIAL_HEAP_SIZE = 0x400000;        // 4MB de tamaño inicial para el heap
-        private const uint DEFAULT_MEMORY_SIZE = 16 * 1024 * 1024;  // 16MB de memoria por defecto
+        // Constants for memory management (now with 64-bit addresses)
+        private const ulong KERNEL_BASE_ADDRESS = 0x100000;      // 1MB, base address of the kernel
+        private const ulong KERNEL_HEAP_ADDRESS = 0x400000;      // 4MB, base address of the kernel heap
+        private const ulong INITIAL_HEAP_SIZE = 0x400000;        // 4MB initial size for the heap
+        private const ulong DEFAULT_MEMORY_SIZE = 16UL * 1024UL * 1024UL;  // 16MB default memory size
 
-        // Información de memoria física
-        private static uint _totalMemory;                       // Memoria total en bytes
-        private static uint _usedMemory;                        // Memoria usada en bytes
+        // Physical memory information
+        private static ulong _totalMemory;                       // Total memory in bytes
+        private static ulong _usedMemory;                        // Used memory in bytes
 
         /// <summary>
-        /// Inicializa el sistema de gestión de memoria con valores predeterminados
+        /// Initializes the memory management system with default values
         /// </summary>
         public static void Initialize(MultibootInfo* multibootInfo = null)
         {
-            
-            SerialDebug.Info("Inicializando sistema de gestion de memoria...");
+            Console.WriteLine("Initializing memory management system...");
 
             if (multibootInfo != null && (multibootInfo->Flags & MultibootFlags.MEMORY) != 0)
             {
-                // Obtener memoria desde la información Multiboot
-                uint memLowKB = multibootInfo->MemLow;
-                uint memHighKB = multibootInfo->MemHigh;
-
-                 // total = memoria baja + memoria alta
-                _totalMemory = (memLowKB + memHighKB) * 1024;
-
-                SerialDebug.Info($"Memoria detectada por Multiboot: {memLowKB.ToString()}KB baja {memHighKB.ToString()}KB alta");
+                // Get memory from the Multiboot information
+                ulong memLowKB = multibootInfo->MemLow;
+                ulong memHighKB = multibootInfo->MemHigh;
+                // total = low memory + high memory
+                _totalMemory = (memLowKB + memHighKB) * 1024UL;
             }
             else
             {
-                // Usar valor predeterminado si no hay información Multiboot
+                // Use default value if no Multiboot information is available
                 _totalMemory = DEFAULT_MEMORY_SIZE;
-                SerialDebug.Warning("Usando valor predeterminado de memoria: 16MB");
+                Console.WriteLine("Using default memory size: 16MB");
             }
 
-            // Calcular la memoria usada inicialmente (hasta el inicio del heap)
+            // Calculate the initially used memory (up to the start of the heap)
             _usedMemory = KERNEL_HEAP_ADDRESS;
 
-            SerialDebug.Info($"Memoria total detectada: {(_totalMemory / 1024 / 1024).ToString()}MB");
-            SerialDebug.Info($"Memoria disponible: {((_totalMemory - _usedMemory) / 1024 / 1024).ToString()}MB");
+            Console.WriteLine($"Total detected memory: {(_totalMemory / 1024UL / 1024UL).ToString()}MB");
+            Console.WriteLine($"Available memory: {((_totalMemory - _usedMemory) / 1024UL / 1024UL).ToString()}MB");
 
-            // Inicializar el heap
+            // Initialize the heap
             InitializeHeap();
 
-            // Imprimir información de memoria
-            PrintMemoryInfo();
-
-            SerialDebug.Info("Sistema de gestion de memoria inicializado correctamente.");
+            Console.WriteLine("Memory management system initialized successfully.");
         }
 
         /// <summary>
-        /// Inicializa el heap del kernel para la asignación dinámica de memoria
+        /// Initializes the kernel heap for dynamic memory allocation
         /// </summary>
         private static void InitializeHeap()
         {
-            uint heapSize = INITIAL_HEAP_SIZE;
+            ulong heapSize = INITIAL_HEAP_SIZE;
 
-            // Asegurarnos de que no excedamos la memoria disponible
+            // Ensure we don't exceed available memory
             if (KERNEL_HEAP_ADDRESS + heapSize > _totalMemory)
             {
-                // Ajustar el tamaño si es necesario
+                // Adjust the size if necessary
                 heapSize = _totalMemory - KERNEL_HEAP_ADDRESS;
-                SerialDebug.Warning("Tamaño de heap ajustado a " + (heapSize / 1024 / 1024).ToString() + " MB debido a la memoria limitada.");
-
+                //SendString.Warning("Heap size adjusted to " + (heapSize / 1024UL / 1024UL).ToString() + " MB due to limited memory.");
             }
 
-            // Actualizar la memoria usada
+            // Update the used memory
             _usedMemory += heapSize;
 
-            // Inicializar el administrador de memoria nativa
+            // Initialize the native memory manager
             NativeMemory.Initialize((byte*)KERNEL_HEAP_ADDRESS, heapSize);
 
-            SerialDebug.Info($"Heap inicializado en 0x{KERNEL_HEAP_ADDRESS.ToHexString()}, tamaño: {(heapSize / 1024 / 1024).ToString()}MB");
-            SerialDebug.Info("InitializeHeap");
+            //SendString.Info($"Heap initialized at 0x{KERNEL_HEAP_ADDRESS.ToString("X")}, size: {(heapSize / 1024UL / 1024UL).ToString()}MB");
+            //SendString.Info("InitializeHeap");
         }
 
         /// <summary>
-        /// Imprime información sobre la memoria del sistema
-        /// </summary>
-        private static void PrintMemoryInfo()
-        {
-            SerialDebug.Info("===== INFORMACION DE MEMORIA =====");
-            SerialDebug.Info($"Memoria total: {(_totalMemory / 1024 / 1024).ToString()}MB ({(_totalMemory / 1024).ToString()}KB)");
-            SerialDebug.Info($"Memoria usada: {(_usedMemory / 1024 / 1024).ToString()}MB ({(_usedMemory / 1024).ToString()}KB)");
-            SerialDebug.Info($"Memoria libre: {((_totalMemory - _usedMemory) / 1024 / 1024).ToString()}MB ({((_totalMemory - _usedMemory) / 1024).ToString()}KB)");
-            SerialDebug.Info($"Base del kernel: 0x{KERNEL_BASE_ADDRESS.ToString()}");
-            SerialDebug.Info($"Base del heap: 0x{KERNEL_HEAP_ADDRESS.ToHexString()}");
-            SerialDebug.Info($"Tamaño del heap: {(INITIAL_HEAP_SIZE / 1024 / 1024).ToString()}MB");
-            SerialDebug.Info("===============================");
-        }
-
-        /// <summary>
-        /// Reserva un bloque de memoria del tamaño especificado
+        /// Reserves a block of memory of the specified size
         /// </summary>
         public static void* Allocate(nuint size)
         {
@@ -109,18 +87,18 @@ namespace Kernel.Memory
         }
 
         /// <summary>
-        /// Obtiene la cantidad total de memoria en el sistema
+        /// Gets the total amount of memory in the system
         /// </summary>
-        public static uint TotalMemory => _totalMemory;
+        public static ulong TotalMemory => _totalMemory;
 
         /// <summary>
-        /// Obtiene la cantidad de memoria usada actualmente
+        /// Gets the amount of memory currently used
         /// </summary>
-        public static uint UsedMemory => _usedMemory + NativeMemory.UsedSize;
+        public static ulong UsedMemory => _usedMemory + NativeMemory.UsedSize;
 
         /// <summary>
-        /// Obtiene la cantidad de memoria libre disponible
+        /// Gets the amount of free memory available
         /// </summary>
-        public static uint FreeMemory => _totalMemory - UsedMemory;
+        public static ulong FreeMemory => _totalMemory - UsedMemory;
     }
 }

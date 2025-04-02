@@ -1,39 +1,39 @@
 # KernelSharp
 
-KernelSharp is a minimalist kernel implementation in C# aimed at 32-bit systems. This project seeks to create a modern kernel that leverages C# capabilities while maintaining efficient performance.
+KernelSharp is a minimalist kernel implementation in C# aimed at 64-bit systems. This project aims to create a modern kernel that leverages C# capabilities while maintaining efficient performance.
 
 ## Features
 
 The project includes a CoreLib implementation that provides the basic functionalities required for the operating system:
 
-| Category | Components | Status |
-|-----------|------------|--------|
-| **Primitive Types** | Int32, Int64, UInt32, UInt64, Byte, SByte, Boolean, Char, Double, Single | ✅ Implemented |
-| **Fundamental Types** | String, Array, Object | ✅ Implemented |
-| **Memory** | Buffer, SpanHelpers, Unsafe, Allocator | ✅ Implemented |
-| **Collections** | List (basic) | ✅ Partial |
-| **System Structures** | DateTime, TimeSpan, Random | ✅ Implemented |
-| **Runtime** | EEType, RuntimeType | ✅ Implemented |
-| **Native Support** | Native interoperability for memory management | ✅ Implemented |
-| **Exception Handling** | Basic exception handling | ⚠️ Basic |
-| **Memory Management** | Static GC, bootstrapping, initialization | ✅ Implemented |
-| **Multiboot** | Support for Multiboot (GRUB) | ✅ Implemented |
+| Category               | Components                                                             | Status        |
+|------------------------|------------------------------------------------------------------------|---------------|
+| **Primitive Types**     | Int32, Int64, UInt32, UInt64, Byte, SByte, Boolean, Char, Double, Single | ✅ Implemented |
+| **Fundamental Types**   | String, Array, Object                                                  | ✅ Implemented |
+| **Memory**              | Buffer, SpanHelpers, Unsafe, Allocator                                 | ✅ Implemented |
+| **Collections**         | List (basic)                                                           | ✅ Partial     |
+| **System Structures**   | DateTime, TimeSpan, Random                                             | ✅ Implemented |
+| **Runtime**             | EEType, RuntimeType                                                    | ✅ Implemented |
+| **Native Support**      | Native interoperability for memory management                          | ✅ Implemented |
+| **Exception Handling**  | Basic exception handling                                               | ⚠️ Basic      |
+| **Memory Management**   | Static GC, bootstrapping, initialization                               | ✅ Implemented |
+| **Multiboot**           | Support for Multiboot (GRUB)                                           | ✅ Implemented |
 
 ## Architecture
 
 The project is structured into several layers:
 
-1. **Low-Level Layer (Assembly)**
+1. **Low-Level Layer (Assembly)**:
    - Initial hardware setup
    - SSE initialization
    - Basic memory management
 
-2. **CoreLib (.NET Implementation)**
+2. **CoreLib (.NET Implementation)**:
    - Primitive and fundamental types
    - System structures
    - Runtime support
 
-3. **Kernel**
+3. **Kernel**:
    - System initialization
    - Console management
    - Paged memory management
@@ -90,16 +90,12 @@ To compile the project, you need:
 - System build tool (cmoos)
 - Essential tools (nasm, ld, objcopy)
 - Microsoft.DotNet.ILCompiler 8.0.0
-- Vscode
+- Qemu
+- Visual Studio Code
 
 ## Usage
 
-To build the project, use:
+To build the project, use the following command:
 
-```sh
+```bash
 cmoos.exe build --debug
-```
-
-## License
-
-This project is licensed under the MIT license.

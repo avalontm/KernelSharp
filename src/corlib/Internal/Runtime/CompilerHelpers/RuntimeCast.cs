@@ -9,44 +9,7 @@ namespace Internal.Runtime.CompilerHelpers
     /// </summary>
     public static unsafe class RuntimeCast
     {
-        /// <summary>
-        /// Verifica si un objeto puede ser convertido a un tipo específico.
-        /// </summary>
-        /// <param name="obj">Objeto que se quiere convertir</param>
-        /// <param name="targetType">Tipo destino de la conversión</param>
-        /// <returns>El objeto original si la conversión es válida, null en caso contrario</returns>
-        [RuntimeExport("RhTypeCast_CheckCastAny")]
-        public static object RhTypeCast_CheckCastAny(object obj, EETypePtr targetType)
-        {
-            // Si el objeto es null, siempre es válido para cualquier tipo de referencia
-            if (obj == null)
-                return null;
 
-            // Obtener el EEType del objeto
-            EEType* objEEType = obj.m_pEEType;
-
-            // Comprobar si los tipos son compatibles
-            if (AreTypesAssignable(objEEType, targetType._value))
-                return obj;
-
-            // Si el tipo destino es una interfaz, requerimos verificación adicional
-            if (targetType._value->IsInterface)
-            {
-                if (ImplementsInterface(objEEType, targetType._value))
-                    return obj;
-            }
-
-            // Si el destino es un tipo genérico con varianza, hay que comprobar la compatibilidad
-            if (targetType._value->HasGenericVariance)
-            {
-                if (CheckVarianceCompatibility(objEEType, targetType._value))
-                    return obj;
-            }
-
-            // La conversión no es válida
-            ThrowInvalidCastException(obj, targetType);
-            return null; // Nunca llega aquí (ThrowInvalidCastException lanza una excepción)
-        }
 
         /// <summary>
         /// Comprueba si un tipo es asignable a otro.

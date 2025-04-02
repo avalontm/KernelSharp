@@ -1,5 +1,4 @@
-﻿using Internal.Runtime.CompilerHelpers;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 namespace System.Diagnostics
 {
     public static unsafe class Debug
@@ -12,13 +11,13 @@ namespace System.Diagnostics
 
             // Obtener la longitud del mensaje para reservar buffer
             int length = message.Length;
-            byte* buffer = stackalloc byte[length];
+            char* buffer = stackalloc char[length];
 
             // Convertir cada carácter directamente a byte
             // Esto funciona para ASCII pero trunca caracteres Unicode
             for (int i = 0; i < length; i++)
             {
-                buffer[i] = (byte)message[i];
+                buffer[i] = message[i];
             }
 
             // Enviar al método nativo
@@ -27,8 +26,8 @@ namespace System.Diagnostics
         }
 
         // Native method for output
-        [DllImport("*", EntryPoint = "_DebugWrite", PreserveSig = true, CallingConvention = CallingConvention.ThisCall)]
-        private static extern void NativeDebugWrite(byte* value, int length);
+        [DllImport("*", EntryPoint = "_DebugWrite")]
+        private static extern void NativeDebugWrite(char* value, int length);
     }
 
 }
