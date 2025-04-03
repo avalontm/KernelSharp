@@ -6,27 +6,23 @@ using Kernel.Diagnostics;
 namespace Kernel.Threading
 {
     /// <summary>
-    /// Planificador cooperativo de hilos para el kernel
+    /// Cooperative thread scheduler for the kernel
     /// </summary>
     public static class Scheduler
     {
-        /*
-        // Lista de hilos disponibles
+        // List of available threads
         private static List<Thread> _threads;
 
-        // Hilo actual
+        // Current thread
         private static Thread _currentThread;
 
-        // Índice del hilo actual
+        // Current thread index
         private static int _currentIndex;
 
-        // Indica si el planificador está iniciado
+        // Indicates if the scheduler is started
         private static bool _initialized;
 
-        // Mutex para operaciones del planificador
-        private static object _schedulerLock = new object();
-
-        // Lista de hilos en espera con su tiempo restante
+        // Class for threads waiting with their remaining time
         private class WaitingThread
         {
             public Thread Thread;
@@ -39,29 +35,36 @@ namespace Kernel.Threading
             }
         }
 
-        // Lista de hilos en espera
+        // List of waiting threads
         private static List<WaitingThread> _waitingThreads;
 
-        // Contador de tics para temporización
+        // Tick counter for timing
         private static int _tickCount;
 
         /// <summary>
-        /// Inicializa el planificador de hilos
+        /// Initializes the thread scheduler
         /// </summary>
         public static void Initialize()
         {
-            lock (_schedulerLock)
+            if (_initialized)
+                return;
+
+            SerialDebug.Info("Thread scheduler initialization started");
+
+            lock (null)
             {
-                if (_initialized)
-                    return;
-
+                SerialDebug.Info("PASO 1");
                 _threads = new List<Thread>();
+                SerialDebug.Info("PASO 2");
                 _waitingThreads = new List<WaitingThread>();
+                SerialDebug.Info("PASO 3");
                 _currentIndex = -1;
+                SerialDebug.Info("PASO 4");
                 _tickCount = 0;
+                SerialDebug.Info("PASO 5");
                 _initialized = true;
-
-                // Registrar el hilo principal
+                SerialDebug.Info("PASO 6");
+                // Register the main thread
                 Thread mainThread = Thread.CurrentThread;
                 if (mainThread != null)
                 {
@@ -69,13 +72,13 @@ namespace Kernel.Threading
                     _currentThread = mainThread;
                     _currentIndex = 0;
                 }
-
-                SerialDebug.Info("Planificador de hilos inicializado");
             }
+
+            SerialDebug.Info("Thread scheduler initialization successful");
         }
 
         /// <summary>
-        /// Añade un hilo al planificador
+        /// Adds a thread to the scheduler
         /// </summary>
         public static void AddThread(Thread thread)
         {
@@ -85,30 +88,30 @@ namespace Kernel.Threading
             if (thread == null)
                 ThrowHelpers.ArgumentNullException("thread");
 
-            lock (_schedulerLock)
+            lock (null)
             {
-                // Verificar que el hilo no esté ya en la lista
+                // Verify that the thread is not already in the list
                 if (!_threads.Contains(thread))
                 {
                     _threads.Add(thread);
-                    SerialDebug.Info("Hilo añadido al planificador: " + thread.Name);
+                    SerialDebug.Info("Thread added to scheduler: " + thread.Name);
                 }
             }
         }
 
         /// <summary>
-        /// Elimina un hilo del planificador
+        /// Removes a thread from the scheduler
         /// </summary>
         public static void RemoveThread(Thread thread)
         {
             if (!_initialized || thread == null)
                 return;
 
-            lock (_schedulerLock)
+            lock (null)
             {
                 _threads.Remove(thread);
 
-                // Eliminar también de la lista de espera si estuviera
+                // Also remove from the waiting list if present
                 for (int i = _waitingThreads.Count - 1; i >= 0; i--)
                 {
                     if (_waitingThreads[i].Thread == thread)
@@ -118,7 +121,7 @@ namespace Kernel.Threading
                     }
                 }
 
-                // Si era el hilo actual, forzar un cambio de contexto
+                // If it was the current thread, force a context switch
                 if (_currentThread == thread)
                 {
                     _currentThread = null;
@@ -129,7 +132,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Pone el hilo actual en espera durante el tiempo especificado
+        /// Puts the current thread to sleep for the specified time
         /// </summary>
         public static void Sleep(int milliseconds)
         {
@@ -142,20 +145,20 @@ namespace Kernel.Threading
                 return;
             }
 
-            // Obtener el hilo actual
+            // Get the current thread
             Thread currentThread = Thread.CurrentThread;
             if (currentThread == null)
                 return;
 
-            // Calcular el tiempo de despertar
+            // Calculate wake time
             int wakeTime = _tickCount + milliseconds;
 
-            lock (_schedulerLock)
+            lock (null)
             {
-                // Añadir a la lista de espera
+                // Add to the waiting list
                 _waitingThreads.Add(new WaitingThread(currentThread, wakeTime));
 
-                // Remover de la lista de hilos activos
+                // Remove from the active threads list
                 _threads.Remove(currentThread);
 
                 if (_currentThread == currentThread)
@@ -163,64 +166,64 @@ namespace Kernel.Threading
                     _currentThread = null;
                     _currentIndex = -1;
 
-                    // Forzar cambio de contexto
+                    // Force context switch
                     Yield();
                 }
             }
         }
 
         /// <summary>
-        /// Cede el procesador a otro hilo
+        /// Yields the processor to another thread
         /// </summary>
         public static void Yield()
         {
             if (!_initialized)
                 return;
 
-            lock (_schedulerLock)
+            lock (null)
             {
-                // Verificar hilos en espera que deben despertar
+                // Check waiting threads that should wake up
                 CheckWaitingThreads();
 
-                // Si no hay hilos, retornar inmediatamente
+                // If there are no threads, return immediately
                 if (_threads.Count == 0)
                     return;
 
-                // Seleccionar el siguiente hilo
+                // Select the next thread
                 _currentIndex = (_currentIndex + 1) % _threads.Count;
                 Thread nextThread = _threads[_currentIndex];
 
-                // Si es el mismo hilo, no hacer nada
+                // If it's the same thread, do nothing
                 if (nextThread == Thread.CurrentThread)
                     return;
 
-                // Cambiar al siguiente hilo
+                // Switch to the next thread
                 _currentThread = nextThread;
                 nextThread.SwitchToThread();
             }
         }
 
         /// <summary>
-        /// Verifica los hilos en espera y despierta aquellos cuyo tiempo ha expirado
+        /// Checks waiting threads and wakes up those whose time has expired
         /// </summary>
         private static void CheckWaitingThreads()
         {
             if (_waitingThreads.Count == 0)
                 return;
 
-            // Incrementar el contador de tics
+            // Increment the tick counter
             _tickCount++;
 
-            // Verificar los hilos que deben despertar
+            // Check threads that should wake up
             for (int i = _waitingThreads.Count - 1; i >= 0; i--)
             {
                 if (_tickCount >= _waitingThreads[i].WakeTime)
                 {
-                    // Despertar el hilo
+                    // Wake up the thread
                     Thread thread = _waitingThreads[i].Thread;
                     _waitingThreads.RemoveAt(i);
 
-                    // Añadir de nuevo a la lista de hilos activos
+                    // Add back to the active threads list
                     if (!_threads.Contains(thread))
                     {
                         _threads.Add(thread);
@@ -230,7 +233,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el hilo que se está ejecutando actualmente
+        /// Gets the currently executing thread
         /// </summary>
         public static Thread CurrentThread
         {
@@ -238,7 +241,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Indica si el planificador ha sido inicializado
+        /// Indicates if the scheduler has been initialized
         /// </summary>
         public static bool IsInitialized
         {
@@ -246,13 +249,13 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el número de hilos activos
+        /// Gets the number of active threads
         /// </summary>
         public static int ThreadCount
         {
             get
             {
-                lock (_schedulerLock)
+                lock (null)
                 {
                     return _threads.Count;
                 }
@@ -260,17 +263,17 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el número de hilos en espera
+        /// Gets the number of waiting threads
         /// </summary>
         public static int WaitingThreadCount
         {
             get
             {
-                lock (_schedulerLock)
+                lock (null)
                 {
                     return _waitingThreads.Count;
                 }
             }
-        }*/
+        }
     }
 }

@@ -1,40 +1,38 @@
 ENTRY(_start)
 
 SECTIONS {
-    . = 0x100000; /* Dirección base del kernel */
+    . = 0x100000; /* Kernel base address */
 
     .text : {
-        *(.text)                /* Código ejecutable */
+        *(.text)                /* Executable code */
     }
 
     .data : {
-        *(.data)                /* Datos inicializados */
+        *(.data)                /* Initialized data */
     }
 
     .rodata : {
-        *(.rodata)              /* Datos solo lectura */
+        *(.rodata)              /* Read-only data */
     }
 
     .bss : {
-        *(.bss)                 /* Datos no inicializados */
+        *(.bss)                 /* Uninitialized data */
     }
 
-    /* Información de reubicación */
     .reloc : {
-        *(.reloc)               /* Datos de reubicación */
+        *(.reloc)               /* Relocation data */
     }
 
-
-    /* Datos solo lectura */
+    /* Read-only data */
     .rdata : {
-        *(.rdata)               /* Información de personalidades para excepciones */
+        *(.rdata)                /* Read-only data */
     }
 
-    /* Para descartar secciones no deseadas */
+    /* Discard unwanted sections */
     /DISCARD/ : {
         *(.note.*)
         *(.comment)
-        *(.pdata)  /* Eliminar .pdata si no es necesario */
+        *(.pdata)  /* Important to remove */
         *(.xdata)
     }
 }

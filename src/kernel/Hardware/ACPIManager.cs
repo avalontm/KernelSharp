@@ -1,21 +1,20 @@
 ﻿using Kernel.Diagnostics;
 using System;
-using System.Runtime;
 using System.Runtime.InteropServices;
 
 namespace Kernel.Hardware
 {
     /// <summary>
-    /// Gestor básico de ACPI (Advanced Configuration and Power Interface)
+    /// Basic ACPI (Advanced Configuration and Power Interface) Manager
     /// </summary>
     public static unsafe class ACPIManager
     {
-        // Constantes para búsqueda de tablas ACPI
+        // Constants for ACPI table search
         private const ulong ACPI_SEARCH_START = 0x000E0000;
         private const ulong ACPI_SEARCH_END = 0x000FFFFF;
         private const string RSDP_SIGNATURE = "RSD PTR ";
 
-        // Firmas de tablas comunes
+        // Common table signatures
         private const uint APIC_SIGNATURE = 0x43495041; // "APIC"
         private const uint FACP_SIGNATURE = 0x50434146; // "FACP"
         private const uint DSDT_SIGNATURE = 0x54445344; // "DSDT"
@@ -23,11 +22,11 @@ namespace Kernel.Hardware
         private const uint HPET_SIGNATURE = 0x54455048; // "HPET"
         private const uint MCFG_SIGNATURE = 0x4746434D; // "MCFG"
 
-        // Estado del gestor
-        private static bool _initialized = false;
+        // Manager state
+        internal static bool _initialized = false;
         private static bool _acpiVersion2 = false;
 
-        // Punteros a tablas importantes
+        // Pointers to important tables
         private static RSDP* _rsdp = null;
         private static ACPISDTHeader* _rsdt = null;
         private static ACPISDTHeader* _xsdt = null;
@@ -35,13 +34,13 @@ namespace Kernel.Hardware
         private static ACPISDTHeader* _dsdt = null;
         private static MADT* _madt = null;
 
-        // Información sobre reinicio del sistema
+        // System reset information
         private static ResetType _resetType = ResetType.None;
         private static ushort _resetPort = 0;
         private static byte _resetValue = 0;
 
         /// <summary>
-        /// Tipos de reinicio de sistema soportados
+        /// Supported system reset types
         /// </summary>
         public enum ResetType
         {
@@ -52,7 +51,7 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Estructura ACPI RSDP (Root System Description Pointer)
+        /// ACPI RSDP (Root System Description Pointer) Structure
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct RSDP
@@ -62,7 +61,7 @@ namespace Kernel.Hardware
             public fixed byte OemId[6];
             public byte Revision;
             public uint RsdtAddress;
-            // ACPI 2.0+ campos adicionales
+            // ACPI 2.0+ additional fields
             public uint Length;
             public ulong XsdtAddress;
             public byte ExtendedChecksum;
@@ -70,7 +69,7 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Estructura ACPI SDT Header (System Description Table)
+        /// ACPI SDT Header (System Description Table)
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct ACPISDTHeader
@@ -87,7 +86,7 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Estructura ACPI FADT (Fixed ACPI Description Table)
+        /// ACPI FADT (Fixed ACPI Description Table)
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct FADT
@@ -96,7 +95,7 @@ namespace Kernel.Hardware
             public uint FirmwareCtrl;
             public uint Dsdt;
 
-            // Campo reservado en ACPI 2.0+
+            // Reserved field in ACPI 2.0+
             public byte Reserved;
 
             public byte PreferredPowerManagementProfile;
@@ -132,7 +131,7 @@ namespace Kernel.Hardware
             public byte MonthAlarm;
             public byte Century;
 
-            // Campos reservados para sistemas ACPI 1.0
+            // Reserved fields for ACPI 1.0 systems
             public ushort BootArchitectureFlags;
             public byte Reserved2;
             public uint Flags;
@@ -141,18 +140,18 @@ namespace Kernel.Hardware
             public GenericAddressStructure ResetReg;
             public byte ResetValue;
 
-            // Campos reservados para ACPI 2.0+
+            // Reserved fields for ACPI 2.0+
             public fixed byte Reserved3[3];
 
             // ACPI 2.0+ fields
             public ulong X_FirmwareControl;
             public ulong X_Dsdt;
 
-            // Más campos ACPI 2.0+ para control de energía que no incluimos por simplicidad
+            // More ACPI 2.0+ fields for power control not included for simplicity
         }
 
         /// <summary>
-        /// Estructura ACPI MADT (Multiple APIC Description Table)
+        /// ACPI MADT (Multiple APIC Description Table)
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct MADT
@@ -160,11 +159,11 @@ namespace Kernel.Hardware
             public ACPISDTHeader Header;
             public uint LocalApicAddress;
             public uint Flags;
-            // Seguido por registros de controladores de interrupción
+            // Followed by interrupt controller records
         }
 
         /// <summary>
-        /// Estructura ACPI Generic Address Structure
+        /// ACPI Generic Address Structure
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct GenericAddressStructure
@@ -177,73 +176,73 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Inicializa el subsistema ACPI
+        /// Initializes the ACPI subsystem
         /// </summary>
         public static bool Initialize()
         {
             if (_initialized)
                 return true;
 
-           SerialDebug.Info("Inicializando subsistema ACPI...");
+            SerialDebug.Info("Initializing ACPI subsystem...");
 
-            // Buscar la tabla RSDP
+            // Search for the RSDP table
             if (!FindRSDP())
             {
-               SerialDebug.Info("No se encontró la tabla RSDP. ACPI no disponible.");
+                SerialDebug.Info("RSDP table not found. ACPI not available.");
                 return false;
             }
 
-            // Determinar la versión de ACPI
+            // Determine ACPI version
             _acpiVersion2 = _rsdp->Revision >= 2;
 
             if (_acpiVersion2)
             {
-               SerialDebug.Info($"Detectado ACPI {_rsdp->Revision.ToString()}.0");
+                SerialDebug.Info($"Detected ACPI {_rsdp->Revision}.0");
 
-                // Usar XSDT para ACPI 2.0+
+                // Use XSDT for ACPI 2.0+
                 if (_rsdp->XsdtAddress != 0)
                 {
                     _xsdt = (ACPISDTHeader*)_rsdp->XsdtAddress;
                     if (!ValidateTable(_xsdt))
                     {
-                       SerialDebug.Info("XSDT inválida, intentando con RSDT...");
+                        SerialDebug.Info("Invalid XSDT, trying RSDT...");
                         _xsdt = null;
                     }
                 }
             }
             else
             {
-               SerialDebug.Info("Detectado ACPI 1.0");
+                SerialDebug.Info("Detected ACPI 1.0");
             }
 
-            // Si no hay XSDT válida o es ACPI 1.0, usar RSDT
+            // If no valid XSDT or ACPI 1.0, use RSDT
             if (_xsdt == null)
             {
                 _rsdt = (ACPISDTHeader*)_rsdp->RsdtAddress;
                 if (!ValidateTable(_rsdt))
                 {
-                   SerialDebug.Info("RSDT inválida. No se puede continuar.");
+                    SerialDebug.Info("Invalid RSDT. Cannot continue.");
                     return false;
                 }
             }
 
-            // Buscar las tablas principales
+            // Find main tables
             if (!FindTables())
             {
-               SerialDebug.Info("Error al buscar tablas ACPI importantes.");
+                SerialDebug.Info("Error finding important ACPI tables.");
                 return false;
             }
 
-            // Detectar método de reinicio del sistema
+            // Detect system reset method
             DetectResetMethod();
 
             _initialized = true;
-           SerialDebug.Info("Subsistema ACPI inicializado correctamente.");
+            SerialDebug.Info("ACPI subsystem initialized successfully.");
             return true;
         }
 
         /// <summary>
-        /// Busca y valida la tabla RSDP (Root System Description Pointer)
+        /// Finds and validates the RSDP (Root System Description Pointer) table
         /// </summary>
         private static bool FindRSDP()
         {
@@ -253,9 +252,9 @@ namespace Kernel.Hardware
             {
                 if (IsSignatureMatch(current, RSDP_SIGNATURE))
                 {
-                    // Verificar checksum
+                    // Verify checksum
                     byte sum = 0;
-                    for (int i = 0; i < 20; i++) // Tamaño de RSDP 1.0
+                    for (int i = 0; i < 20; i++) // Size of RSDP 1.0
                     {
                         sum += current[i];
                     }
@@ -264,7 +263,7 @@ namespace Kernel.Hardware
                     {
                         _rsdp = (RSDP*)current;
 
-                        // Para ACPI 2.0+, verificar también el checksum extendido
+                        // For ACPI 2.0+, also verify extended checksum
                         if (_rsdp->Revision >= 2)
                         {
                             sum = 0;
@@ -275,7 +274,7 @@ namespace Kernel.Hardware
 
                             if (sum != 0)
                             {
-                               SerialDebug.Info("RSDP extendido inválido (checksum).");
+                                SerialDebug.Info("Invalid extended RSDP (checksum).");
                                 return false;
                             }
                         }
@@ -284,14 +283,14 @@ namespace Kernel.Hardware
                     }
                 }
 
-                current += 16; // Búsqueda alineada a 16 bytes
+                current += 16; // 16-byte aligned search
             }
 
             return false;
         }
 
         /// <summary>
-        /// Verifica si una cadena en memoria coincide con una firma
+        /// Checks if a memory string matches a signature
         /// </summary>
         private static bool IsSignatureMatch(byte* memory, string signature)
         {
@@ -304,16 +303,24 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Valida una tabla ACPI verificando su checksum
+        /// Validates an ACPI table by verifying its checksum
         /// </summary>
         private static bool ValidateTable(ACPISDTHeader* table)
         {
             if (table == null)
                 return false;
 
-            // Verificar checksum
+            // Verify checksum
             byte sum = 0;
             byte* ptr = (byte*)table;
+
+            // Add explicit bounds check to prevent potential overflow
+            if (table->Length < sizeof(ACPISDTHeader) || table->Length > 0x100000) // 1MB max table size as sanity check
+            {
+                SerialDebug.Info($"Invalid table length: {table->Length}");
+                return false;
+            }
+
             for (int i = 0; i < table->Length; i++)
             {
                 sum += ptr[i];
@@ -323,15 +330,15 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Busca las tablas ACPI importantes
+        /// Finds important ACPI tables
         /// </summary>
         private static bool FindTables()
         {
-            // Buscar tablas importantes como FACP (FADT), APIC (MADT), etc.
+            // Find important tables like FACP (FADT), APIC (MADT), etc.
             _fadt = (FADT*)FindTable(FACP_SIGNATURE);
             _madt = (MADT*)FindTable(APIC_SIGNATURE);
 
-            // DSDT se referencia desde FADT
+            // DSDT is referenced from FADT
             if (_fadt != null)
             {
                 if (_acpiVersion2 && _fadt->X_Dsdt != 0)
@@ -345,15 +352,15 @@ namespace Kernel.Hardware
 
                 if (!ValidateTable(_dsdt))
                 {
-                   SerialDebug.Info("DSDT inválida.");
+                    SerialDebug.Info("Invalid DSDT.");
                     _dsdt = null;
                 }
             }
 
-            // Verificar que encontramos lo mínimo necesario
+            // Verify that we found the minimum required
             if (_fadt == null)
             {
-               SerialDebug.Info("No se encontró la tabla FADT.");
+                SerialDebug.Info("FADT table not found.");
                 return false;
             }
 
@@ -361,19 +368,40 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Busca una tabla ACPI específica por su firma
+        /// Finds a specific ACPI table by its signature
         /// </summary>
         private static ACPISDTHeader* FindTable(uint signature)
         {
             if (_xsdt != null)
             {
-                // Usar XSDT (punteros de 64 bits)
+                // Use XSDT (64-bit pointers)
                 int entries = (int)(_xsdt->Length - sizeof(ACPISDTHeader)) / 8;
+
+                // Validate entry count for security
+                if (entries <= 0 || entries > 1000) // Sanity check - no more than 1000 tables
+                {
+                    SerialDebug.Info($"Invalid XSDT entry count: {entries}");
+                    return null;
+                }
+
                 ulong* tables = (ulong*)((byte*)_xsdt + sizeof(ACPISDTHeader));
 
                 for (int i = 0; i < entries; i++)
                 {
+                    // Add extra validation for pointer
+                    if (tables[i] == 0 || tables[i] > 0xFFFFFFFFFFFF) // Sanity check - address in reasonable range
+                    {
+                        continue;
+                    }
+
                     ACPISDTHeader* table = (ACPISDTHeader*)tables[i];
+
+                    // Basic validation before full checksum
+                    if (table->Length < sizeof(ACPISDTHeader))
+                    {
+                        continue;
+                    }
+
                     if (table->Signature == signature && ValidateTable(table))
                     {
                         return table;
@@ -382,13 +410,34 @@ namespace Kernel.Hardware
             }
             else if (_rsdt != null)
             {
-                // Usar RSDT (punteros de 32 bits)
+                // Use RSDT (32-bit pointers)
                 int entries = (int)(_rsdt->Length - sizeof(ACPISDTHeader)) / 4;
+
+                // Validate entry count for security
+                if (entries <= 0 || entries > 1000) // Sanity check
+                {
+                    SerialDebug.Info($"Invalid RSDT entry count: {entries}");
+                    return null;
+                }
+
                 uint* tables = (uint*)((byte*)_rsdt + sizeof(ACPISDTHeader));
 
                 for (int i = 0; i < entries; i++)
                 {
+                    // Add extra validation for pointer
+                    if (tables[i] == 0 || tables[i] > 0xFFFFFFFF) // Sanity check
+                    {
+                        continue;
+                    }
+
                     ACPISDTHeader* table = (ACPISDTHeader*)tables[i];
+
+                    // Basic validation before full checksum
+                    if (table->Length < sizeof(ACPISDTHeader))
+                    {
+                        continue;
+                    }
+
                     if (table->Signature == signature && ValidateTable(table))
                     {
                         return table;
@@ -400,45 +449,46 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Detecta el método disponible para reiniciar el sistema
+        /// Detects the available method for system reset
         /// </summary>
         private static void DetectResetMethod()
         {
             _resetType = ResetType.None;
 
-            // En ACPI 2.0+, verificar el registro de reinicio
+            // In ACPI 2.0+, check the reset register
             if (_acpiVersion2 && _fadt != null && _fadt->ResetReg.Address != 0)
             {
                 _resetType = ResetType.Register;
                 _resetValue = _fadt->ResetValue;
-               SerialDebug.Info("Método de reinicio: Registro ACPI");
+                SerialDebug.Info("Reset method: ACPI Register");
                 return;
             }
 
-            // Método de reinicio alternativo: Puerto de teclado
+            // Alternative reset method: Keyboard port
             _resetType = ResetType.IO;
-            _resetPort = 0x64; // Puerto de control de teclado
-            _resetValue = 0xFE; // Valor de reinicio
-           SerialDebug.Info("Método de reinicio: Puerto de teclado (KB Controller)");
+            _resetPort = 0x64; // Keyboard controller port
+            _resetValue = 0xFE; // Reset value
+            SerialDebug.Info("Reset method: Keyboard Controller Port");
         }
 
         /// <summary>
-        /// Reinicia el sistema usando el método ACPI
+        /// Resets the system using the ACPI method
         /// </summary>
         public static void ResetSystem()
         {
             if (!_initialized)
             {
-               SerialDebug.Info("ACPI no inicializado. No se puede reiniciar.");
+                SerialDebug.Info("ACPI not initialized. Cannot reset.");
                 return;
             }
 
-           SerialDebug.Info("Reiniciando sistema...");
+            SerialDebug.Info("Resetting system...");
 
+            // Try multiple reset methods in fallback sequence
             switch (_resetType)
             {
                 case ResetType.Register:
-                    // Usar el registro ACPI para reiniciar
+                    // Use ACPI register to reset
                     if (_fadt->ResetReg.AddressSpace == 0) // Memory
                     {
                         *(byte*)_fadt->ResetReg.Address = _resetValue;
@@ -447,146 +497,172 @@ namespace Kernel.Hardware
                     {
                         Native.OutByte((ushort)_fadt->ResetReg.Address, _resetValue);
                     }
+
+                    // Always try fallback method
+                    SerialDebug.Info("Trying keyboard controller reset as fallback");
+                    Native.OutByte(0x64, 0xFE);
                     break;
 
                 case ResetType.IO:
-                    // Reiniciar usando el controlador de teclado
+                    // Reset using keyboard controller
                     Native.OutByte(0x64, 0xFE);
                     break;
 
                 case ResetType.Memory:
-                    // Escribir en memoria para reiniciar
+                    // Write to memory to reset
                     *(byte*)_resetPort = _resetValue;
+                    SerialDebug.Info("Memory reset attempted");
                     break;
 
                 default:
-                   SerialDebug.Info("No hay método de reinicio disponible.");
+                    SerialDebug.Info("No reset method available.");
                     break;
             }
 
-            // Si llegamos aquí, el reinicio falló
-           SerialDebug.Info("El reinicio falló. Sistema detenido.");
+            // Last resort - try the PCI reset method
+            // PCI reset through CF9 port (common in modern systems)
+            SerialDebug.Info("Attempting PCI reset through CF9 port");
+            Native.OutByte(0xCF9, 0x0E);
+
+            // If we get here, reset failed
+            SerialDebug.Info("Reset failed. System halted.");
             while (true) { Native.Halt(); }
         }
 
         /// <summary>
-        /// Apaga el sistema usando métodos ACPI
+        /// Shuts down the system using ACPI methods
         /// </summary>
         public static void ShutdownSystem()
         {
             if (!_initialized || _fadt == null)
             {
-               SerialDebug.Info("ACPI no inicializado. No se puede apagar.");
+                SerialDebug.Info("ACPI not initialized. Cannot shutdown.");
                 return;
             }
 
-           SerialDebug.Info("Apagando sistema...");
+            SerialDebug.Info("Shutting down system...");
 
-            // Escribir en los registros PM1a y PM1b para apagar
+            // Write to PM1a and PM1b registers to shut down
             if (_fadt->PM1aControlBlock != 0)
             {
-                // Valores para SLP_TYP y SLP_EN
+                // Values for SLP_TYP and SLP_EN
                 const ushort SLP_EN = 1 << 13;
                 const ushort SLP_TYP_S5 = 7 << 10;
 
+                SerialDebug.Info("Writing to PM1a control block");
                 Native.OutWord((ushort)_fadt->PM1aControlBlock, SLP_TYP_S5 | SLP_EN);
 
-                // Si hay un segundo bloque, escribir también allí
+                // If there's a second block, write there too
                 if (_fadt->PM1bControlBlock != 0)
                 {
+                    SerialDebug.Info("Writing to PM1b control block");
                     Native.OutWord((ushort)_fadt->PM1bControlBlock, SLP_TYP_S5 | SLP_EN);
                 }
             }
 
-            // Si llegamos aquí, el apagado falló
-           SerialDebug.Info("El apagado falló. Sistema detenido.");
+            // If we get here, shutdown failed
+            SerialDebug.Info("Shutdown failed. System halted.");
             while (true) { Native.Halt(); }
         }
 
         /// <summary>
-        /// Obtiene la dirección del controlador APIC local
+        /// Gets the Local APIC controller address
         /// </summary>
         public static ulong GetLocalApicAddress()
         {
             if (_madt != null)
             {
-                if (_acpiVersion2)
-                {
-                    // En ACPI 2.0+, podría estar extendido a 64 bits (pero no está en la especificación)
-                    return _madt->LocalApicAddress;
-                }
-                else
-                {
-                    return _madt->LocalApicAddress;
-                }
+                // ACPI 2.0+ might have extended address (but not in the specification)
+                return _madt->LocalApicAddress;
+            }
+
+            // Fallback to the default address if MADT not found
+            // Most systems use a fixed address for the Local APIC
+            return 0xFEE00000;
+        }
+
+        /// <summary>
+        /// Gets the ACPI Power Management Timer address
+        /// </summary>
+        /// <returns>The address of the PM Timer, or 0 if not available</returns>
+        public static uint GetPMTimerAddress()
+        {
+            if (!_initialized || _fadt == null)
+                return 0;
+
+            // Check if PM Timer is available
+            if (_fadt->PMTimerBlock != 0 && _fadt->PMTimerLength > 0)
+            {
+                return _fadt->PMTimerBlock;
             }
 
             return 0;
         }
 
         /// <summary>
-        /// Imprime información sobre las tablas ACPI detectadas
+        /// Prints information about detected ACPI tables
         /// </summary>
         public static void PrintACPIInfo()
         {
             if (!_initialized)
             {
-               SerialDebug.Info("ACPI no inicializado.");
+                SerialDebug.Info("ACPI not initialized.");
                 return;
             }
 
-           SerialDebug.Info("\n=== Información ACPI ===");
+            SerialDebug.Info("\n=== ACPI Information ===");
 
             if (_acpiVersion2)
             {
-               SerialDebug.Info("Versión ACPI: 2.0+");
+                SerialDebug.Info("ACPI Version: 2.0+");
             }
             else
             {
-               SerialDebug.Info("Versión ACPI: 1.0");
+                SerialDebug.Info("ACPI Version: 1.0");
             }
 
-            // Extraer OEM ID
+            // Extract OEM ID
             string oemId = "";
             for (int i = 0; i < 6; i++)
             {
                 oemId += (char)_rsdp->OemId[i];
             }
-           SerialDebug.Info($"OEM ID: {oemId}");
+            SerialDebug.Info($"OEM ID: {oemId}");
 
             // RSDT/XSDT
             if (_xsdt != null)
             {
-                //Console.WriteLine($"XSDT: 0x{((ulong)_xsdt).ToStringHex()}");
                 int entries = (int)(_xsdt->Length - sizeof(ACPISDTHeader)) / 8;
-               SerialDebug.Info($"Entradas en XSDT: {entries.ToString()}");
+                SerialDebug.Info($"XSDT Entries: {entries}");
             }
 
             if (_rsdt != null)
             {
-                ///Console.WriteLine($"RSDT: 0x{((ulong)_rsdt).ToStringHex()}");
                 int entries = (int)(_rsdt->Length - sizeof(ACPISDTHeader)) / 4;
-               SerialDebug.Info($"Entradas en RSDT: {entries.ToString()}");
+                SerialDebug.Info($"RSDT Entries: {entries}");
             }
 
-            // Tablas importantes
-            if (_fadt != null)
-               //SerialDebug.Info($"FADT: 0x{((ulong)_fadt).ToStringHex()}");
-
-            if (_dsdt != null)
-               //SerialDebug.Info($"DSDT: 0x{((ulong)_dsdt).ToStringHex()}");
+            // Important tables
+            SerialDebug.Info($"FADT: {(_fadt != null ? "Found" : "Not found")}");
+            SerialDebug.Info($"DSDT: {(_dsdt != null ? "Found" : "Not found")}");
 
             if (_madt != null)
             {
-                //Console.WriteLine($"MADT: 0x{((ulong)_madt).ToStringHex()}");
-               SerialDebug.Info($"Local APIC Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
-               SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
+                SerialDebug.Info($"MADT: Found");
+                SerialDebug.Info($"Local APIC Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
+                SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
+            }
+            else
+            {
+                SerialDebug.Info("MADT: Not found");
             }
 
-            // Método de reinicio
-            //Console.WriteLine($"Método de reinicio: {_resetType.ToString()}");
+            // Reset method
+            SerialDebug.Info($"Reset Method: {_resetType}");
 
-           SerialDebug.Info("========================\n");
+            SerialDebug.Info("========================\n");
         }
+
+
     }
 }

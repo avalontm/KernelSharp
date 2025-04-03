@@ -143,7 +143,7 @@ namespace Kernel.Hardware
             }
 
             _initialized = true;
-            SerialDebug.Info($"SMBIOS initialized: version {_majorVersion.ToString()}.{_minorVersion.ToString()}");
+            SerialDebug.Info($"SMBIOS initialized: version {_majorVersion}.{_minorVersion}");
             return true;
         }
 
@@ -154,43 +154,67 @@ namespace Kernel.Hardware
         {
             // Search within the memory range reserved for SMBIOS.
             byte* current = (byte*)SMBIOS_SEARCH_START;
+            byte* endPtr = (byte*)SMBIOS_SEARCH_END;
 
-            while (current < (byte*)SMBIOS_SEARCH_END)
+            // Boundary check to prevent overruns
+            if (current == null || endPtr == null || current >= endPtr)
+            {
+                SerialDebug.Warning("Invalid SMBIOS search range");
+                return false;
+            }
+
+            while (current < endPtr)
             {
                 // Check for SMBIOS 3.0.
-                if (IsMatch(current, SMBIOS3_ANCHOR_STRING))
+                if (IsMatch(current, SMBIOS3_ANCHOR_STRING) && current + sizeof(SMBIOSEntryPoint64) <= endPtr)
                 {
                     SMBIOSEntryPoint64* entry64 = (SMBIOSEntryPoint64*)current;
 
-                    // Verify checksum.
-                    if (VerifyChecksum(current, entry64->Length))
+                    // Verify checksum and length
+                    if (entry64->Length >= sizeof(SMBIOSEntryPoint64) && VerifyChecksum(current, entry64->Length))
                     {
                         _majorVersion = entry64->MajorVersion;
                         _minorVersion = entry64->MinorVersion;
                         _tablePtr = (IntPtr)entry64->StructureTableAddress;
                         _tableLength = entry64->StructureTableMaxSize;
 
-                        SerialDebug.Info($"SMBIOS 3.0: v{_majorVersion.ToString()}.{_minorVersion.ToString()}, " +
-                                           $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
-                        return true;
+                        // Perform basic validation
+                        if (_tablePtr != IntPtr.Zero && _tableLength > 0 && _tableLength < 0x100000) // 1MB max
+                        {
+                            SerialDebug.Info($"SMBIOS 3.0: v{_majorVersion}.{_minorVersion}, " +
+                                            $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
+                            return true;
+                        }
+                        else
+                        {
+                            SerialDebug.Warning("Invalid SMBIOS 3.0 table pointer or length");
+                        }
                     }
                 }
                 // Check for SMBIOS 2.x.
-                else if (IsMatch(current, SMBIOS_ANCHOR_STRING))
+                else if (IsMatch(current, SMBIOS_ANCHOR_STRING) && current + sizeof(SMBIOSEntryPoint32) <= endPtr)
                 {
                     SMBIOSEntryPoint32* entry32 = (SMBIOSEntryPoint32*)current;
 
-                    // Verify checksum.
-                    if (VerifyChecksum(current, entry32->Length))
+                    // Verify checksum and length
+                    if (entry32->Length >= sizeof(SMBIOSEntryPoint32) && VerifyChecksum(current, entry32->Length))
                     {
                         _majorVersion = entry32->MajorVersion;
                         _minorVersion = entry32->MinorVersion;
                         _tablePtr = (IntPtr)entry32->StructureTableAddress;
                         _tableLength = entry32->StructureTableLength;
 
-                        SerialDebug.Info($"SMBIOS 2.x: v{_majorVersion.ToString()}.{_minorVersion.ToString()}, " +
-                                           $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
-                        return true;
+                        // Perform basic validation
+                        if (_tablePtr != IntPtr.Zero && _tableLength > 0 && _tableLength < 0x100000) // 1MB max
+                        {
+                            SerialDebug.Info($"SMBIOS 2.x: v{_majorVersion}.{_minorVersion}, " +
+                                            $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
+                            return true;
+                        }
+                        else
+                        {
+                            SerialDebug.Warning("Invalid SMBIOS 2.x table pointer or length");
+                        }
                     }
                 }
 
@@ -205,6 +229,9 @@ namespace Kernel.Hardware
         /// </summary>
         private static bool IsMatch(byte* memory, string str)
         {
+            if (memory == null)
+                return false;
+
             for (int i = 0; i < str.Length; i++)
             {
                 if (memory[i] != str[i])
@@ -218,6 +245,9 @@ namespace Kernel.Hardware
         /// </summary>
         private static bool VerifyChecksum(byte* start, byte length)
         {
+            if (start == null || length < 1)
+                return false;
+
             byte sum = 0;
             for (int i = 0; i < length; i++)
             {
@@ -231,15 +261,30 @@ namespace Kernel.Hardware
         /// </summary>
         public static bool EnumerateStructures(Func<IntPtr, bool> callback)
         {
-            if (!_initialized || _tablePtr == IntPtr.Zero)
+            if (!_initialized || _tablePtr == IntPtr.Zero || callback == null)
                 return false;
 
             byte* current = (byte*)_tablePtr;
             byte* end = current + _tableLength;
 
+            // Validate bounds
+            if (current == null || end == null || current >= end)
+                return false;
+
             while (current < end)
             {
+                // Ensure we have at least the header size available
+                if (current + sizeof(SMBIOSHeader) > end)
+                    break;
+
                 SMBIOSHeader* header = (SMBIOSHeader*)current;
+
+                // Basic header validation
+                if (header->Length < sizeof(SMBIOSHeader) || current + header->Length > end)
+                {
+                    SerialDebug.Warning($"Invalid SMBIOS structure header at 0x{((ulong)current).ToStringHex()}");
+                    break;
+                }
 
                 // Check for end-of-table.
                 if (header->Type == (byte)SMBIOSStructureType.EndOfTable)
@@ -252,16 +297,34 @@ namespace Kernel.Hardware
                 // Move past the formatted area.
                 byte* stringSection = current + header->Length;
 
+                // Make sure we don't overrun the buffer
+                if (stringSection >= end)
+                    break;
+
                 // Search for the end of the string section (two consecutive null bytes).
                 byte* stringEnd = stringSection;
-                while (stringEnd < end)
+                bool foundTerminator = false;
+
+                // Limit the search to prevent infinite loops
+                int maxSearchLength = 2048; // Arbitrary reasonable limit
+                int searchCount = 0;
+
+                while (stringEnd < end && searchCount < maxSearchLength)
                 {
-                    if (stringEnd[0] == 0 && stringEnd[1] == 0)
+                    if (stringEnd + 1 < end && stringEnd[0] == 0 && stringEnd[1] == 0)
                     {
                         stringEnd += 2; // Move past the null bytes.
+                        foundTerminator = true;
                         break;
                     }
                     stringEnd++;
+                    searchCount++;
+                }
+
+                if (!foundTerminator)
+                {
+                    SerialDebug.Warning("SMBIOS structure missing string terminator");
+                    break;
                 }
 
                 // Move to the next record.
@@ -304,13 +367,23 @@ namespace Kernel.Hardware
                 return string.Empty;
 
             SMBIOSHeader* header = (SMBIOSHeader*)structPtr.ToPointer();
+
+            // Validate header
+            if (header == null || header->Length < sizeof(SMBIOSHeader))
+                return string.Empty;
+
             byte* stringStart = (byte*)structPtr.ToPointer() + header->Length;
 
             // Find the specified string (indices start at 1)
             int currentIndex = 1;
+            int safetyCounter = 0;
+            int maxSafetyCount = 4096; // Prevent infinite loops
 
-            while (currentIndex < 255) // Safety limit
+            while (currentIndex < 255 && safetyCounter < maxSafetyCount) // Safety limit
             {
+                safetyCounter++;
+
+                // Check for null terminator
                 if (*stringStart == 0)
                 {
                     // End of string
@@ -331,7 +404,14 @@ namespace Kernel.Hardware
                 {
                     // Found the string, calculate length
                     byte* end = stringStart;
-                    while (*end != 0) end++;
+                    int maxLength = 1024; // Maximum reasonable string length
+                    int lengthCounter = 0;
+
+                    while (*end != 0 && lengthCounter < maxLength)
+                    {
+                        end++;
+                        lengthCounter++;
+                    }
 
                     int length = (int)(end - stringStart);
                     if (length <= 0)
@@ -351,6 +431,11 @@ namespace Kernel.Hardware
                 stringStart++;
             }
 
+            if (safetyCounter >= maxSafetyCount)
+            {
+                SerialDebug.Warning("Safety limit reached while processing SMBIOS string");
+            }
+
             return string.Empty; // String not found
         }
 
@@ -361,22 +446,25 @@ namespace Kernel.Hardware
         {
             if (!_initialized && !Initialize())
             {
-                Console.WriteLine("Failed to initialize SMBIOS");
+                SerialDebug.Info("Failed to initialize SMBIOS");
                 return;
             }
 
-            Console.WriteLine("\n===== SMBIOS INFORMATION =====");
-            Console.WriteLine($"SMBIOS Version: {_majorVersion.ToString()}.{_minorVersion.ToString()}");
+            SerialDebug.Info("\n===== SMBIOS INFORMATION =====");
+            SerialDebug.Info($"SMBIOS Version: {_majorVersion}.{_minorVersion}");
 
             // BIOS
             IntPtr biosPtr = FindStructure(SMBIOSStructureType.BIOSInformation);
             if (biosPtr != IntPtr.Zero)
             {
                 BIOSInfo* biosInfo = (BIOSInfo*)biosPtr.ToPointer();
-                Console.WriteLine("\n== BIOS ==");
-                Console.WriteLine($"Manufacturer: {GetString(biosPtr, biosInfo->Vendor)}");
-                Console.WriteLine($"Version: {GetString(biosPtr, biosInfo->Version)}");
-                Console.WriteLine($"Release Date: {GetString(biosPtr, biosInfo->ReleaseDate)}");
+                if (biosInfo != null && biosInfo->Header.Length >= sizeof(BIOSInfo))
+                {
+                    SerialDebug.Info("\n== BIOS ==");
+                    SerialDebug.Info($"Manufacturer: {GetString(biosPtr, biosInfo->Vendor)}");
+                    SerialDebug.Info($"Version: {GetString(biosPtr, biosInfo->Version)}");
+                    SerialDebug.Info($"Release Date: {GetString(biosPtr, biosInfo->ReleaseDate)}");
+                }
             }
 
             // System
@@ -384,10 +472,13 @@ namespace Kernel.Hardware
             if (sysPtr != IntPtr.Zero)
             {
                 SystemInfo* sysInfo = (SystemInfo*)sysPtr.ToPointer();
-                Console.WriteLine("\n== System ==");
-                Console.WriteLine($"Manufacturer: {GetString(sysPtr, sysInfo->Manufacturer)}");
-                Console.WriteLine($"Product: {GetString(sysPtr, sysInfo->ProductName)}");
-                Console.WriteLine($"Version: {GetString(sysPtr, sysInfo->Version)}");
+                if (sysInfo != null && sysInfo->Header.Length >= sizeof(SystemInfo))
+                {
+                    SerialDebug.Info("\n== System ==");
+                    SerialDebug.Info($"Manufacturer: {GetString(sysPtr, sysInfo->Manufacturer)}");
+                    SerialDebug.Info($"Product: {GetString(sysPtr, sysInfo->ProductName)}");
+                    SerialDebug.Info($"Version: {GetString(sysPtr, sysInfo->Version)}");
+                }
             }
 
             // Processor
@@ -395,15 +486,18 @@ namespace Kernel.Hardware
             if (cpuPtr != IntPtr.Zero)
             {
                 ProcessorInfo* cpuInfo = (ProcessorInfo*)cpuPtr.ToPointer();
-                Console.WriteLine("\n== Processor ==");
-                Console.WriteLine($"Socket: {GetString(cpuPtr, cpuInfo->SocketDesignation)}");
-                Console.WriteLine($"Manufacturer: {GetString(cpuPtr, cpuInfo->ProcessorManufacturer)}");
-                Console.WriteLine($"Version: {GetString(cpuPtr, cpuInfo->ProcessorVersion)}");
-                Console.WriteLine($"Current Speed: {cpuInfo->CurrentSpeed.ToString()} MHz");
-                Console.WriteLine($"Max Speed: {cpuInfo->MaxSpeed.ToString()} MHz");
+                if (cpuInfo != null && cpuInfo->Header.Length >= sizeof(ProcessorInfo))
+                {
+                    SerialDebug.Info("\n== Processor ==");
+                    SerialDebug.Info($"Socket: {GetString(cpuPtr, cpuInfo->SocketDesignation)}");
+                    SerialDebug.Info($"Manufacturer: {GetString(cpuPtr, cpuInfo->ProcessorManufacturer)}");
+                    SerialDebug.Info($"Version: {GetString(cpuPtr, cpuInfo->ProcessorVersion)}");
+                    SerialDebug.Info($"Current Speed: {cpuInfo->CurrentSpeed} MHz");
+                    SerialDebug.Info($"Max Speed: {cpuInfo->MaxSpeed} MHz");
+                }
             }
 
-            Console.WriteLine("\n=============================");
+            SerialDebug.Info("\n=============================");
         }
     }
 }

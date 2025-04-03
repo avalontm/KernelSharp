@@ -1,9 +1,8 @@
 ﻿using Kernel.Diagnostics;
-using Kernel.Drivers;
 using Kernel.Drivers.IO;
 using System.Collections.Generic;
 
-namespace Kernel.Hardware
+namespace Kernel.Drivers
 {
     /// <summary>
     /// Manager for PCI bus operations
@@ -161,7 +160,7 @@ namespace Kernel.Hardware
             uint address = GetAddressBase(bus, device, function) | (uint)(offset & 0xFC);
             IOPort.OutDword(PCI_CONFIG_ADDRESS, address);
             byte shift = (byte)((offset & 3) * 8);
-            return (byte)((IOPort.InDword(PCI_CONFIG_DATA) >> shift) & 0xFF);
+            return (byte)(IOPort.InDword(PCI_CONFIG_DATA) >> shift & 0xFF);
         }
 
         /// <summary>
@@ -172,7 +171,7 @@ namespace Kernel.Hardware
             uint address = GetAddressBase(bus, device, function) | (uint)(offset & 0xFC);
             IOPort.OutDword(PCI_CONFIG_ADDRESS, address);
             byte shift = (byte)((offset & 2) * 8);
-            return (ushort)((IOPort.InDword(PCI_CONFIG_DATA) >> shift) & 0xFFFF);
+            return (ushort)(IOPort.InDword(PCI_CONFIG_DATA) >> shift & 0xFFFF);
         }
 
         /// <summary>
@@ -196,7 +195,7 @@ namespace Kernel.Hardware
             uint data = IOPort.InDword(PCI_CONFIG_DATA);
             byte shift = (byte)((offset & 3) * 8);
             uint mask = ~(0xFFU << shift);
-            data = (data & mask) | ((uint)value << shift);
+            data = data & mask | (uint)value << shift;
 
             IOPort.OutDword(PCI_CONFIG_DATA, data);
         }
@@ -212,7 +211,7 @@ namespace Kernel.Hardware
             uint data = IOPort.InDword(PCI_CONFIG_DATA);
             byte shift = (byte)((offset & 2) * 8);
             uint mask = ~(0xFFFFU << shift);
-            data = (data & mask) | ((uint)value << shift);
+            data = data & mask | (uint)value << shift;
 
             IOPort.OutDword(PCI_CONFIG_DATA, data);
         }
@@ -262,7 +261,7 @@ namespace Kernel.Hardware
         /// </summary>
         private static uint GetAddressBase(byte bus, byte device, byte function)
         {
-            return (uint)(0x80000000 | (bus << 16) | ((device & 0x1F) << 11) | ((function & 0x07) << 8));
+            return (uint)(0x80000000 | bus << 16 | (device & 0x1F) << 11 | (function & 0x07) << 8);
         }
 
         /// <summary>
@@ -312,7 +311,7 @@ namespace Kernel.Hardware
             bars[5] = ReadConfig32(bus, device, function, PCI_REGISTER_BAR5);
 
             // Get bridge-specific information
-            bool isBridge = (id.ClassCode == 0x06 && id.Subclass == 0x04); // PCI-to-PCI bridge
+            bool isBridge = id.ClassCode == 0x06 && id.Subclass == 0x04; // PCI-to-PCI bridge
             byte secondaryBus = 0;
             byte subordinateBus = 0;
 
@@ -372,7 +371,7 @@ namespace Kernel.Hardware
             PCIDevice pciDevice = GetDeviceInfo(bus, device, function);   
 
             _devices.Add(pciDevice);
-            SerialDebug.Info($"pciDevice Added");
+
             // If this is a PCI-to-PCI bridge, scan the secondary bus if not already processed
             if (pciDevice.IsBridge)
             {

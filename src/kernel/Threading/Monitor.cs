@@ -1,25 +1,22 @@
-﻿
-using Internal.Runtime;
-using Internal.Runtime.CompilerHelpers;
-using Kernel.Threading;
+﻿using Internal.Runtime.CompilerHelpers;
+using Kernel.Diagnostics;
 using System.Collections.Generic;
 
 namespace Kernel.Threading
 {
-    /*
-    // Información de bloqueo para un objeto
+    // Lock information for an object
     public class LockInfo
     {
-        // Propietario actual del bloqueo
+        // Current lock owner
         public Thread Owner;
 
-        // Número de veces que el propietario ha adquirido el bloqueo (para bloqueos recursivos)
+        // Number of times the owner has acquired the lock (for recursive locks)
         public int RecursionCount;
 
-        // Cola de hilos esperando en este objeto
+        // Queue of threads waiting on this object
         public Queue<Thread> WaitingThreads;
 
-        // Cola de hilos esperando ser despertados por un Pulse
+        // Queue of threads waiting to be awakened by a Pulse
         public Queue<Thread> PulseWaitingThreads;
 
         public LockInfo(Thread owner)
@@ -29,68 +26,70 @@ namespace Kernel.Threading
             WaitingThreads = new Queue<Thread>();
             PulseWaitingThreads = new Queue<Thread>();
         }
-    }*/
+    }
 
     /// <summary>
-    /// Implementación básica de Monitor para sincronización de hilos
+    /// Basic Monitor implementation for thread synchronization
     /// </summary>
     public static class Monitor
     {
-    /*
-        // Diccionario que mantiene información de bloqueo para objetos
-       // private static Dictionary<object, LockInfo> _lockTable = new Dictionary<object, LockInfo>();
+        // Dictionary that maintains lock information for objects
+        private static Dictionary<object, LockInfo> _lockTable;
 
-        // Objeto de sincronización para el propio Monitor
-       // private static object _syncObject = new object();
+        // Synchronization object for the Monitor itself
+        private static object _syncObject;
 
- 
+        public static void Initialize()
+        {
+            SerialDebug.Info("Monitor initialization started");
+            _lockTable = new Dictionary<object, LockInfo>();
+            _syncObject = new object();
+            SerialDebug.Info("Monitor initialization successful");
+        }
 
         /// <summary>
-        /// Adquiere un bloqueo exclusivo sobre un objeto
+        /// Acquires an exclusive lock on an object
         /// </summary>
-        /// <param name="obj">Objeto a bloquear</param>
+        /// <param name="obj">Object to lock</param>
         public static void Enter(object obj)
         {
-            
             if (obj == null)
                 ThrowHelpers.ArgumentNullException("obj");
 
             bool lockTaken = false;
             TryEnter(obj, -1, ref lockTaken);
-            
         }
 
         /// <summary>
-        /// Intenta adquirir un bloqueo exclusivo sobre un objeto
+        /// Attempts to acquire an exclusive lock on an object
         /// </summary>
-        /// <param name="obj">Objeto a bloquear</param>
-        /// <param name="timeout">Tiempo de espera en milisegundos, o -1 para esperar indefinidamente</param>
-        /// <param name="lockTaken">Indica si se ha adquirido el bloqueo</param>
-        /// <returns>true si se ha adquirido el bloqueo, false en caso contrario</returns>
+        /// <param name="obj">Object to lock</param>
+        /// <param name="timeout">Wait time in milliseconds, or -1 to wait indefinitely</param>
+        /// <param name="lockTaken">Indicates if the lock has been acquired</param>
+        /// <returns>true if the lock has been acquired, false otherwise</returns>
         public static bool TryEnter(object obj, int timeout, ref bool lockTaken)
         {
-            
             if (obj == null)
                 ThrowHelpers.ArgumentNullException("obj");
             if (lockTaken)
-                ThrowHelpers.ArgumentException("lockTaken debe ser false", "lockTaken");
-            
-            // Obtener el hilo actual
+                ThrowHelpers.ArgumentException("lockTaken must be false", "lockTaken");
+
+            // Get the current thread
             Kernel.Threading.Thread currentThread = Kernel.Threading.Thread.CurrentThread;
             if (currentThread == null)
                 return false;
 
-            // Tiempo de inicio para control de timeout
+            // Start time for timeout control
             int startTime = GetTickCount();
 
             while (true)
             {
                 lock (_syncObject)
                 {
-                    // Verificar si el objeto ya está en la tabla de bloqueos
+                    // Check if the object is already in the lock table
                     if (_lockTable.TryGetValue(obj, out LockInfo lockInfo))
                     {
-                        // Si el propietario es el hilo actual, incrementar la recursión
+                        // If the owner is the current thread, increment recursion
                         if (lockInfo.Owner == currentThread)
                         {
                             lockInfo.RecursionCount++;
@@ -98,17 +97,17 @@ namespace Kernel.Threading
                             return true;
                         }
 
-                        // Si el bloqueo está ocupado
+                        // If the lock is occupied
                         if (lockInfo.Owner != null)
                         {
-                            // Verificar timeout
+                            // Check timeout
                             if (timeout == 0)
                             {
                                 lockTaken = false;
                                 return false;
                             }
 
-                            // Verificar si se ha excedido el tiempo de espera
+                            // Check if the wait time has been exceeded
                             int currentTime = GetTickCount();
                             if (timeout != -1 && (currentTime - startTime) >= timeout)
                             {
@@ -116,24 +115,24 @@ namespace Kernel.Threading
                                 return false;
                             }
 
-                            // Encolar el hilo actual en los hilos esperando
+                            // Queue the current thread in the waiting threads
                             lockInfo.WaitingThreads.Enqueue(currentThread);
 
-                            // Suspender el hilo actual
+                            // Suspend the current thread
                             currentThread.Suspend();
 
-                            // Continuar con el siguiente ciclo
+                            // Continue with the next cycle
                             continue;
                         }
 
-                        // Tomar el bloqueo
+                        // Take the lock
                         lockInfo.Owner = currentThread;
                         lockInfo.RecursionCount = 1;
                         lockTaken = true;
                         return true;
                     }
 
-                    // Si el objeto no está en la tabla de bloqueos, crear una nueva entrada
+                    // If the object is not in the lock table, create a new entry
                     _lockTable[obj] = new LockInfo(currentThread);
                     lockTaken = true;
                     return true;
@@ -143,15 +142,14 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Libera el bloqueo de un objeto
+        /// Releases the lock on an object
         /// </summary>
-        /// <param name="obj">Objeto a desbloquear</param>
+        /// <param name="obj">Object to unlock</param>
         public static void Exit(object obj)
         {
-            
             if (obj == null)
                 ThrowHelpers.ArgumentNullException("obj");
-            
+
             Kernel.Threading.Thread currentThread = Kernel.Threading.Thread.CurrentThread;
             if (currentThread == null)
                 return;
@@ -160,19 +158,19 @@ namespace Kernel.Threading
             {
                 if (_lockTable.TryGetValue(obj, out LockInfo lockInfo))
                 {
-                    // Verificar que el hilo actual sea el propietario
+                    // Check that the current thread is the owner
                     if (lockInfo.Owner != currentThread)
-                        ThrowHelpers.InvalidOperationException("El hilo actual no es el propietario del bloqueo");
+                        ThrowHelpers.InvalidOperationException("The current thread is not the owner of the lock");
 
-                    // Decrementar el contador de recursión
+                    // Decrement the recursion counter
                     lockInfo.RecursionCount--;
 
-                    // Si no quedan bloqueos, liberar el objeto
+                    // If no locks remain, release the object
                     if (lockInfo.RecursionCount == 0)
                     {
                         lockInfo.Owner = null;
 
-                        // Despertar un hilo en espera si hay alguno
+                        // Wake a waiting thread if there's one
                         if (lockInfo.WaitingThreads.Count > 0)
                         {
                             Kernel.Threading.Thread waitingThread = lockInfo.WaitingThreads.Dequeue();
@@ -180,33 +178,32 @@ namespace Kernel.Threading
                         }
                     }
                 }
-            
             }
         }
-        
+
         /// <summary>
-        /// Método auxiliar para obtener el tiempo actual en milisegundos
+        /// Helper method to get the current time in milliseconds
         /// </summary>
         public static int GetTickCount()
         {
-            // En un kernel real, implementaría una forma de obtener el tiempo del sistema
-            // Por ahora, retornamos un valor simulado
+            // In a real kernel, would implement a way to get the system time
+            // For now, return a simulated value
             return 0;
         }
 
         public static void Wait(object syncRoot)
         {
-
+            // To be implemented
         }
 
         public static void PulseAll(object syncRoot)
         {
-
+            // To be implemented
         }
 
         public static void Pulse(object syncRoot)
         {
-
-        }*/
+            // To be implemented
+        }
     }
 }

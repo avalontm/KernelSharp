@@ -13,8 +13,8 @@ namespace System
         public IntPtr(long value) { _value = (void*)value; }
         public IntPtr(ulong value) { _value = (void*)value; }
 
-        [Intrinsic]
-        public static readonly IntPtr Zero;
+        // Manual definition of a zero IntPtr
+        public static readonly IntPtr Zero = new IntPtr(0);
 
         public bool Equals(IntPtr ptr)
             => _value == ptr._value;

@@ -5,6 +5,7 @@ using Kernel.Drivers;
 using Kernel.Drivers.Network;
 using Kernel.Hardware;
 using Kernel.Memory;
+using Kernel.Threading;
 using System;
 using System.Collections.Generic;
 using System.Runtime;
@@ -21,7 +22,6 @@ namespace Kernel
             SerialDebug.Initialize();
             // Initialize memory subsystem
             Allocator.Initialize((IntPtr)0x200000);
-            //StartupCodeHelpers.InitializeModules((IntPtr)trampoline);
             PageTable.Initialize();
  
             // Show welcome message
@@ -29,6 +29,12 @@ namespace Kernel
             string welcomeMessage = "Welcome to KernelSharp!";
             Console.WriteLine(welcomeMessage);
             Console.ForegroundColor = ConsoleColor.White;
+
+            VBEInfo* info = (VBEInfo*)multibootInfo->VBEInfo;
+            if (info->PhysBase != 0)
+            {
+                Console.WriteLine($"screen: {info->ScreenWidth.ToString()}x{info->ScreenHeight.ToString()}");
+            }
 
             //SerialDebug.Info(cosa);
             if (RuntimeArchitecture.Is32Bit)
@@ -53,96 +59,30 @@ namespace Kernel
 
             Console.WriteLine($"Flag: {multibootInfo->Flags.ToString()}");
 
-            // Inicializar SMBIOS
-            Console.WriteLine("Inicializando detección de hardware SMBIOS...");
-
-            if (SMBIOS.Initialize())
-            {
-                // Mostrar información básica del sistema
-                SMBIOS.PrintSystemSummary();
-            }
-            else
-            {
-                Console.WriteLine("No se pudo detectar información SMBIOS");
-            }
-
-            IDTManager.Disable();
-
             GDTManager.Initialize();
             IDTManager.Initialize();
-            InterruptManager.Initialize();
 
-            IDTManager.Enable();
+            ACPIManager.Initialize();
+            SMPManager.Initialize();
 
-            Console.WriteLine("Sistema de interrupciones inicializado");
+            APICController.Initialize();
 
-            // En tu método Entry o Main, después de inicializar el sistema básico
-
-            // Inicializar ACPI (necesario para SMP y APIC)
-            if (ACPIManager.Initialize())
-            {
-                //ACPIManager.PrintACPIInfo();
-
-                // Inicializar SMP para detectar múltiples procesadores
-                if (SMPManager.Initialize())
-                {
-                    //SMPManager.PrintProcessorInfo();
-
-                    // Inicializar controlador APIC para manejar interrupciones en modo SMP
-                    if (APICController.Initialize())
-                    {
-                        Console.WriteLine($"Sistema inicializado en modo SMP con {SMPManager.GetProcessorCount().ToString()} procesador(es)");
-
-                        // Configurar temporizador APIC si es necesario
-                         //APICController.ConfigureTimer(0x20, APICController.CalibrateTimer(10), true);
-
-                        // Inicializar procesadores secundarios si es necesario
-                        // APICController.InitializeAPs(0x8000); // La dirección de inicio debe ser configurada adecuadamente
-                    }
-                    else
-                    {
-                        Console.WriteLine("Error al inicializar APIC. Funcionando en modo monoprocesador.");
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Error al detectar SMP. Funcionando en modo monoprocesador.");
-                }
-            }
-            else
-            {
-                Console.WriteLine("Error al inicializar ACPI. Funcionalidades avanzadas deshabilitadas.");
-            }
-
+            SMBIOS.Initialize();
 
             PCIManager.Initialize();
             DriverManager.Initialize();
             RegisterPCIDrivers();
             DriverManager.InitializeAllDrivers();
-            // Habilitar interrupciones en el CPU
-           // Native.EnableInterrupts();
 
+            InterruptManager.Initialize();
+
+            ThreadPool.Initialize();
 
             // Show basic system information
             SerialDebug.Info("Initializing system...");
 
-            if (CPUMode.IsInProtectedMode())
-            {
-                Console.WriteLine("System in protected mode");
-            }
-            else
-            {
-                Console.WriteLine("System in real mode");
-            }
-
-            if (CPUMode.IsPagingEnabled())
-            {
-                Console.WriteLine("Paging enabled");
-            }
-
             // Rest of the kernel initialization...
             ArrayExamples.DemoArrays();
-
 
             // Initialize other kernel modules
             StartupCodeHelpers.Test();

@@ -5,31 +5,30 @@ using System.Collections.Generic;
 namespace Kernel.Threading
 {
     /// <summary>
-    /// Implementación básica de un pool de hilos para el kernel
+    /// Basic implementation of a thread pool for the kernel
     /// </summary>
     public class ThreadPool
     {
-        /*
-        // Número máximo de hilos en el pool
+        // Maximum number of threads in the pool
         private readonly int _maxThreads;
 
-        // Hilos de trabajo
+        // Worker threads
         private Thread[] _threads;
 
-        // Cola de tareas pendientes
+        // Queue of pending tasks
         private Queue<WorkItem> _workItems;
 
-        // Estado del pool
+        // Pool state
         private bool _isRunning;
         private readonly object _syncRoot;
 
-        // Estructura que representa una tarea a ejecutar
+        // Structure representing a task to execute
         private struct WorkItem
         {
-            // Delegado para la acción a ejecutar
+            // Delegate for the action to execute
             public Action TaskAction;
 
-            // Parámetro opcional para la tarea
+            // Optional parameter for the task
             public object State;
 
             // Constructor
@@ -41,12 +40,12 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Constructor que inicializa el pool con un número específico de hilos
+        /// Constructor that initializes the pool with a specific number of threads
         /// </summary>
-        /// <param name="maxThreads">Número máximo de hilos a crear</param>
+        /// <param name="maxThreads">Maximum number of threads to create</param>
         public ThreadPool(int maxThreads)
         {
-            // Validar parámetros
+            // Validate parameters
             if (maxThreads <= 0)
                 maxThreads = Environment.ProcessorCount > 0 ? Environment.ProcessorCount : 1;
 
@@ -57,8 +56,16 @@ namespace Kernel.Threading
             _threads = new Thread[_maxThreads];
         }
 
+        public static void Initialize()
+        {
+            SerialDebug.Info("ThreadPool initialization started");
+            Monitor.Initialize();
+            Scheduler.Initialize();
+            SerialDebug.Info("ThreadPool initialization successful");
+        }
+
         /// <summary>
-        /// Inicia el pool de hilos
+        /// Starts the thread pool
         /// </summary>
         public void Start()
         {
@@ -67,7 +74,7 @@ namespace Kernel.Threading
 
             _isRunning = true;
 
-            // Crear e iniciar los hilos de trabajo
+            // Create and start worker threads
             for (int i = 0; i < _maxThreads; i++)
             {
                 Thread thread = new Thread(WorkerThreadFunc);
@@ -76,14 +83,14 @@ namespace Kernel.Threading
                 _threads[i] = thread;
                 thread.Start();
 
-                SerialDebug.Info("Iniciado hilo de ThreadPool: " + thread.Name);
+                SerialDebug.Info("Started ThreadPool thread: " + thread.Name);
             }
 
-            SerialDebug.Info("ThreadPool iniciado con " + _maxThreads.ToString() + " hilos");
+            SerialDebug.Info("ThreadPool started with " + _maxThreads.ToString() + " threads");
         }
 
         /// <summary>
-        /// Detiene el pool de hilos
+        /// Stops the thread pool
         /// </summary>
         public void Stop()
         {
@@ -92,13 +99,13 @@ namespace Kernel.Threading
 
             _isRunning = false;
 
-            // Señalizar a todos los hilos para que se detengan
+            // Signal all threads to stop
             lock (_syncRoot)
             {
                 Monitor.PulseAll(_syncRoot);
             }
 
-            // Esperar a que todos los hilos terminen
+            // Wait for all threads to finish
             for (int i = 0; i < _maxThreads; i++)
             {
                 if (_threads[i] != null && _threads[i].IsAlive)
@@ -107,31 +114,31 @@ namespace Kernel.Threading
                 }
             }
 
-            // Limpiar la cola de tareas
+            // Clear the task queue
             lock (_syncRoot)
             {
                 _workItems.Clear();
             }
 
-            SerialDebug.Info("ThreadPool detenido");
+            SerialDebug.Info("ThreadPool stopped");
         }
 
         /// <summary>
-        /// Encola una tarea para su ejecución
+        /// Queues a task for execution
         /// </summary>
-        /// <param name="taskAction">Acción a ejecutar</param>
-        /// <returns>true si la tarea se encola correctamente, false en caso contrario</returns>
+        /// <param name="taskAction">Action to execute</param>
+        /// <returns>true if the task is successfully queued, false otherwise</returns>
         public bool QueueUserWorkItem(Action taskAction)
         {
             return QueueUserWorkItem(taskAction, null);
         }
 
         /// <summary>
-        /// Encola una tarea con estado para su ejecución
+        /// Queues a task with state for execution
         /// </summary>
-        /// <param name="taskAction">Acción a ejecutar</param>
-        /// <param name="state">Estado asociado a la tarea</param>
-        /// <returns>true si la tarea se encola correctamente, false en caso contrario</returns>
+        /// <param name="taskAction">Action to execute</param>
+        /// <param name="state">State associated with the task</param>
+        /// <returns>true if the task is successfully queued, false otherwise</returns>
         public bool QueueUserWorkItem(Action taskAction, object state)
         {
             if (!_isRunning)
@@ -140,15 +147,15 @@ namespace Kernel.Threading
             if (taskAction == null)
                 return false;
 
-            // Crear el item de trabajo
+            // Create the work item
             WorkItem workItem = new WorkItem(taskAction, state);
 
-            // Encolar de forma thread-safe
+            // Queue in a thread-safe manner
             lock (_syncRoot)
             {
                 _workItems.Enqueue(workItem);
 
-                // Despertar a un hilo para procesar la nueva tarea
+                // Wake up a thread to process the new task
                 Monitor.Pulse(_syncRoot);
             }
 
@@ -156,7 +163,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Función principal de los hilos de trabajo
+        /// Main function for worker threads
         /// </summary>
         private void WorkerThreadFunc()
         {
@@ -165,20 +172,20 @@ namespace Kernel.Threading
                 WorkItem workItem = default(WorkItem);
                 bool hasWork = false;
 
-                // Intentar obtener una tarea de la cola
+                // Try to get a task from the queue
                 lock (_syncRoot)
                 {
                     while (_isRunning && _workItems.Count == 0)
                     {
-                        // Esperar hasta que haya trabajo disponible
+                        // Wait until work is available
                         Monitor.Wait(_syncRoot);
                     }
 
-                    // Salir si el pool se está deteniendo
+                    // Exit if the pool is stopping
                     if (!_isRunning)
                         break;
 
-                    // Obtener el siguiente elemento de trabajo
+                    // Get the next work item
                     if (_workItems.Count > 0)
                     {
                         workItem = _workItems.Dequeue();
@@ -186,20 +193,19 @@ namespace Kernel.Threading
                     }
                 }
 
-                // Ejecutar la tarea obtenida
+                // Execute the obtained task
                 if (hasWork)
                 {
-                    // Ejecutar la acción
+                    // Execute the action
                     workItem.TaskAction();
-
                 }
             }
 
-            SerialDebug.Info("Hilo de ThreadPool finalizado: " + Thread.CurrentThread.Name);
+            SerialDebug.Info("ThreadPool thread finished: " + Thread.CurrentThread.Name);
         }
 
         /// <summary>
-        /// Obtiene el número de hilos en el pool
+        /// Gets the number of threads in the pool
         /// </summary>
         public int ThreadCount
         {
@@ -207,7 +213,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el número de tareas pendientes
+        /// Gets the number of pending tasks
         /// </summary>
         public int PendingWorkItemCount
         {
@@ -221,11 +227,11 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Indica si el pool está en ejecución
+        /// Indicates if the pool is running
         /// </summary>
         public bool IsRunning
         {
             get { return _isRunning; }
-        }*/
+        }
     }
 }

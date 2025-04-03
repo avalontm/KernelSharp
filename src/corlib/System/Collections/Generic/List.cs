@@ -1,11 +1,11 @@
-﻿using System.Diagnostics;
+﻿using Internal.Runtime.CompilerHelpers;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using Internal.Runtime.CompilerHelpers;
 
 namespace System.Collections.Generic
 {
-    // Optimized List<T> implementation for kernel environment
+    /// <summary>
+    /// Optimized List implementation for kernel environment
+    /// </summary>
     public class List<T>
     {
         // Internal storage with dynamic resizing
@@ -13,18 +13,23 @@ namespace System.Collections.Generic
         private int _size;
         private const int _defaultCapacity = 4;  // Start with reasonable capacity
 
-        // Constructors with explicit array creation
+        /// <summary>
+        /// Creates a new list with default capacity
+        /// </summary>
         public List()
         {
             _items = new T[_defaultCapacity];
             _size = 0;
         }
 
+        /// <summary>
+        /// Creates a new list with specified capacity
+        /// </summary>
         public List(int capacity)
         {
             if (capacity < 0)
             {
-                ThrowHelpers.ThrowArgumentException("Capacity cannot be negative");
+                ThrowHelpers.ArgumentException("Capacity cannot be negative");
             }
 
             capacity = capacity == 0 ? _defaultCapacity : capacity;
@@ -32,21 +37,26 @@ namespace System.Collections.Generic
             _size = 0;
         }
 
-        // Basic properties
+        /// <summary>
+        /// Gets the number of elements in the list
+        /// </summary>
         public int Count
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _size;
+            get { return _size; }
         }
 
+        /// <summary>
+        /// Gets or sets the capacity of the list
+        /// </summary>
         public int Capacity
         {
-            get => _items.Length;
+            get { return _items.Length; }
             set
             {
                 if (value < _size)
                 {
-                    ThrowHelpers.ThrowArgumentException("Capacity cannot be less than Count");
+                    ThrowHelpers.ArgumentException("Capacity cannot be less than Count");
                 }
 
                 if (value != _items.Length)
@@ -56,10 +66,7 @@ namespace System.Collections.Generic
                         T[] newItems = new T[value];
                         if (_size > 0)
                         {
-                            for (int i = 0; i < _size; i++)
-                            {
-                                newItems[i] = _items[i];
-                            }
+                            Array.Copy(_items, 0, newItems, 0, _size);
                         }
                         _items = newItems;
                     }
@@ -71,18 +78,21 @@ namespace System.Collections.Generic
             }
         }
 
-        // Optimized Add method for handling many items
+        /// <summary>
+        /// Adds an item to the list
+        /// </summary>
         public void Add(T item)
         {
             if (_size == _items.Length)
             {
                 // Growth factor of 2 is efficient for most scenarios
                 int newCapacity = _items.Length == 0 ? _defaultCapacity : _items.Length * 2;
+
                 // Safety check for very large arrays
-                if (newCapacity > 0x7FEFFFFF)
+                if (_items.Length > 0x3FFFFFFF)
                 {
                     // More conservative growth for very large arrays
-                    newCapacity = _items.Length + Math.Min(_items.Length, 0x7FEFFFFF - _items.Length);
+                    newCapacity = _items.Length + (_items.Length / 2);
                 }
 
                 EnsureCapacity(newCapacity);
@@ -92,7 +102,9 @@ namespace System.Collections.Generic
             _size++;
         }
 
-        // Helper method to ensure sufficient capacity
+        /// <summary>
+        /// Helper method to ensure sufficient capacity
+        /// </summary>
         private void EnsureCapacity(int min)
         {
             if (_items.Length < min)
@@ -113,14 +125,16 @@ namespace System.Collections.Generic
             }
         }
 
-        // Indexer with bounds checking
+        /// <summary>
+        /// Indexer for accessing list elements
+        /// </summary>
         public T this[int index]
         {
             get
             {
                 if ((uint)index >= (uint)_size)
                 {
-                    ThrowHelpers.ThrowArgumentException("Index out of range");
+                    ThrowHelpers.ArgumentException("Index out of range");
                 }
                 return _items[index];
             }
@@ -128,18 +142,20 @@ namespace System.Collections.Generic
             {
                 if ((uint)index >= (uint)_size)
                 {
-                    ThrowHelpers.ThrowArgumentException("Index out of range");
+                    ThrowHelpers.ArgumentException("Index out of range");
                 }
                 _items[index] = value;
             }
         }
 
-        // Improved RemoveAt that doesn't reallocate unnecessarily
+        /// <summary>
+        /// Removes the element at the specified index
+        /// </summary>
         public void RemoveAt(int index)
         {
             if ((uint)index >= (uint)_size)
             {
-                ThrowHelpers.ThrowArgumentException("Index out of range");
+                ThrowHelpers.ArgumentException("Index out of range");
             }
 
             _size--;
@@ -158,7 +174,23 @@ namespace System.Collections.Generic
             _items[_size] = default(T);
         }
 
-        // Clear the list without releasing memory unnecessarily
+        /// <summary>
+        /// Removes the first occurrence of a specific item from the list
+        /// </summary>
+        public bool Remove(T item)
+        {
+            int index = IndexOf(item);
+            if (index >= 0)
+            {
+                RemoveAt(index);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Clears all elements from the list
+        /// </summary>
         public void Clear()
         {
             if (_size > 0)
@@ -172,10 +204,12 @@ namespace System.Collections.Generic
             }
         }
 
-        // Find the index of an item (more efficient implementation)
+        /// <summary>
+        /// Find the index of an item
+        /// </summary>
         public int IndexOf(T item)
         {
-            // Use EqualityComparer for value types or null references
+            // Handle null items
             if (item == null)
             {
                 for (int i = 0; i < _size; i++)
@@ -187,8 +221,7 @@ namespace System.Collections.Generic
             {
                 for (int i = 0; i < _size; i++)
                 {
-                    // For reference types, use reference equality
-                    // This could be improved with a proper EqualityComparer in a full implementation
+                    // For reference types, use reference equality or Equals
                     if (Object.ReferenceEquals(_items[i], item) ||
                         (_items[i] != null && _items[i].Equals(item)))
                     {
@@ -199,13 +232,17 @@ namespace System.Collections.Generic
             return -1;
         }
 
-        // Optimized Contains method
+        /// <summary>
+        /// Checks if the list contains a specific item
+        /// </summary>
         public bool Contains(T item)
         {
             return IndexOf(item) != -1;
         }
 
-        // Convert to array (optimized)
+        /// <summary>
+        /// Converts the list to an array
+        /// </summary>
         public T[] ToArray()
         {
             if (_size == 0)
@@ -221,19 +258,17 @@ namespace System.Collections.Generic
             return array;
         }
 
-        public bool Remove<T>(T value)
-        {
-            throw new NotImplementedException();
-        }
-
-        // Iterator support
+        /// <summary>
+        /// Gets an enumerator for the list
+        /// </summary>
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);
         }
 
-
-        // Nested enumerator (more efficient implementation)
+        /// <summary>
+        /// Nested enumerator struct for efficient iteration
+        /// </summary>
         public struct Enumerator
         {
             private readonly List<T> _list;
@@ -258,7 +293,7 @@ namespace System.Collections.Generic
                 return false;
             }
 
-            public T Current => _current;
+            public T Current { get { return _current; } }
         }
     }
 }

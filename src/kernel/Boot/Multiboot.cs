@@ -34,7 +34,7 @@ namespace Kernel.Boot
         public uint VBEInterfaceOff;
         public uint VBEInterfaceLen;
 
-        public uint* Mods
+        public uint* Modules
         {
             get
             {

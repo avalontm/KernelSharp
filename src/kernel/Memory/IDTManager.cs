@@ -6,109 +6,110 @@ using System.Runtime.InteropServices;
 namespace Kernel.Memory
 {
     /// <summary>
-    /// Tipo de entrada de la IDT
+    /// IDT Entry Type
     /// </summary>
     public enum IDTGateType : byte
     {
-        Task = 0x5,             // Compuerta de tarea de 80386
-        Interrupt16 = 0x6,      // Compuerta de interrupción de 16 bits
-        Trap16 = 0x7,           // Compuerta de trampa de 16 bits
-        Interrupt32 = 0xE,      // Compuerta de interrupción de 32 bits
-        Trap32 = 0xF,           // Compuerta de trampa de 32 bits
-        InterruptGate = 0x8E,   // Compuerta de interrupción (con banderas)
-        TrapGate = 0x8F         // Compuerta de trampa (con banderas)
+        Task = 0x5,             // 80386 Task Gate
+        Interrupt16 = 0x6,      // 16-bit Interrupt Gate
+        Trap16 = 0x7,           // 16-bit Trap Gate
+        Interrupt32 = 0xE,      // 32-bit Interrupt Gate
+        Trap32 = 0xF,           // 32-bit Trap Gate
+        InterruptGate = 0x8E,   // Interrupt Gate (with flags)
+        TrapGate = 0x8F         // Trap Gate (with flags)
     }
 
     /// <summary>
-    /// Estructura para una entrada en la tabla de descriptores de interrupciones (IDT)
+    /// Structure for an entry in the Interrupt Descriptor Table (IDT)
     /// </summary>
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct IDTEntry
     {
-        public ushort BaseLow;    // Parte baja de la dirección del manejador
-        public ushort Selector;   // Selector de segmento de código
-        public byte IST;          // Índice de pila de interrupciones (0-7)
-        public byte TypeAttr;     // Tipo y atributos
-        public ushort BaseMid;    // Parte media de la dirección del manejador
-        public uint BaseHigh;     // Parte alta de la dirección del manejador
-        public uint Reserved;     // Reservado, debe ser 0
+        public ushort BaseLow;    // Lower part of handler address
+        public ushort Selector;   // Code segment selector
+        public byte IST;          // Interrupt Stack Table index (0-7)
+        public byte TypeAttr;     // Type and attributes
+        public ushort BaseMid;    // Middle part of handler address
+        public uint BaseHigh;     // Upper part of handler address
+        public uint Reserved;     // Reserved, must be 0
     }
 
     /// <summary>
-    /// Puntero a la IDT para cargar con la instrucción LIDT
+    /// IDT Pointer for loading with LIDT instruction
     /// </summary>
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct IDTPointer
     {
-        public ushort Limit;      // Tamaño de la IDT - 1
-        public ulong Base;        // Dirección base de la IDT
+        public ushort Limit;      // Size of IDT - 1
+        public ulong Base;        // Base address of IDT
     }
 
     /// <summary>
-    /// Gestor de la tabla de descriptores de interrupciones para x86_64
+    /// Interrupt Descriptor Table manager for x86_64
     /// </summary>
     public static unsafe class IDTManager
     {
-        // Tamaño de la IDT (256 posibles interrupciones)
+        // IDT Size (256 possible interrupts)
         private const int IDT_SIZE = 256;
 
-        // La IDT
+        // The IDT
         private static IDTEntry* _idt;
 
-        // Puntero a la IDT para la instrucción LIDT
+        // IDT Pointer for LIDT instruction
         private static IDTPointer _idtPointer;
 
         /// <summary>
-        /// Inicializa la IDT
+        /// Initializes the IDT
         /// </summary>
         public static void Initialize()
         {
-            SerialDebug.Info("Inicializando tabla de descriptores de interrupciones (IDT)...");
+            SerialDebug.Info("Initializing Interrupt Descriptor Table (IDT)...");
 
-            // Asignar memoria para la IDT
+            // Allocate memory for the IDT
             _idt = (IDTEntry*)Allocator.malloc((nuint)(sizeof(IDTEntry) * IDT_SIZE));
 
-            // Inicializar todas las entradas a cero
+            // Initialize all entries to zero
             for (int i = 0; i < IDT_SIZE; i++)
             {
                 _idt[i] = new IDTEntry();
             }
 
-            // Configurar el puntero a la IDT
+            // Configure IDT pointer
             _idtPointer.Limit = (ushort)(IDT_SIZE * sizeof(IDTEntry) - 1);
             _idtPointer.Base = (ulong)_idt;
 
-            // Configurar controlador de interrupción de stub que redirige a HandleInterrupt
+            // Configure interrupt stub handler that redirects to HandleInterrupt
             IntPtr stubHandler = GetInterruptStubAddress();
+
             if (stubHandler != IntPtr.Zero)
             {
-                // Registrar el stub para todas las entradas
+                // Register the stub for all entries
                 for (int i = 0; i < IDT_SIZE; i++)
                 {
                     SetIDTEntry(i, stubHandler, 0x08, IDTGateType.InterruptGate);
                 }
 
-                // Cargar la IDT
+                // Load the IDT
                 fixed (IDTPointer* idtPtr = &_idtPointer)
                 {
                     LoadIDT(idtPtr);
                 }
-                SerialDebug.Info("IDT inicializada correctamente");
+                SerialDebug.Info("IDT initialized successfully");
             }
             else
             {
-                SerialDebug.Info("ERROR: No se pudo obtener la dirección del stub de interrupción");
+                SerialDebug.Info("ERROR: Could not get interrupt stub address");
             }
         }
 
         /// <summary>
-        /// Configura una entrada en la IDT
+        /// Configures an entry in the IDT
         /// </summary>
-        /// <param name="index">Índice de la entrada (0-255)</param>
-        /// <param name="handler">Dirección del manejador</param>
-        /// <param name="selector">Selector de segmento de código (0x08 para código de kernel)</param>
-        /// <param name="type">Tipo de puerta</param>
-        /// <param name="ist">Índice de pila de interrupciones (0 para pila normal)</param>
+        /// <param name="index">Entry index (0-255)</param>
+        /// <param name="handler">Handler address</param>
+        /// <param name="selector">Code segment selector (0x08 for kernel code)</param>
+        /// <param name="type">Gate type</param>
+        /// <param name="ist">Interrupt Stack Table index (0 for normal stack)</param>
         public static void SetIDTEntry(int index, IntPtr handler, ushort selector, IDTGateType type, byte ist = 0)
         {
             if (index < 0 || index >= IDT_SIZE)
@@ -132,18 +133,17 @@ namespace Kernel.Memory
 
         internal static void Enable()
         {
-           
             Native.STI();
         }
 
         /// <summary>
-        /// Obtiene la dirección del stub de interrupción
+        /// Gets the interrupt stub address
         /// </summary>
         [DllImport("*", EntryPoint = "_GetInterruptStubAddress")]
         private static extern IntPtr GetInterruptStubAddress();
 
         /// <summary>
-        /// Carga la IDT en el registro IDTR
+        /// Loads the IDT into the IDTR register
         /// </summary>
         [DllImport("*", EntryPoint = "_LoadIDT")]
         private static extern void LoadIDT(IDTPointer* idtPtr);

@@ -7,9 +7,8 @@ using Kernel.Memory;
 
 namespace Kernel.Threading
 {
-    /*
     /// <summary>
-    /// Estados posibles de un hilo
+    /// Possible thread states
     /// </summary>
     public enum ThreadState
     {
@@ -19,56 +18,52 @@ namespace Kernel.Threading
         Suspended,
         Terminated
     }
-    */
+
     /// <summary>
-    /// Clase que representa un hilo de ejecución
+    /// Class representing an execution thread
     /// </summary>
     public unsafe class Thread
     {
-        /*
-        // Tamaño predeterminado de la pila del hilo (8 KB)
+        // Default thread stack size (8 KB)
         private const int DEFAULT_STACK_SIZE = 8 * 1024;
 
-        // ID único del hilo
+        // Unique thread ID
         private int _id;
 
-        // Estado actual del hilo
+        // Current thread state
         private ThreadState _state;
 
-        // Nombre del hilo (opcional)
+        // Thread name (optional)
         private string _name;
 
-        // Indica si el hilo es un hilo de fondo
+        // Indicates if the thread is a background thread
         private bool _isBackground;
 
-        // Puntero a la pila del hilo
+        // Pointer to the thread stack
         private byte* _stackPointer;
 
-        // Tamaño de la pila
+        // Stack size
         private int _stackSize;
 
-        // Delegado que representa el método a ejecutar
+        // Delegate representing the method to execute
         private Action _threadStart;
 
-        // Pila de contexto para la ejecución
+        // Execution context stack
         private ThreadContext _context;
 
-        // Contador global de IDs de hilo
+        // Global thread ID counter
         private static int _nextThreadId = 1;
 
-        // Hilo actual en ejecución
+        // Currently executing thread
         private static Thread _currentThread;
 
-        // Mutex para operaciones relacionadas con hilos
-        private static object _threadLock = new object();
-
         /// <summary>
-        /// Estructura que almacena el contexto de ejecución de un hilo
+        /// Structure that stores a thread's execution context
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 16)]
         private struct ThreadContext
         {
-            // Registros de propósito general
+            // General purpose registers
             public ulong RAX;
             public ulong RBX;
             public ulong RCX;
@@ -85,26 +80,26 @@ namespace Kernel.Threading
             public ulong R13;
             public ulong R14;
             public ulong R15;
-            public ulong RIP;      // Puntero de instrucción
+            public ulong RIP;      // Instruction pointer
             public ulong RFLAGS;   // Flags
         }
-        
+
         /// <summary>
-        /// Crea un nuevo hilo para ejecutar el método especificado
+        /// Creates a new thread to execute the specified method
         /// </summary>
-        /// <param name="start">Método a ejecutar</param>
+        /// <param name="start">Method to execute</param>
         public Thread(Action start) : this(start, DEFAULT_STACK_SIZE)
         {
         }
 
         /// <summary>
-        /// Crea un nuevo hilo con el tamaño de pila especificado
+        /// Creates a new thread with the specified stack size
         /// </summary>
-        /// <param name="start">Método a ejecutar</param>
-        /// <param name="stackSize">Tamaño de la pila en bytes</param>
+        /// <param name="start">Method to execute</param>
+        /// <param name="stackSize">Stack size in bytes</param>
         public Thread(Action start, int stackSize)
         {
-            lock (_threadLock)
+            lock (null)
             {
                 _id = _nextThreadId++;
                 _context.RIP = (ulong)(delegate*<IntPtr, void>)&ThreadStartWrapper;
@@ -114,79 +109,86 @@ namespace Kernel.Threading
             {
                 ThrowHelpers.ArgumentNullException("start");
             }
+
             _threadStart = start;
             _stackSize = stackSize > 0 ? stackSize : DEFAULT_STACK_SIZE;
             _state = ThreadState.New;
             _name = "Thread-" + _id.ToString();
             _isBackground = false;
 
-            // Asignar memoria para la pila
+            // Allocate memory for the stack
             _stackPointer = (byte*)Allocator.malloc((nuint)_stackSize);
             if (_stackPointer == null)
             {
-                ThrowHelpers.OutOfMemoryException("No se pudo asignar memoria para la pila del hilo.");
+                ThrowHelpers.OutOfMemoryException("Could not allocate memory for thread stack.");
             }
 
-            // Inicializar el contexto del hilo
+            // Initialize thread context
             InitializeContext();
+
+            SerialDebug.Info("Thread created: " + _name);
         }
 
         /// <summary>
-        /// Inicializa el contexto de ejecución del hilo
+        /// Initializes the thread's execution context
         /// </summary>
         private void InitializeContext()
         {
-            // Limpiar el contexto
+            // Clear the context
             _context = new ThreadContext();
 
-            // Configurar puntero de pila (apunta al final de la pila - crece hacia abajo)
+            // Configure stack pointer (points to end of stack - grows downward)
             _context.RSP = (ulong)(_stackPointer + _stackSize - 8);
 
-            // Alinear la pila a 16 bytes (requerido por la ABI)
+            // Align stack to 16 bytes (required by ABI)
             _context.RSP &= ~15UL;
 
-            lock (_threadLock)
+            lock (null)
             {
                 _context.RIP = (ulong)(delegate*<IntPtr, void>)&ThreadStartWrapper;
             }
 
-            // Establecer flags iniciales (solo interrupciones habilitadas)
-            _context.RFLAGS = 0x200; // IF=1 (interrupciones habilitadas)
+            // Set initial flags (interrupts enabled only)
+            _context.RFLAGS = 0x200; // IF=1 (interrupts enabled)
 
-            // Parámetros para ThreadStartWrapper (this en RDI según la convención de llamada)
+            // Parameters for ThreadStartWrapper (this in RDI as per calling convention)
             _context.RDI = (ulong)GCHandle.ToIntPtr(GCHandle.Alloc(this));
         }
 
         /// <summary>
-        /// Función wrapper en ensamblador que prepara y ejecuta el método del hilo
+        /// Assembly wrapper function that prepares and executes the thread method
         /// </summary>
         [RuntimeExport("ThreadStartWrapper")]
         private static void ThreadStartWrapper(IntPtr threadHandle)
         {
-            // Recuperar el objeto Thread desde el handle
+            // Recover Thread object from handle
             GCHandle handle = GCHandle.FromIntPtr(threadHandle);
             Thread thread = (Thread)handle.Target;
             handle.Free();
 
-            // Establecer como hilo actual
+            // Set as current thread
             _currentThread = thread;
             thread._state = ThreadState.Running;
 
-            // Ejecutar el método del hilo
+            SerialDebug.Info("Thread started: " + thread._name);
+
+            // Execute the thread method
             thread._threadStart();
 
-            // Marcar el hilo como terminado
+            // Mark thread as terminated
             thread._state = ThreadState.Terminated;
             _currentThread = null;
 
-            // Si hay un planificador, ceder el control
+            SerialDebug.Info("Thread terminated: " + thread._name);
+
+            // If there's a scheduler, yield control
             if (Scheduler.IsInitialized)
             {
                 Scheduler.Yield();
             }
             else
             {
-                // Si no hay planificador, simplemente detener el hilo
+                // If there's no scheduler, simply stop the thread
                 while (true)
                 {
                     Native.Halt();
@@ -195,73 +197,75 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Inicia la ejecución del hilo
+        /// Starts thread execution
         /// </summary>
         public void Start()
         {
             if (_state != ThreadState.New)
             {
-               ThrowHelpers.InvalidOperationException("El hilo ya ha sido iniciado.");
+                ThrowHelpers.InvalidOperationException("Thread has already been started.");
             }
 
-            // Registrar el hilo con el planificador
+            SerialDebug.Info("Starting thread: " + _name);
+
+            // Register the thread with the scheduler
             if (Scheduler.IsInitialized)
             {
                 Scheduler.AddThread(this);
             }
             else
             {
-                // Si no hay planificador, iniciar directamente el hilo
+                // If there's no scheduler, start the thread directly
                 _state = ThreadState.Running;
                 SwitchToThread();
             }
         }
 
         /// <summary>
-        /// Cambia el contexto al de este hilo
+        /// Switches context to this thread
         /// </summary>
         internal void SwitchToThread()
         {
-            // Guardar el contexto actual si hay un hilo en ejecución
+            // Save current context if there's a thread running
             Thread current = _currentThread;
             if (current != null && current != this)
             {
                 SaveContext(current);
             }
 
-            // Establecer como hilo actual
+            // Set as current thread
             _currentThread = this;
 
-            // Restaurar contexto y cambiar a este hilo
+            // Restore context and switch to this thread
             RestoreContext(this);
         }
 
         /// <summary>
-        /// Guarda el contexto de un hilo
+        /// Saves a thread's context
         /// </summary>
         [DllImport("*", EntryPoint = "_SaveThreadContext")]
         private static extern void SaveContext(Thread thread);
 
         /// <summary>
-        /// Restaura el contexto de un hilo
+        /// Restores a thread's context
         /// </summary>
         [DllImport("*", EntryPoint = "_RestoreThreadContext")]
         private static extern void RestoreContext(Thread thread);
 
         /// <summary>
-        /// Suspende la ejecución del hilo actual durante el tiempo especificado
+        /// Suspends execution of the current thread for the specified time
         /// </summary>
-        /// <param name="milliseconds">Tiempo de espera en milisegundos</param>
+        /// <param name="milliseconds">Wait time in milliseconds</param>
         public static void Sleep(int milliseconds)
         {
             if (Scheduler.IsInitialized)
             {
-                // Usar el planificador para la espera
+                // Use the scheduler for waiting
                 Scheduler.Sleep(milliseconds);
             }
             else
             {
-                // Espera simple (aproximada)
+                // Simple wait (approximate)
                 for (int i = 0; i < milliseconds * 10000; i++)
                 {
                     Native.Pause();
@@ -270,7 +274,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Cede la ejecución a otro hilo
+        /// Yields execution to another thread
         /// </summary>
         public static void Yield()
         {
@@ -280,23 +284,23 @@ namespace Kernel.Threading
             }
             else
             {
-                // Si no hay planificador, una pequeña pausa
+                // If there's no scheduler, a small pause
                 Native.Pause();
             }
         }
 
         /// <summary>
-        /// Espera a que el hilo termine
+        /// Waits for the thread to terminate
         /// </summary>
         public void Join()
         {
-            // No puede unirse a sí mismo
+            // Cannot join itself
             if (this == _currentThread)
             {
-                ThrowHelpers.InvalidOperationException("Un hilo no puede unirse a sí mismo.");
+                ThrowHelpers.InvalidOperationException("A thread cannot join itself.");
             }
 
-            // Esperar hasta que el hilo termine
+            // Wait until the thread terminates
             while (_state != ThreadState.Terminated)
             {
                 Yield();
@@ -304,7 +308,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Libera los recursos utilizados por el hilo
+        /// Releases resources used by the thread
         /// </summary>
         public override void Dispose()
         {
@@ -318,16 +322,16 @@ namespace Kernel.Threading
 
         public void Suspend()
         {
-            
+            // To be implemented
         }
 
         public void Resume()
         {
-          
+            // To be implemented
         }
 
         /// <summary>
-        /// Obtiene o establece el nombre del hilo
+        /// Gets or sets the thread name
         /// </summary>
         public string Name
         {
@@ -336,7 +340,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el ID del hilo
+        /// Gets the thread ID
         /// </summary>
         public int Id
         {
@@ -344,7 +348,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el estado actual del hilo
+        /// Gets the current thread state
         /// </summary>
         public ThreadState State
         {
@@ -352,7 +356,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene o establece si el hilo es un hilo de fondo
+        /// Gets or sets whether the thread is a background thread
         /// </summary>
         public bool IsBackground
         {
@@ -361,7 +365,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Indica si el hilo está vivo (en ejecución o esperando)
+        /// Indicates if the thread is alive (running or waiting)
         /// </summary>
         public bool IsAlive
         {
@@ -369,7 +373,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene el hilo actual
+        /// Gets the current thread
         /// </summary>
         public static Thread CurrentThread
         {
@@ -377,7 +381,7 @@ namespace Kernel.Threading
         }
 
         /// <summary>
-        /// Obtiene dirección del contexto para el cambio de contexto
+        /// Gets context address for context switching
         /// </summary>
         internal IntPtr ContextPointer
         {
@@ -388,6 +392,6 @@ namespace Kernel.Threading
                     return (IntPtr)contextPtr;
                 }
             }
-        }*/
+        }
     }
 }

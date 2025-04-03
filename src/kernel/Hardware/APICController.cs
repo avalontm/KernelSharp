@@ -1,7 +1,7 @@
 ﻿using Kernel.Diagnostics;
+using Kernel.System;
+using Kernel.Threading;
 using System;
-using System.Runtime;
-using System.Runtime.InteropServices;
 
 namespace Kernel.Hardware
 {
@@ -63,14 +63,14 @@ namespace Kernel.Hardware
             if (_initialized)
                 return true;
 
-            Console.WriteLine("Inicializando controlador APIC...");
+            SerialDebug.Info("Inicializando controlador APIC...");
 
             // Obtener la dirección del APIC Local desde ACPI
             ulong apicAddr = ACPIManager.GetLocalApicAddress();
-
+  
             if (apicAddr == 0)
             {
-                Console.WriteLine("No se pudo obtener la dirección del APIC Local desde ACPI.");
+                SerialDebug.Info("No se pudo obtener la dirección del APIC Local desde ACPI.");
                 return false;
             }
 
@@ -81,14 +81,37 @@ namespace Kernel.Hardware
             _apicId = (byte)(ReadAPICRegister(APIC_ID_REGISTER) >> 24);
             _apicVersion = (byte)(ReadAPICRegister(APIC_VERSION_REGISTER) & 0xFF);
 
-            Console.WriteLine($"APIC Local ID: {_apicId.ToString()}, Versión: {_apicVersion.ToString()}");
+            SerialDebug.Info($"APIC Local ID: {_apicId.ToString()}, Versión: {_apicVersion.ToString()}");
 
             // Configurar el APIC
             ConfigureAPIC();
-
+            InitializeSystemTimer();
             _initialized = true;
-            Console.WriteLine("Controlador APIC inicializado correctamente.");
+            SerialDebug.Info("Controlador APIC inicializado correctamente.");
             return true;
+        }
+
+        // In your kernel initialization code, after APIC is initialized
+        public static void InitializeSystemTimer()
+        {
+            SerialDebug.Info("Calibrating APIC timer...");
+
+            // Calibrate the timer to find how many ticks represent 10 milliseconds
+            uint ticksPer10ms = CalibrateTimer(10);
+
+            // Calculate ticks per millisecond
+            uint ticksPerMs = ticksPer10ms / 10;
+
+            SerialDebug.Info($"APIC Timer calibration: {ticksPerMs} ticks per millisecond");
+
+            // Configure the timer to fire an interrupt (e.g., 0x20) every 10ms
+            byte timerInterruptVector = 0x20;
+            uint timerInterval = ticksPer10ms;
+
+            // Set up the timer in periodic mode
+            ConfigureTimer(timerInterruptVector, timerInterval, true);
+
+            SerialDebug.Info("APIC Timer configured for 10ms intervals");
         }
 
         /// <summary>
@@ -284,14 +307,38 @@ namespace Kernel.Hardware
         /// <returns>Valor de cuenta para el tiempo objetivo</returns>
         public static uint CalibrateTimer(uint msTarget)
         {
-            // Este método es aproximado y requiere un temporizador externo preciso
-            // En un kernel real, podría usar el PIT (Programmable Interval Timer) para calibración
+            // Disable timer while we calibrate
+            WriteAPICRegister(APIC_LVT_TIMER, 0x10000);
 
-            // Por ahora, asumimos un valor aproximado basado en experimentación
-            // En un sistema real, esto sería calibrado
+            // Set divide value
+            WriteAPICRegister(APIC_TIMER_DIVIDE_CONFIG, 0x3); // Divide by 16
 
-            // Por ejemplo, si sabemos que 1,000,000 ticks es aproximadamente 10 ms en nuestro hardware
-            return msTarget * 100000;
+            // Start with maximum count
+            WriteAPICRegister(APIC_TIMER_INITIAL_COUNT, 0xFFFFFFFF);
+
+            // Wait for a fixed amount of time (e.g., using PITController)
+            DelayUsingPITController(msTarget);
+
+            // Read current count
+            uint remaining = ReadAPICRegister(APIC_TIMER_CURRENT_COUNT);
+
+            // Calculate ticks elapsed
+            uint elapsed = 0xFFFFFFFF - remaining;
+
+            // Stop timer
+            WriteAPICRegister(APIC_TIMER_INITIAL_COUNT, 0);
+
+            return elapsed;
+        }
+
+        private static void DelayUsingPITController(uint ms)
+        {
+            // In a real implementation, you would use the PITController as a reference timer
+            // For now, we'll use a conservative busy-wait
+            for (uint i = 0; i < ms * 1000000; i++)
+            {
+                Native.Pause();
+            }
         }
 
         /// <summary>
@@ -315,7 +362,7 @@ namespace Kernel.Hardware
 
                 if (apicId != _apicId) // Asegurar que no enviamos IPIs a nosotros mismos
                 {
-                    Console.WriteLine($"Iniciando procesador con APIC ID {apicId.ToString()}...");
+                    SerialDebug.Info($"Iniciando procesador con APIC ID {apicId.ToString()}...");
 
                     // Enviar INIT IPI
                     SendInitIPI(apicId);
@@ -338,17 +385,75 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Espera simple (aproximada)
+        /// Performs a timed wait using the system timer
         /// </summary>
-        /// <param name="ms">Milisegundos a esperar</param>
+        /// <param name="ms">Milliseconds to wait</param>
+        /// <summary>
+        /// Performs a timed wait using the best available time source
+        /// </summary>
+        /// <param name="ms">Milliseconds to wait</param>
         private static void Wait(int ms)
         {
-            // En un sistema real, usaríamos un temporizador preciso
-            // Esta es una aproximación muy burda
-            for (int i = 0; i < ms * 1000000; i++)
+            // If timer subsystem is initialized, use it (most accurate)
+            if (Timer.IsInitialized)
             {
-                Native.Pause();
+                ulong startTick = Timer.GetTickCount();
+                ulong endTick = startTick + (ulong)ms;
+
+                while (Timer.GetTickCount() < endTick)
+                {
+                    // If scheduler is available, yield to other threads
+                    if (Scheduler.IsInitialized)
+                    {
+                        Thread.Yield();
+                    }
+                    else
+                    {
+                        // Otherwise, pause to save power
+                        Native.Pause();
+                    }
+                }
             }
+            // If ACPI timer is available, use that
+            else if (ACPIManager._initialized && ACPIManager.GetPMTimerAddress() != 0)
+            {
+                // ACPI PM timer is typically a 24/32-bit timer running at 3.579545 MHz
+                ulong start = ReadPMTimer();
+                ulong end = start + ((ulong)ms * 3580) / 1000; // Convert ms to timer ticks
+
+                while (ReadPMTimer() < end)
+                {
+                    Native.Pause();
+                }
+            }
+            // If PITController (Programmable Interval Timer) is initialized, use that
+            else if (PITController.IsInitialized)
+            {
+                ulong currentTick = PITController.Ticks;
+                ulong targetTick = currentTick + ((ulong)ms * PITController.TicksPerMS);
+
+                while (PITController.Ticks < targetTick)
+                {
+                    Native.Pause();
+                }
+            }
+            // Last resort: use busy waiting with CPU pauses
+            else
+            {
+                // Very crude approximation - depends heavily on CPU speed
+                // This should be calibrated if possible
+                for (int i = 0; i < ms * 1000000; i++)
+                {
+                    Native.Pause();
+                }
+            }
+        }
+
+        // Helper method to read the ACPI PM Timer
+        private static ulong ReadPMTimer()
+        {
+            // Read from the PM Timer register
+            return (ulong)Native.InDWord((ushort)ACPIManager.GetPMTimerAddress());
         }
     }
 }

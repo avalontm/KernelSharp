@@ -1,5 +1,4 @@
-﻿using Internal.Runtime.CompilerHelpers;
-using Kernel.Diagnostics;
+﻿using Kernel.Diagnostics;
 using System;
 using System.Runtime;
 using System.Runtime.InteropServices;
@@ -7,12 +6,12 @@ using System.Runtime.InteropServices;
 namespace Kernel.Memory
 {
     /// <summary>
-    /// Estructura que representa el estado de la CPU durante una interrupción
+    /// Structure representing CPU state during an interrupt
     /// </summary>
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct InterruptFrame
     {
-        // Registros guardados por la rutina de interrupción
+        // Registers saved by the interrupt routine
         public ulong RDI;
         public ulong RSI;
         public ulong RBP;
@@ -22,56 +21,63 @@ namespace Kernel.Memory
         public ulong RCX;
         public ulong RAX;
 
-        // Información de la interrupción
+        // Interrupt information
         public ulong InterruptNumber;
         public ulong ErrorCode;
 
-        // Registros guardados automáticamente por la CPU
+        // Registers automatically saved by the CPU
         public ulong RIP;
         public ulong CS;
         public ulong RFLAGS;
-        public ulong UserRSP;  // Solo en cambios de privilegio
-        public ulong SS;       // Solo en cambios de privilegio
+        public ulong UserRSP;  // Only on privilege changes
+        public ulong SS;       // Only on privilege changes
     }
 
     /// <summary>
-    /// Gestor básico de interrupciones del sistema
+    /// Basic system interrupt manager
     /// </summary>
     public static unsafe class InterruptManager
     {
-        // Tabla de punteros a manejadores de interrupciones
+        // Table of pointers to interrupt handlers
         public static IntPtr* _handlerTable;
-
+        internal static bool _initialized;
 
         /// <summary>
-        /// Inicializa el gestor de interrupciones
+        /// Initializes the interrupt manager
         /// </summary>
         public static void Initialize()
         {
-            Console.WriteLine("Inicializando gestor de interrupciones...");
+            if(_initialized)
+            {
+                return;
+            }
 
-            // Asignar memoria para la tabla de manejadores (256 posibles interrupciones)
+            SerialDebug.Info("Initializing interrupt manager...");
+
+            // Allocate memory for the handler table (256 possible interrupts)
             _handlerTable = (IntPtr*)Allocator.malloc((nuint)(sizeof(IntPtr) * 256));
 
-            // Inicializar todos los punteros a cero
+            // Initialize all pointers to zero
             for (int i = 0; i < 256; i++)
             {
                 _handlerTable[i] = IntPtr.Zero;
+
             }
 
-            // Registrar manejadores para excepciones importantes
-            RegisterHandler(0, &DivideByZeroHandler);      // División por cero
-            RegisterHandler(6, &InvalidOpcodeHandler);     // Código de operación inválido
-            RegisterHandler(8, &DoubleFaultHandler);       // Doble falta
-            RegisterHandler(13, &GeneralProtectionHandler); // Protección general
-            RegisterHandler(14, &PageFaultHandler);        // Falta de página
+            // Register handlers for important exceptions
+            RegisterHandler(0, &DivideByZeroHandler);      // Divide by zero
+            RegisterHandler(6, &InvalidOpcodeHandler);     // Invalid opcode
+            RegisterHandler(8, &DoubleFaultHandler);       // Double fault
+            RegisterHandler(13, &GeneralProtectionHandler); // General protection
+            RegisterHandler(14, &PageFaultHandler);        // Page fault
 
-            // Informar que el gestor está inicializado
-            Console.WriteLine("Gestor de interrupciones inicializado correctamente");
+            _initialized = true;
+            // Report that the manager is initialized
+            SerialDebug.Info("Interrupt manager initialized successfully");
         }
 
         /// <summary>
-        /// Registra un manejador para un número de interrupción específico
+        /// Registers a handler for a specific interrupt number
         /// </summary>
         private static void RegisterHandler(int interruptNumber, delegate*<InterruptFrame*, void> handler)
         {
@@ -79,41 +85,41 @@ namespace Kernel.Memory
             {
                 _handlerTable[interruptNumber] = (IntPtr)handler;
 
-                // Llamar a la función externa que establece el manejador en el IDT
+                // Call the external function that sets the handler in the IDT
                 WriteInterruptHandler(interruptNumber, (IntPtr)handler);
             }
         }
 
         /// <summary>
-        /// Punto de entrada principal para todas las interrupciones
-        /// Esta función es llamada desde el código de ensamblador
+        /// Main entry point for all interrupts
+        /// This function is called from assembly code
         /// </summary>
         [RuntimeExport("HandleInterrupt")]
         public static void HandleInterrupt(InterruptFrame* frame)
         {
             int interruptNumber = (int)frame->InterruptNumber;
 
-            // Manejar la interrupción según su número
+            // Handle the interrupt based on its number
             if (interruptNumber >= 0 && interruptNumber < 256)
             {
-                // Verificar si hay un manejador registrado
+                // Check if there is a registered handler
                 IntPtr handlerPtr = _handlerTable[interruptNumber];
 
                 if (handlerPtr != IntPtr.Zero)
                 {
-                    // Llamar al manejador específico
+                    // Call the specific handler
                     ((delegate*<InterruptFrame*, void>)handlerPtr.ToPointer())(frame);
                 }
                 else
                 {
-                    // Usar el manejador por defecto
+                    // Use the default handler
                     DefaultHandler(frame);
                 }
             }
         }
 
         /// <summary>
-        /// Función externa para registrar un manejador en la tabla de descriptores de interrupciones
+        /// External function to register a handler in the interrupt descriptor table
         /// </summary>
         [RuntimeExport("_WriteInterruptHandler")]
         public static void WriteInterruptHandler(int index, IntPtr handler)
@@ -125,141 +131,123 @@ namespace Kernel.Memory
         }
 
         /// <summary>
-        /// Manejador por defecto para interrupciones sin manejador específico
+        /// Default handler for interrupts without a specific handler
         /// </summary>
         public static void DefaultHandler(InterruptFrame* frame)
         {
-            // Solo mostrar en consola si es una interrupción inesperada (no de hardware normal)
+            // Only display on console if it's an unexpected interrupt (not normal hardware)
             if (frame->InterruptNumber < 32)
             {
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Interrupción no manejada: 0x{frame->InterruptNumber.ToStringHex()} en dirección 0x{frame->RIP.ToStringHex()}");
+                Console.WriteLine($"Unhandled interrupt: 0x{frame->InterruptNumber.ToStringHex()} at address 0x{frame->RIP.ToStringHex()}");
                 Console.ForegroundColor = ConsoleColor.White;
             }
         }
 
         /// <summary>
-        /// Manejador para división por cero (INT 0)
+        /// Handler for divide by zero (INT 0)
         /// </summary>
         public static void DivideByZeroHandler(InterruptFrame* frame)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: División por cero en dirección 0x{frame->RIP.ToStringHex()}");
+            Console.WriteLine($"ERROR: Divide by zero at address 0x{frame->RIP.ToStringHex()}");
             Console.ForegroundColor = ConsoleColor.White;
             HaltSystem();
         }
 
         /// <summary>
-        /// Manejador para código de operación inválido (INT 6)
+        /// Handler for invalid opcode (INT 6)
         /// </summary>
         public static void InvalidOpcodeHandler(InterruptFrame* frame)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: Código de operación inválido en dirección 0x{frame->RIP.ToStringHex()}");
+            Console.WriteLine($"ERROR: Invalid opcode at address 0x{frame->RIP.ToStringHex()}");
             Console.ForegroundColor = ConsoleColor.White;
             HaltSystem();
         }
 
         /// <summary>
-        /// Manejador para doble falta (INT 8)
+        /// Handler for double fault (INT 8)
         /// </summary>
         public static void DoubleFaultHandler(InterruptFrame* frame)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("ERROR CRÍTICO: Doble falta. El sistema se detendrá.");
+            Console.WriteLine("CRITICAL ERROR: Double fault. System will halt.");
             Console.ForegroundColor = ConsoleColor.White;
             HaltSystem();
         }
 
         /// <summary>
-        /// Manejador para falta de protección general (INT 13)
+        /// Handler for general protection fault (INT 13)
         /// </summary>
         public static void GeneralProtectionHandler(InterruptFrame* frame)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: Falta de protección general en dirección 0x{frame->RIP.ToStringHex()}");
-            Console.WriteLine($"Código de error: 0x{frame->ErrorCode.ToStringHex()}");
+            Console.WriteLine($"ERROR: General protection fault at address 0x{frame->RIP.ToStringHex()}");
+            Console.WriteLine($"Error code: 0x{frame->ErrorCode.ToStringHex()}");
             Console.ForegroundColor = ConsoleColor.White;
             HaltSystem();
         }
 
         /// <summary>
-        /// Manejador para falta de página (INT 14)
+        /// Handler for page fault (INT 14)
         /// </summary>
         public static void PageFaultHandler(InterruptFrame* frame)
         {
-            // Leer el registro CR2 que contiene la dirección que causó la falta
-            ulong faultAddress = ReadCR2();
+            // Read the CR2 register that contains the address that caused the fault
+            ulong faultAddress = Native.ReadCR2();
 
-            // Análisis del código de error
-            bool present = (frame->ErrorCode & 1) != 0;      // Página presente
-            bool write = (frame->ErrorCode & 2) != 0;        // Operación de escritura
-            bool user = (frame->ErrorCode & 4) != 0;         // Modo usuario
-            bool reserved = (frame->ErrorCode & 8) != 0;     // Bits reservados
-            bool instruction = (frame->ErrorCode & 16) != 0; // Búsqueda de instrucción
+            // Error code analysis
+            bool present = (frame->ErrorCode & 1) != 0;      // Page present
+            bool write = (frame->ErrorCode & 2) != 0;        // Write operation
+            bool user = (frame->ErrorCode & 4) != 0;         // User mode
+            bool reserved = (frame->ErrorCode & 8) != 0;     // Reserved bits
+            bool instruction = (frame->ErrorCode & 16) != 0; // Instruction fetch
 
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: Falta de página en dirección 0x{faultAddress.ToStringHex()}");
-            //Console.WriteLine($"Tipo: {(present ? "Violación de protección" : "Página no presente")}");
-            //Console.WriteLine($"Operación: {(write ? "Escritura" : "Lectura")}");
-            //Console.WriteLine($"Contexto: {(user ? "Usuario" : "Kernel")}");
-            if (reserved) Console.WriteLine("Error de bits reservados");
-            if (instruction) Console.WriteLine("Causado por búsqueda de instrucción");
+            Console.WriteLine($"ERROR: Page fault at address 0x{faultAddress.ToStringHex()}");
+            Console.WriteLine($"Type: {(present ? "Protection violation" : "Page not present")}");
+            Console.WriteLine($"Operation: {(write ? "Write" : "Read")}");
+            Console.WriteLine($"Context: {(user ? "User" : "Kernel")}");
+            if (reserved) Console.WriteLine("Reserved bits error");
+            if (instruction) Console.WriteLine("Caused by instruction fetch");
             Console.ForegroundColor = ConsoleColor.White;
 
             HaltSystem();
         }
 
         /// <summary>
-        /// Lee el valor del registro CR2 (dirección que causó la falta de página)
-        /// </summary>
-        [DllImport("*", EntryPoint = "_ReadCR2")]
-        private static extern ulong ReadCR2();
-
-        /// <summary>
-        /// Detiene el sistema después de una excepción crítica
+        /// Halts the system after a critical exception
         /// </summary>
         private static void HaltSystem()
         {
-            // Deshabilitar interrupciones
-            DisableInterrupts();
+            // Disable interrupts
+            Native.CLI();
 
-            Console.WriteLine("Sistema detenido");
+            Console.WriteLine("System halted");
 
-            // Bucle infinito
+            // Infinite loop
             while (true)
             {
-                // Pausar la CPU para ahorrar energía
-                Halt();
+                // Pause the CPU to save power
+                Native.Halt();
             }
         }
 
         /// <summary>
-        /// Deshabilita las interrupciones
+        /// Sends an end of interrupt command to the interrupt controller
         /// </summary>
-        [DllImport("*", EntryPoint = "_DisableInterrupts")]
-        private static extern void DisableInterrupts();
-
-        /// <summary>
-        /// Pausa la CPU (instrucción HLT)
-        /// </summary>
-        [DllImport("*", EntryPoint = "_Hlt")]
-        private static extern void Halt();
-
-        /// <summary>
-        /// Envía un comando de fin de interrupción al controlador de interrupciones
-        /// </summary>
-        /// <param name="irq">Número de IRQ</param>
+        /// <param name="irq">IRQ number</param>
         public static void SendEndOfInterrupt(byte irq)
         {
-            // Para IRQs 8-15, enviar EOI también al PIC esclavo
+            // For IRQs 8-15, send EOI also to the slave PIC
             if (irq >= 8)
             {
-                // Enviar EOI al PIC esclavo (puerto 0xA0)
+                // Send EOI to slave PIC (port 0xA0)
                 Native.OutByte(0xA0, 0x20);
             }
 
-            // Enviar EOI al PIC maestro (puerto 0x20)
+            // Send EOI to master PIC (port 0x20)
             Native.OutByte(0x20, 0x20);
         }
     }

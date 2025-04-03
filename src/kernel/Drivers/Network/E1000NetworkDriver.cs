@@ -32,7 +32,7 @@ namespace Kernel.Drivers.Network
         /// <summary>
         /// Inicialización del driver de red
         /// </summary>
-        protected override void OnInitialize()
+        protected override bool OnInitialize()
         {
             SerialDebug.Info($"Initializing E1000 Network Driver for device {_pciDevice}");
 
@@ -47,6 +47,7 @@ namespace Kernel.Drivers.Network
             SetupInterrupts();
 
             SerialDebug.Info("E1000 Network Driver initialized successfully");
+            return true;
         }
 
         /// <summary>
