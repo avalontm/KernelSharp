@@ -175,5 +175,40 @@ namespace Kernel
         [DllImport("*", EntryPoint = "_SetEFlags")]
         public static extern void SetEFlags(ulong flags);
 
+        /// <summary>
+        /// Ejecuta la instrucción PAUSE para reducir el consumo en esperas activas
+        /// </summary>
+        [DllImport("*", EntryPoint = "_Pause")]
+        public static extern void Pause();
+
+        /// <summary>
+        /// Lee un registro específico del Model Specific Register (MSR)
+        /// </summary>
+        /// <param name="msr">Registro MSR a leer</param>
+        /// <returns>Valor del registro</returns>
+        [DllImport("*", EntryPoint = "_ReadMSR")]
+        public static extern ulong ReadMSR(uint msr);
+
+        /// <summary>
+        /// Escribe un valor en un registro específico del Model Specific Register (MSR)
+        /// </summary>
+        /// <param name="msr">Registro MSR a escribir</param>
+        /// <param name="value">Valor a escribir</param>
+        [DllImport("*", EntryPoint = "_WriteMSR")]
+        public static extern void WriteMSR(uint msr, ulong value);
+
+        /// <summary>
+        /// Obtiene el ID del APIC Local usando la instrucción CPUID
+        /// </summary>
+        /// <returns>ID del APIC Local</returns>
+        [DllImport("*", EntryPoint = "_GetAPICID")]
+        public static extern byte GetAPICID();
+
+        /// <summary>
+        /// Envía un comando al puerto de comando del controlador de teclado
+        /// </summary>
+        /// <param name="command">Comando a enviar</param>
+        [DllImport("*", EntryPoint = "_KBControllerSendCommand")]
+        public static extern void KBControllerSendCommand(byte command);
     }
 }

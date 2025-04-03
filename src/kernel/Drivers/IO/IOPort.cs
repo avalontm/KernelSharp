@@ -45,16 +45,16 @@ namespace Kernel.Drivers.IO
         /// </summary>
         /// <param name="port">Número de puerto (0-65535)</param>
         /// <param name="value">Valor a escribir (32 bits)</param>
-        [DllImport("*", EntryPoint = "_OutDWord")]
-        public static extern void OutDWord(ushort port, uint value);
+        [DllImport("*", EntryPoint = "_OutDword")]
+        public static extern void OutDword(ushort port, uint value);
 
         /// <summary>
         /// Lee una doble palabra (4 bytes) desde un puerto de entrada
         /// </summary>
         /// <param name="port">Número de puerto (0-65535)</param>
         /// <returns>Valor leído (32 bits)</returns>
-        [DllImport("*", EntryPoint = "_InDWord")]
-        public static extern uint InDWord(ushort port);
+        [DllImport("*", EntryPoint = "_InDword")]
+        public static extern uint InDword(ushort port);
 
         /// <summary>
         /// Espera un breve periodo (útil entre operaciones de E/S)

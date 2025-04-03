@@ -81,5 +81,10 @@ namespace System
         {
             return (void*)this;
         }
+
+        internal long ToInt64()
+        {
+            return (long)this;
+        }
     }
 }

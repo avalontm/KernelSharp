@@ -509,8 +509,8 @@ namespace System
         /// </summary>
         public static string Format(string format, object arg0, object arg1)
         {
-            string result = format.Replace("{0}", arg0?.ToString() ?? "");
-            return result.Replace("{1}", arg1?.ToString() ?? "");
+            string result = format.Replace("{0}", arg0.ToString() ?? "");
+            return result.Replace("{1}", arg1.ToString() ?? "");
         }
 
         /// <summary>
@@ -518,9 +518,9 @@ namespace System
         /// </summary>
         public static string Format(string format, object arg0, object arg1, object arg2)
         {
-            string result = format.Replace("{0}", arg0?.ToString() ?? "");
-            result = result.Replace("{1}", arg1?.ToString() ?? "");
-            return result.Replace("{2}", arg2?.ToString() ?? "");
+            string result = format.Replace("{0}", arg0.ToString() ?? "");
+            result = result.Replace("{1}", arg1.ToString() ?? "");
+            return result.Replace("{2}", arg2.ToString() ?? "");
         }
 
         /// <summary>
@@ -529,7 +529,7 @@ namespace System
         public static string Format(string format, object arg0)
         {
             // Implementación muy básica, solo reemplaza {0}
-            return format.Replace("{0}", arg0?.ToString() ?? "");
+            return format.Replace("{0}", arg0.ToString() ?? "");
         }
 
 
@@ -831,7 +831,7 @@ namespace System
                 newSize = minSize;
 
             char[] newBuffer = new char[newSize];
-            Array.Copy(buffer, ref newBuffer, buffer.Length);
+            Array.Copy(buffer, newBuffer, buffer.Length);
             buffer = newBuffer;
         }
 

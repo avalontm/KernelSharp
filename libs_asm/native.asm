@@ -2,8 +2,62 @@
 section .text
 global _Stosb
 global _Movsb
-global _Memcpy
-global _Memset
+global _Pause
+global _ReadMSR
+global _WriteMSR
+global _GetAPICID
+global _KBControllerSendCommand
+
+; Lee un registro MSR
+; ulong ReadMSR(uint msr)
+_ReadMSR:
+    mov ecx, ecx         ; MSR a leer está en ECX (primer parámetro)
+    rdmsr                ; Leer MSR (resultado en EDX:EAX)
+    shl rdx, 32          ; Desplazar EDX para formar parte alta de 64 bits
+    or rax, rdx          ; Combinar los 64 bits en RAX para retorno
+    ret
+
+; Escribe un valor en un registro MSR
+; void WriteMSR(uint msr, ulong value)
+_WriteMSR:
+    mov ecx, ecx         ; MSR a escribir está en ECX (primer parámetro)
+    mov rax, rdx         ; Valor a escribir está en RDX (segundo parámetro)
+    mov rdx, rax         ; Separar los 64 bits en EDX:EAX
+    shr rdx, 32          ; Parte alta en EDX
+    wrmsr                ; Escribir en MSR
+    ret
+
+; Obtiene el ID del APIC Local a través de CPUID
+; byte GetAPICID()
+_GetAPICID:
+    mov eax, 1           ; Función CPUID 1 (información del procesador)
+    cpuid                ; Ejecutar CPUID
+    shr ebx, 24          ; El ID APIC está en los bits 24-31 de EBX
+    mov al, bl           ; Mover el resultado a AL para retorno
+    ret
+
+; Envía un comando al controlador de teclado
+; void KBControllerSendCommand(byte command)
+_KBControllerSendCommand:
+    mov al, cl           ; Comando está en CL (primer parámetro)
+    
+    ; Esperar a que el búfer de entrada esté vacío
+.wait_input_buffer:
+    in al, 64h           ; Leer estado del controlador KB
+    test al, 2           ; Probar bit 1 (búfer de entrada lleno)
+    jnz .wait_input_buffer
+    
+    ; Enviar comando
+    mov al, cl           ; Restaurar el comando
+    out 64h, al          ; Enviar al puerto de comando (0x64)
+    ret
+
+; Instrucción PAUSE para esperas activas eficientes
+; void Pause()
+_Pause:
+    pause                ; Instrucción PAUSE (ahorra energía en esperas activas)
+    ret
+
 
 ; Función para obtener el valor del registro CR2 (dirección que causó la falta de página)
 global _GetCR2
@@ -58,62 +112,4 @@ _Movsb:
     inc rsi            ; Incrementar RSI (avanzar en la memoria de origen)
     inc rdi            ; Incrementar RDI (avanzar en la memoria de destino)
 
-    ret
-
-; void* _memcpy(void* dest, const void* src, size_t count)
-_Memcpy:
-    push rbx
-    push rbp
-    push rsi
-    push rdi
-
-    mov rdi, rdi      ; dest
-    mov rsi, rsi      ; src
-    mov rcx, rdx      ; count
-    
-    cld                ; Asegurar que la dirección sea incremental (DF=0)
-    
-    ; Guardar el valor original de dest para retornarlo
-    mov rax, rdi
-    
-    ; Si count es 0, terminar
-    test rcx, rcx
-    jz .done
-    
-    ; Copiar byte por byte
-    rep movsb
-    
-.done:
-    pop rdi
-    pop rsi
-    pop rbp
-    pop rbx
-    ret
-
-; void* _memset(void* dest, int value, size_t count)
-_Memset:
-    push rbx
-    push rbp
-    push rdi
-
-    mov rdi, rdi      ; dest
-    mov al, dl        ; value (solo usamos un byte)
-    mov rcx, rdx      ; count
-    
-    cld                ; Asegurar que la dirección sea incremental (DF=0)
-    
-    ; Guardar el valor original de dest para retornarlo
-    mov rax, rdi
-    
-    ; Si count es 0, terminar
-    test rcx, rcx
-    jz .done
-    
-    ; Llenar byte por byte
-    rep stosb
-    
-.done:
-    pop rdi
-    pop rbp
-    pop rbx
     ret

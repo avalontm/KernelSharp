@@ -38,10 +38,9 @@ namespace Internal.Runtime.CompilerHelpers
         /// Standard version without register-specific optimizations.
         /// </summary>
         [RuntimeExport("RhpAssignRef")]
-        public static void RhpAssignRef(ref object destination, object value)
+        static unsafe void RhpAssignRef(void** address, void* obj)
         {
-            // Simple implementation: just assign the reference
-            destination = value;
+            *address = obj;
         }
 
         /// <summary>
@@ -49,7 +48,7 @@ namespace Internal.Runtime.CompilerHelpers
         /// Variant used for assignment within arithmetic operations.
         /// </summary>
         [RuntimeExport("RhpCheckedAssignRefArithmetic")]
-        public static void RhpCheckedAssignRefArithmetic(ref object destination, object value)
+        public static void RhpCheckedAssignRefArithmetic(object destination, object value)
         {
             // Simple implementation: just assign the reference
             destination = value;
@@ -60,9 +59,9 @@ namespace Internal.Runtime.CompilerHelpers
         /// Used specifically for ByRef assignments.
         /// </summary>
         [RuntimeExport("RhpByRefAssignRef")]
-        public static void RhpByRefAssignRef(ref object destination, ref object source)
+        static unsafe void RhpByRefAssignRef(void** address, void* obj)
         {
-            destination = source;
+            *address = obj;
         }
     }
 }

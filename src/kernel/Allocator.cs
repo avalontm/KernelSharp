@@ -1,62 +1,63 @@
-﻿using Kernel;
+﻿using Internal.Runtime.CompilerHelpers;
+using Kernel;
 using System;
 using System.Runtime;
 
 /// <summary>
 /// Nifanfa's Super Fast Memory Allocation Lib
 /// </summary>
-abstract unsafe class Allocator
+internal static unsafe class Allocator
 {
     [RuntimeExport("_malloc")]
-    public static void* malloc(ulong size)
+    internal static void* malloc(ulong size)
     {
-        return (void*)Allocator.Allocate(size);
+        return (void*)Allocate(size);
     }
 
     [RuntimeExport("_free")]
-    public static void free(void* ptr)
+    internal static void free(void* ptr)
     {
-        Allocator.Free((System.IntPtr)ptr);
+        Free((IntPtr)ptr);
     }
 
     [RuntimeExport("_realloc")]
-    public static void* realloc(void* ptr, ulong size)
+    internal static void* realloc(void* ptr, ulong size)
     {
-        return (void*)Allocator.Reallocate((System.IntPtr)ptr, size);
+        return (void*)Reallocate((System.IntPtr)ptr, size);
     }
 
 
     [RuntimeExport("_calloc")]
-    public static void* calloc(ulong num, ulong size)
+    internal static void* calloc(ulong num, ulong size)
     {
-        void* ptr = (void*)Allocator.Allocate(num * size);
+        void* ptr = (void*)Allocate(num * size);
         Native.Stosb(ptr, 0, num * size);
         return ptr;
     }
 
     [RuntimeExport("_kmalloc")]
-    public static void* kmalloc(ulong size)
+    internal static void* kmalloc(ulong size)
     {
-        return (void*)Allocator.Allocate(size);
+        return (void*)Allocate(size);
     }
 
     [RuntimeExport("_kfree")]
-    public static void kfree(void* ptr)
+    internal static void kfree(void* ptr)
     {
-        Allocator.Free((System.IntPtr)ptr);
+        Free((IntPtr)ptr);
     }
 
     [RuntimeExport("_krealloc")]
-    public static void* krealloc(void* ptr, ulong size)
+    internal static void* krealloc(void* ptr, ulong size)
     {
-        return (void*)Allocator.Reallocate((System.IntPtr)ptr, size);
+        return (void*)Reallocate((IntPtr)ptr, size);
     }
 
 
     [RuntimeExport("kcalloc")]
-    public static void* kcalloc(ulong num, ulong size)
+    internal static void* kcalloc(ulong num, ulong size)
     {
-        void* ptr = (void*)Allocator.Allocate(num * size);
+        void* ptr = (void*)Allocate(num * size);
         Native.Stosb(ptr, 0, num * size);
         return ptr;
     }
@@ -66,7 +67,7 @@ abstract unsafe class Allocator
         Native.Stosb((void*)data, 0, size);
     }
 
-    private static long GetPageIndexStart(IntPtr ptr)
+    static long GetPageIndexStart(IntPtr ptr)
     {
         ulong p = (ulong)ptr;
         if (p < (ulong)_Info.Start) return -1;
@@ -105,7 +106,7 @@ abstract unsafe class Allocator
         }
     }
 
-    public static ulong MemoryInUse
+    internal static ulong MemoryInUse
     {
         get
         {
@@ -113,7 +114,7 @@ abstract unsafe class Allocator
         }
     }
 
-    public static ulong MemorySize
+    internal static ulong MemorySize
     {
         get
         {
@@ -121,25 +122,25 @@ abstract unsafe class Allocator
         }
     }
 
-    public const ulong PageSignature = 0x2E61666E6166696E;
+    internal const ulong PageSignature = 0x2E61666E6166696E;
 
     /*
      * NumPages = Memory Size / PageSize
      * This should be a const because there will be allocations during initializing modules 👇_Info
      */
-    public const int NumPages = 131072;
-    public const ulong PageSize = 4096;
+    internal const int NumPages = 131072;
+    internal const ulong PageSize = 4096;
 
-    public struct Info
+    internal struct Info
     {
         public IntPtr Start;
         public UInt64 PageInUse;
         public fixed ulong Pages[NumPages]; //Max 512MiB
     }
 
-    public static Info _Info;
+    internal static Info _Info;
 
-    public static void Initialize(IntPtr Start)
+    internal static void Initialize(IntPtr Start)
     {
         fixed (Info* pInfo = &_Info)
             Native.Stosb(pInfo, 0, (ulong)sizeof(Info));
@@ -152,7 +153,7 @@ abstract unsafe class Allocator
     /// </summary>
     /// <param name="size"></param>
     /// <returns></returns>
-    internal static unsafe IntPtr Allocate(ulong size)
+    static unsafe IntPtr Allocate(ulong size)
     {
         //You can use lock(null) in Moos
         lock (null)
@@ -189,7 +190,7 @@ abstract unsafe class Allocator
             }
             if (!found)
             {
-                Console.WriteLine("Memory leak");
+                ThrowHelpers.Panic("Memory leak");
                 return IntPtr.Zero;
             }
 
@@ -205,7 +206,7 @@ abstract unsafe class Allocator
         }
     }
 
-    public static IntPtr Reallocate(IntPtr intPtr, ulong size)
+    internal static IntPtr Reallocate(IntPtr intPtr, ulong size)
     {
         if (intPtr == IntPtr.Zero)
             return Allocate(size);

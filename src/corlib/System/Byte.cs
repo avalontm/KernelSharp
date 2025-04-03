@@ -56,8 +56,12 @@
 
         public override readonly unsafe string ToString()
         {
-            return ((ushort)this).ToString();
+            return ((ulong)this).ToString();
         }
 
+        public string ToString(string format)
+        {
+            return ((ulong)this).ToString(format);
+        }
     }
 }

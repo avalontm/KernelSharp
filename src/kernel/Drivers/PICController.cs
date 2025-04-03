@@ -1,44 +1,46 @@
 ﻿using Kernel.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace Kernel.Drivers
+namespace Kernel.Hardware
 {
     /// <summary>
-    /// Controlador para el Programmable Interrupt Controller (PIC 8259)
+    /// Controlador del PIC (Programmable Interrupt Controller) 8259A
     /// </summary>
     public static class PICController
     {
-        // Puertos del PIC maestro y esclavo
-        private const byte PIC1_COMMAND = 0x20;
-        private const byte PIC1_DATA = 0x21;
-        private const byte PIC2_COMMAND = 0xA0;
-        private const byte PIC2_DATA = 0xA1;
+        // Puertos de los PICs
+        private const byte PIC1_COMMAND = 0x20;    // PIC maestro: puerto de comandos
+        private const byte PIC1_DATA = 0x21;       // PIC maestro: puerto de datos
+        private const byte PIC2_COMMAND = 0xA0;    // PIC esclavo: puerto de comandos
+        private const byte PIC2_DATA = 0xA1;       // PIC esclavo: puerto de datos
 
         // Comandos PIC
-        private const byte ICW1_ICW4 = 0x01;      // Se requiere ICW4
-        private const byte ICW1_SINGLE = 0x02;    // Operación en modo único
+        private const byte ICW1_ICW4 = 0x01;      // ICW4 necesario
+        private const byte ICW1_SINGLE = 0x02;    // Modo simple
         private const byte ICW1_INTERVAL4 = 0x04; // Intervalo de llamada 4
-        private const byte ICW1_LEVEL = 0x08;     // Modo nivel
+        private const byte ICW1_LEVEL = 0x08;     // Modo disparado por nivel
         private const byte ICW1_INIT = 0x10;      // Inicialización
 
         private const byte ICW4_8086 = 0x01;      // Modo 8086/88
-        private const byte ICW4_AUTO = 0x02;      // Fin de interrupción automático
-        private const byte ICW4_BUF_SLAVE = 0x08; // Esclavo en modo buffer
-        private const byte ICW4_BUF_MASTER = 0x0C; // Maestro en modo buffer
-        private const byte ICW4_SFNM = 0x10;      // Modo fully nested especial
+        private const byte ICW4_AUTO = 0x02;      // EOI automático
+        private const byte ICW4_BUF_SLAVE = 0x08; // Modo buffer para esclavo
+        private const byte ICW4_BUF_MASTER = 0x0C; // Modo buffer para maestro
+        private const byte ICW4_SFNM = 0x10;      // Modo anidado completo especial
 
-        // Comandos EOI (End of Interrupt)
         private const byte PIC_EOI = 0x20;        // Comando de fin de interrupción
 
+        // Offset de IRQ (para evitar colisión con excepciones de CPU)
+        private const byte IRQ_OFFSET_MASTER = 0x20; // IRQ 0-7: INT 0x20-0x27
+        private const byte IRQ_OFFSET_SLAVE = 0x28;  // IRQ 8-15: INT 0x28-0x2F
+
         /// <summary>
-        /// Inicializa el PIC, remapeando las IRQs para que no colisionen 
-        /// con las excepciones de la CPU
+        /// Inicializa el PIC con remapeo de IRQs
         /// </summary>
         public static void Initialize()
         {
-            //SendString.Info("Inicializando PIC...");
+            SerialDebug.Info("Inicializando controlador PIC...");
 
-            // Guardar máscaras actuales
+            // Guardar máscaras actuales (si son importantes)
             byte mask1 = InByte(PIC1_DATA);
             byte mask2 = InByte(PIC2_DATA);
 
@@ -48,37 +50,36 @@ namespace Kernel.Drivers
             OutByte(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
             IOWait();
 
-            // ICW2: Vector offset - Remapear IRQs
-            OutByte(PIC1_DATA, 0x20);  // IRQ 0-7 -> INT 0x20-0x27
+            // ICW2: Remapeo de IRQs
+            OutByte(PIC1_DATA, IRQ_OFFSET_MASTER); // IRQ 0-7 -> INT 0x20-0x27
             IOWait();
-            OutByte(PIC2_DATA, 0x28);  // IRQ 8-15 -> INT 0x28-0x2F
+            OutByte(PIC2_DATA, IRQ_OFFSET_SLAVE);  // IRQ 8-15 -> INT 0x28-0x2F
             IOWait();
 
             // ICW3: Configuración maestro/esclavo
-            OutByte(PIC1_DATA, 0x04);  // PIC1 tiene un esclavo en la línea 2 (bit 2 = 1)
+            OutByte(PIC1_DATA, 0x04);  // El bit 2 indica que hay un esclavo en IRQ2
             IOWait();
-            OutByte(PIC2_DATA, 0x02);  // PIC2 tiene ID de cascada 2
+            OutByte(PIC2_DATA, 0x02);  // El valor 2 indica identidad de cascada
             IOWait();
 
-            // ICW4: Configuración de modo de operación
+            // ICW4: Configuración del modo
             OutByte(PIC1_DATA, ICW4_8086);
             IOWait();
             OutByte(PIC2_DATA, ICW4_8086);
             IOWait();
 
-            // Restaurar máscaras guardadas o establecer nuevas
-            // Por defecto, deshabilitamos todas las IRQs excepto el teclado (IRQ1) y temporizador (IRQ0)
-            OutByte(PIC1_DATA, 0xFC); // 1111 1100 - Solo permitimos IRQ0 (temporizador) y IRQ1 (teclado)
-            IOWait();
-            OutByte(PIC2_DATA, 0xFF); // 1111 1111 - Deshabilitamos todas las IRQs del PIC2
+            // Restaurar máscaras originales o configurar nuevas
+            // Aquí deshabilitamos todas las IRQs excepto teclado (IRQ1) y temporizador (IRQ0)
+            OutByte(PIC1_DATA, 0xFC); // 1111 1100 - Solo permitir IRQ0 e IRQ1
+            OutByte(PIC2_DATA, 0xFF); // 1111 1111 - Deshabilitar todas las IRQs del PIC2
 
-            //SendString.Info("PIC inicializado correctamente");
+            SerialDebug.Info("Controlador PIC inicializado correctamente");
         }
 
         /// <summary>
-        /// Envía un comando de fin de interrupción (EOI) al PIC apropiado
+        /// Envía un comando de fin de interrupción (EOI) al PIC
         /// </summary>
-        /// <param name="irq">Número de IRQ</param>
+        /// <param name="irq">Número de IRQ (0-15)</param>
         public static void SendEOI(byte irq)
         {
             if (irq >= 8)
@@ -92,38 +93,9 @@ namespace Kernel.Drivers
         }
 
         /// <summary>
-        /// Establece la máscara de interrupciones para el PIC maestro
-        /// </summary>
-        /// <param name="mask">Máscara a establecer (1 = deshabilitado, 0 = habilitado)</param>
-        public static void SetMasterMask(byte mask)
-        {
-            OutByte(PIC1_DATA, mask);
-        }
-
-        /// <summary>
-        /// Establece la máscara de interrupciones para el PIC esclavo
-        /// </summary>
-        /// <param name="mask">Máscara a establecer (1 = deshabilitado, 0 = habilitado)</param>
-        public static void SetSlaveMask(byte mask)
-        {
-            OutByte(PIC2_DATA, mask);
-        }
-
-        /// <summary>
-        /// Establece la máscara de interrupciones para ambos PICs
-        /// </summary>
-        /// <param name="masterMask">Máscara para el PIC maestro</param>
-        /// <param name="slaveMask">Máscara para el PIC esclavo</param>
-        public static void SetMask(byte masterMask, byte slaveMask)
-        {
-            SetMasterMask(masterMask);
-            SetSlaveMask(slaveMask);
-        }
-
-        /// <summary>
         /// Habilita una IRQ específica
         /// </summary>
-        /// <param name="irq">Número de IRQ a habilitar</param>
+        /// <param name="irq">Número de IRQ (0-15)</param>
         public static void EnableIRQ(byte irq)
         {
             byte port;
@@ -146,7 +118,7 @@ namespace Kernel.Drivers
         /// <summary>
         /// Deshabilita una IRQ específica
         /// </summary>
-        /// <param name="irq">Número de IRQ a deshabilitar</param>
+        /// <param name="irq">Número de IRQ (0-15)</param>
         public static void DisableIRQ(byte irq)
         {
             byte port;
@@ -166,7 +138,25 @@ namespace Kernel.Drivers
             OutByte(port, value);
         }
 
-        // Métodos de acceso a puertos de E/S
+        /// <summary>
+        /// Establece la máscara de interrupciones para el PIC maestro
+        /// </summary>
+        /// <param name="mask">Máscara (1 bit por IRQ, 1 = deshabilitada)</param>
+        public static void SetMasterMask(byte mask)
+        {
+            OutByte(PIC1_DATA, mask);
+        }
+
+        /// <summary>
+        /// Establece la máscara de interrupciones para el PIC esclavo
+        /// </summary>
+        /// <param name="mask">Máscara (1 bit por IRQ, 1 = deshabilitada)</param>
+        public static void SetSlaveMask(byte mask)
+        {
+            OutByte(PIC2_DATA, mask);
+        }
+
+        // Funciones de acceso a puertos de E/S
         [DllImport("*", EntryPoint = "_OutByte")]
         private static extern void OutByte(byte port, byte value);
 
@@ -174,11 +164,11 @@ namespace Kernel.Drivers
         private static extern byte InByte(byte port);
 
         /// <summary>
-        /// Pequeño retraso para asegurar que el PIC procese los comandos
+        /// Pequeña espera para asegurar que el PIC procese los comandos
         /// </summary>
         private static void IOWait()
         {
-            // Un método simple es escribir en un puerto no utilizado
+            // Método simple: escribir en un puerto no utilizado
             OutByte(0x80, 0);
         }
     }

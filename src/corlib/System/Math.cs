@@ -461,6 +461,66 @@ namespace System
             return (double)((long)value);
         }
 
+        /// <summary>
+        /// Converts a native int to Int32 with overflow checking.
+        /// Required by the op_Explicit(nint to int) operation in Native AOT.
+        /// </summary>
+        /// <param name="value">The native integer to convert</param>
+        /// <returns>The value as a 32-bit integer</returns>
+        /// <exception cref="OverflowException">If the value is outside the range of Int32</exception>
+        public static int ConvertToInt32Checked(IntPtr value)
+        {
+            // Get the value as a long to handle both 32-bit and 64-bit architectures
+            long longValue = value.ToInt64();
+
+            // Check for overflow
+            if (longValue < int.MinValue || longValue > int.MaxValue)
+            {
+                ThrowHelpers.ThrowOverflowException("Value was either too large or too small for an Int32.");
+            }
+
+            return (int)longValue;
+        }
+
+        /// <summary>
+        /// Converts a native int to Int64 with overflow checking.
+        /// </summary>
+        /// <param name="value">The native integer to convert</param>
+        /// <returns>The value as a 64-bit integer</returns>
+        public static long ConvertToInt64Checked(IntPtr value)
+        {
+            return value.ToInt64();
+        }
+
+        /// <summary>
+        /// Converts a native unsigned int to UInt32 with overflow checking.
+        /// </summary>
+        /// <param name="value">The native unsigned integer to convert</param>
+        /// <returns>The value as a 32-bit unsigned integer</returns>
+        /// <exception cref="OverflowException">If the value is outside the range of UInt32</exception>
+        public static uint ConvertToUInt32Checked(UIntPtr value)
+        {
+            // Get the value as a ulong to handle both 32-bit and 64-bit architectures
+            ulong ulongValue = value.ToUInt64();
+
+            // Check for overflow
+            if (ulongValue > uint.MaxValue)
+            {
+                ThrowHelpers.ThrowOverflowException("Value was too large for a UInt32.");
+            }
+
+            return (uint)ulongValue;
+        }
+
+        /// <summary>
+        /// Converts a native unsigned int to UInt64 with overflow checking.
+        /// </summary>
+        /// <param name="value">The native unsigned integer to convert</param>
+        /// <returns>The value as a 64-bit unsigned integer</returns>
+        public static ulong ConvertToUInt64Checked(UIntPtr value)
+        {
+            return value.ToUInt64();
+        }
     }
 }
 

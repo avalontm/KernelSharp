@@ -68,5 +68,56 @@ namespace Internal.Runtime.CompilerHelpers
 
             return 0; // Iguales
         }
+
+        /// <summary>
+        /// Copia un bloque de memoria de una ubicación a otra (similar a memcpy)
+        /// </summary>
+        /// <param name="dest">Puntero al destino</param>
+        /// <param name="src">Puntero al origen</param>
+        /// <param name="count">Número de bytes a copiar</param>
+        public static unsafe void Movsb(void* dest, void* src, ulong count)
+        {
+            // Conversión a punteros de bytes para copia byte a byte
+            byte* destination = (byte*)dest;
+            byte* source = (byte*)src;
+
+            // Optimización para copias largas usando bloque de 8 bytes (64 bits)
+            ulong longCount = count / 8;
+            ulong remainingBytes = count % 8;
+
+            // Copiar en bloques de 8 bytes cuando sea posible
+            if (longCount > 0)
+            {
+                ulong* destLong = (ulong*)destination;
+                ulong* srcLong = (ulong*)source;
+
+                for (ulong i = 0; i < longCount; i++)
+                {
+                    destLong[i] = srcLong[i];
+                }
+
+                // Ajustar punteros
+                destination += longCount * 8;
+                source += longCount * 8;
+            }
+
+            // Copiar bytes restantes uno por uno
+            for (ulong i = 0; i < remainingBytes; i++)
+            {
+                destination[i] = source[i];
+            }
+        }
+
+        /// <summary>
+        /// Versión genérica de Movsb para arrays de tipos conocidos
+        /// </summary>
+        public static unsafe void Movsb<T>(T* dest, T* src, ulong count) where T : unmanaged
+        {
+            // Copia directa de elementos del mismo tipo
+            for (ulong i = 0; i < count; i++)
+            {
+                dest[i] = src[i];
+            }
+        }
     }
 }

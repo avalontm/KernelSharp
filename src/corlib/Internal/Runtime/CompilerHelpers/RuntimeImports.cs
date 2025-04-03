@@ -22,7 +22,7 @@ namespace Internal.Runtime.CompilerHelpers
 
             var b = (byte*)data;
             b += sizeof(IntPtr);
-            MemoryHelpers.MemCpy(b, (byte*)&length, sizeof(long));
+            MemoryHelpers.MemCpy(b, (byte*)&length, sizeof(int));
 
             return obj;
         }

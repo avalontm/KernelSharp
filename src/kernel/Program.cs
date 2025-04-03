@@ -2,29 +2,35 @@ using Internal.Runtime.CompilerHelpers;
 using Kernel.Boot;
 using Kernel.Diagnostics;
 using Kernel.Drivers;
+using Kernel.Drivers.Network;
+using Kernel.Hardware;
 using Kernel.Memory;
 using System;
+using System.Collections.Generic;
 using System.Runtime;
-using System.Runtime.InteropServices;
 
 namespace Kernel
 {
-    unsafe class Program
+    static unsafe class Program
     {
         [RuntimeExport("Entry")]
         public static void Entry(MultibootInfo* multibootInfo, IntPtr trampoline)
-        {
-            // Initialize memory subsystem
-            Allocator.Initialize((IntPtr)0x20000000);
-            StartupCodeHelpers.InitializeModules((IntPtr)0x20000000);
-            PageTable.Initialize();
+        {   
+            // Initialize serial debug
+            SerialDebug.Initialize();
 
+            // Initialize memory subsystem
+            Allocator.Initialize((IntPtr)0x200000);
+           // StartupCodeHelpers.InitializeModules(0x200000);
+            PageTable.Initialize();
+ 
             // Show welcome message
             Console.ForegroundColor = ConsoleColor.Green;
             string welcomeMessage = "Welcome to KernelSharp!";
             Console.WriteLine(welcomeMessage);
             Console.ForegroundColor = ConsoleColor.White;
 
+            //SerialDebug.Info(cosa);
             if (RuntimeArchitecture.Is32Bit)
             {
                 Console.WriteLine("32 bits");
@@ -42,21 +48,80 @@ namespace Kernel
                 return;
             }
 
-            // Initialize serial debug
-            SerialDebug.Initialize();
-
-            // Rest of the kernel initialization...
-            ArrayExamples.DemoArrays();
-
-
             Console.WriteLine("Multiboot info!");
             Console.WriteLine($"multibootInfo: 0x" + ((ulong)multibootInfo).ToStringHex());
 
             Console.WriteLine($"Flag: {multibootInfo->Flags.ToString()}");
 
+            // Inicializar SMBIOS
+            Console.WriteLine("Inicializando detección de hardware SMBIOS...");
+            if (SMBIOS.Initialize())
+            {
+                // Mostrar información básica del sistema
+                SMBIOS.PrintSystemSummary();
+            }
+            else
+            {
+                Console.WriteLine("No se pudo detectar información SMBIOS");
+            }
+
             // Initialize GDT first
-            SerialDebug.Info("Initializing GDT...");
-            //GDTManager.Initialize();
+            GDTManager.Initialize();
+
+            // Initialize IDT after memory
+            IDTManager.Initialize();
+
+            Console.WriteLine("Sistema de interrupciones inicializado");
+
+            // En tu método Entry o Main, después de inicializar el sistema básico
+
+            // Inicializar ACPI (necesario para SMP y APIC)
+            if (ACPIManager.Initialize())
+            {
+                //ACPIManager.PrintACPIInfo();
+
+                // Inicializar SMP para detectar múltiples procesadores
+                if (SMPManager.Initialize())
+                {
+                    //SMPManager.PrintProcessorInfo();
+
+                    // Inicializar controlador APIC para manejar interrupciones en modo SMP
+                    if (APICController.Initialize())
+                    {
+                        Console.WriteLine($"Sistema inicializado en modo SMP con {SMPManager.GetProcessorCount().ToString()} procesador(es)");
+
+                        // Configurar temporizador APIC si es necesario
+                         //APICController.ConfigureTimer(0x20, APICController.CalibrateTimer(10), true);
+
+                        // Inicializar procesadores secundarios si es necesario
+                        // APICController.InitializeAPs(0x8000); // La dirección de inicio debe ser configurada adecuadamente
+                    }
+                    else
+                    {
+                        Console.WriteLine("Error al inicializar APIC. Funcionando en modo monoprocesador.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Error al detectar SMP. Funcionando en modo monoprocesador.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Error al inicializar ACPI. Funcionalidades avanzadas deshabilitadas.");
+            }
+
+            // Initialize interrupt handlers
+            InterruptManager.Initialize();
+
+      
+            PCIManager.Initialize();
+            DriverManager.Initialize();
+            RegisterPCIDrivers();
+            DriverManager.InitializeAllDrivers();
+            // Habilitar interrupciones en el CPU
+           // Native.EnableInterrupts();
+
 
             // Show basic system information
             SerialDebug.Info("Initializing system...");
@@ -75,17 +140,8 @@ namespace Kernel
                 Console.WriteLine("Paging enabled");
             }
 
-            // Memory tests
-            MemoryManager.Initialize(multibootInfo);
-
-            // Initialize IDT after memory
-            //IDTManager.Initialize();
-
-            // Initialize interrupt handlers
-            //InterruptHandlers.Initialize();
-
-            // Initialize the PIC
-            //PICController.Initialize();
+            // Rest of the kernel initialization...
+            ArrayExamples.DemoArrays();
 
 
             // Initialize other kernel modules
@@ -99,6 +155,63 @@ namespace Kernel
 
             // Enter the main loop
             Main();
+        }
+
+        private static void RegisterPCIDrivers()
+        {
+            // Obtener lista de dispositivos PCI detectados
+            List<PCIDevice> pciDevices = PCIManager.GetDevices();
+
+            SerialDebug.Info($"pciDevices: {pciDevices.Count.ToString()}");
+            // Iterar dispositivos y registrar drivers según su clase
+            for (int i = 0; i < pciDevices.Count; i++)
+            {
+                PCIDevice device = pciDevices[i];
+
+                switch (device.ID.ClassCode)
+                {
+                    case 0x02: // Dispositivos de red
+                        RegisterNetworkDriver(device);
+                        break;
+
+                    case 0x03: // Controladores de gráficos
+                        //RegisterGraphicsDriver(device);
+                        break;
+
+                    case 0x01: // Controladores de almacenamiento
+                               // RegisterStorageDriver(device);
+                        break;
+
+                    default:
+                        // Registrar drivers genéricos para otros tipos de dispositivos
+                        // RegisterGenericDriver(device);
+                        break;
+                }
+            }
+        }
+
+        private static void RegisterNetworkDriver(PCIDevice device)
+        {
+            // Drivers específicos para diferentes vendedores de red
+            switch (device.ID.VendorID)
+            {
+                case 0x8086: // Intel
+                    if (device.ID.DeviceID == 0x100E) // E1000
+                    {
+                        DriverManager.RegisterDriver(new E1000NetworkDriver(device));
+                    }
+                    break;
+
+                case 0x10EC: // Realtek
+                             // Agregar soporte para otros dispositivos Realtek
+                    break;
+
+                // Otros vendedores de red
+                default:
+                    // Driver genérico de red
+                   // DriverManager.RegisterDriver(new GenericNetworkDriver(device));
+                    break;
+            }
         }
 
         /// <summary>
@@ -130,7 +243,7 @@ namespace Kernel
             // Example method to create and use arrays
             public static void DemoArrays()
             {
-                Console.WriteLine("===== ARRAY EXAMPLE =====");
+                SerialDebug.Info("===== ARRAY EXAMPLE =====");
 
                 // Create an array of integers explicitly
                 int[] intArray = new int[4];
@@ -139,23 +252,34 @@ namespace Kernel
                 intArray[2] = 30;
                 intArray[3] = 40;
 
-                Console.WriteLine("Array of integers created explicitly:");
+                SerialDebug.Info("Array of integers created explicitly:");
                 for (int i = 0; i < intArray.Length; i++)
                 {
-                    Console.WriteLine(intArray[i].ToString());
+                    SerialDebug.Info(intArray[i].ToString());
                 }
 
                 // Create an array of strings
                 string[] stringArray = new string[] { "Hello", "World", "KernelSharp" };
 
-                Console.WriteLine("\nArray of strings:");
+                SerialDebug.Info("\nArray of strings:");
                 for (int i = 0; i < stringArray.Length; i++)
                 {
-                    Console.WriteLine(stringArray[i]);
+                    SerialDebug.Info(stringArray[i]);
                 }
 
+                SerialDebug.Info("\nList of numbers:");
+                List<PCIDevice> devices = new List<PCIDevice>();
 
-                Console.WriteLine("==========================");
+                devices.Add(new PCIDevice(new PCIDeviceID(), new PCILocation(), 0, 0,0, new uint[6], true, 0, 0));
+                devices.Add(new PCIDevice(new PCIDeviceID(), new PCILocation(), 0, 0, 0, new uint[6], true, 0, 0));
+                devices.Add(new PCIDevice(new PCIDeviceID(), new PCILocation(), 0, 0, 0, new uint[6], true, 0, 0));
+
+                for (int i = 0; i < devices.Count; i++)
+                {
+                    SerialDebug.Info(devices[i].ID.ToString());
+                }
+
+                SerialDebug.Info("==========================");
 
                 Elemento elemento = new Elemento()
                 {

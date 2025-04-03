@@ -1,80 +1,163 @@
-﻿using Internal.Runtime.CompilerServices;
+﻿using Internal.Runtime.CompilerHelpers;
+using System;
+using System.Diagnostics;
 
 namespace System.Collections.Generic
 {
     public class Dictionary<TKey, TValue>
     {
+        private struct Entry
+        {
+            public int HashCode;
+            public TKey Key;
+            public TValue Value;
+            public int Next;
+        }
+
+        private Entry[] _entries;
+        private int[] _buckets;
+        private int _count;
+        private int _freeList;
+        private int _freeCount;
+        private TKey[] _keys;
+
+        public Dictionary(int capacity = 4)
+        {
+            _buckets = new int[capacity]; 
+            _entries = new Entry[capacity];   
+            _keys = new TKey[capacity];  
+
+            Array.Fill(_buckets, -1);         
+
+            _freeList = -1;  
+        }
+
+
+        public int Count => _count - _freeCount;
+
+        public void Add(TKey key, TValue value)
+        {
+            int hashCode = key.GetHashCode() & 0x7FFFFFFF;
+            int targetBucket = hashCode % _buckets.Length;
+
+            // Comprobar si la clave ya existe en el diccionario
+            for (int i = _buckets[targetBucket]; i >= 0; i = _entries[i].Next)
+            {
+                if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
+                {
+                    ThrowHelpers.ArgumentException("Key already exists");
+                }
+            }
+
+            int index;
+            if (_freeCount > 0)
+            {
+                // Recuperar una entrada libre
+                index = _freeList;
+                _freeList = _entries[index].Next;
+                _freeCount--;
+            }
+            else
+            {
+                // Si el número de elementos alcanza la capacidad, redimensiona el diccionario
+                if (_count == _entries.Length)
+                {
+                    Resize();
+                    targetBucket = hashCode % _buckets.Length; // Recalcular el bucket después de redimensionar
+                }
+
+                index = _count;
+                _count++;
+            }
+
+            // Asignar la entrada al diccionario
+            _entries[index].HashCode = hashCode;
+           // Thread.MemoryBarrier();
+            _entries[index].Key = key;
+            _entries[index].Value = value;
+            _entries[index].Next = _buckets[targetBucket];
+            _buckets[targetBucket] = index;
+            // Asegúrate de redimensionar el arreglo de claves si es necesario
+            if (_count > _keys.Length)
+            {
+                Array.Resize(ref _keys, _keys.Length * 2);
+            }
+           
+            // Asignar la clave al arreglo de claves
+            _keys[index] = key;
+        }
+
+
         public TValue this[TKey key]
         {
             get
             {
-                return Values[Keys.IndexOf(key)];
+                int index = IndexOfKey(key);
+                if (index >= 0)
+                {
+                    return _entries[index].Value;
+                }
+                ThrowHelpers.KeyNotFoundException("Key");
+                return default;
             }
             set
             {
-                Values[Keys.IndexOf(key)] = value;
+                int index = IndexOfKey(key);
+                if (index >= 0)
+                {
+                    _entries[index].Value = value;
+                }
+                else
+                {
+                    Add(key, value);
+                }
             }
         }
 
-        public int Count { get { return Values.Count; } }
+        public bool ContainsKey(TKey key) => IndexOfKey(key) >= 0;
 
-        public bool Remove(TKey key)
+        public TKey[] Keys => _keys;
+
+        private int IndexOfKey(TKey key)
         {
-            return Values.Remove(Values[Keys.IndexOf(key)]) && Keys.Remove(key);
-        }
-
-        public Dictionary()
-        {
-            Keys = new List<TKey>();
-            Values = new List<TValue>();
-        }
-
-        public bool ContainsKey(TKey key)
-        {
-            return Keys.IndexOf(key) != -1;
-        }
-
-        public bool ContainsValue(TValue value)
-        {
-            return Values.IndexOf(value) != -1;
-        }
-
-        public void Add(TKey key, TValue value)
-        {
-            Keys.Add(key);
-            Values.Add(value);
-        }
-
-        public void Clear()
-        {
-            Keys.Clear();
-            Values.Clear();
-        }
-
-        public override void Dispose()
-        {
-            Keys.Clear();
-            Values.Clear();
-            Values.Dispose();
-            Keys.Dispose();
-            base.Dispose();
-        }
-
-        public bool TryGetValue(TKey key, out TValue client)
-        {
-            int index = Keys.IndexOf(key);
-
-            if (index == -1)
+            int hashCode = key.GetHashCode() & 0x7FFFFFFF;
+            for (int i = _buckets[hashCode % _buckets.Length]; i >= 0; i = _entries[i].Next)
             {
-                client = default;
-                return false;
+                if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
+                {
+                    return i;
+                }
             }
-
-            client = Values[index];
-            return index != -1;
+            return -1;
         }
 
-        public List<TKey> Keys;
-        public List<TValue> Values;
+        public bool TryGetValue(TKey key, out TValue value)
+        {
+            int index = IndexOfKey(key);
+            if (index != -1)
+            {
+                value = _entries[index].Value;
+                return true;
+            }
+            value = default(TValue);
+            return false;
+        }
+
+
+        private void Resize()
+        {
+            int newSize = _entries.Length * 2;
+            Array.Resize(ref _entries, newSize);
+            Array.Resize(ref _keys, newSize);
+            _buckets = new int[newSize];
+            Array.Fill(_buckets, -1);
+
+            for (int i = 0; i < _count; i++)
+            {
+                int bucket = _entries[i].HashCode % newSize;
+                _entries[i].Next = _buckets[bucket];
+                _buckets[bucket] = i;
+            }
+        }
     }
 }

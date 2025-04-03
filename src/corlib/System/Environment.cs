@@ -47,6 +47,8 @@ namespace System
             }
         }
 
+        public static int ProcessorCount { get; set; } = 0;
+
         // Método para obtener variables de entorno
         public static string GetEnvironmentVariable(string variable)
         {

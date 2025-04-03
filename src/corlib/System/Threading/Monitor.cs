@@ -6,18 +6,18 @@ namespace System.Threading
     {
         public static void Enter(object obj)
         {
-            //Lock();
+           //Lock();
         }
 
         public static void Exit(object obj)
         {
-           // Unlock();
+             Unlock();
         }
+        
+        [DllImport("*", EntryPoint = "_Lock")]
+        static extern void Lock();
 
-        //[DllImport("*")]
-        //static extern void Lock();
-
-        //[DllImport("*")]
-        //static extern void Unlock();
+        [DllImport("*", EntryPoint = "_Unlock")]
+        static extern void Unlock();
     }
 }

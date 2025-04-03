@@ -617,57 +617,18 @@ namespace System.Runtime
             // 2. Checking a specific flag or base type
             return false;
         }
-        /// <summary>
-        /// Stores a reference element in an array with type checking.
-        /// </summary>
-        /// <param name="pArrayEEType">EEType of the array</param>
-        /// <param name="array">The array to store the element in</param>
-        /// <param name="index">The index at which to store the element</param>
-        /// <param name="obj">The object to store in the array</param>
+
         [RuntimeExport("RhpStelemRef")]
-        public static unsafe void StelemRef(EEType* pArrayEEType, Array array, int index, object obj)
+        static unsafe void RhpStelemRef(Array array, int index, object obj)
         {
-            // Validate array input
-            if (array == null)
-                ThrowHelpers.ThrowArgumentNullException("array");
-
-            // Validate index
-            if (index < 0 || index >= array.Length)
-                ThrowHelpers.ThrowIndexOutOfRangeException();
-
-            // If object is null, it can be stored in any reference type array
-            if (obj == null)
+            fixed (int* n = &array._numComponents)
             {
-                SetArrayElement(array, index, null);
-                return;
+                var ptr = (byte*)n;
+                ptr += sizeof(void*);   // Array length is padded to 8 bytes on 64-bit
+                ptr += index * array.m_pEEType->ComponentSize;  // Component size should always be 8, seeing as it's a pointer...
+                var pp = (IntPtr*)ptr;
+                *pp = Unsafe.As<object, IntPtr>(ref obj);
             }
-
-            // Get object's EEType
-            EEType* objEEType = obj.m_pEEType;
-
-            // Verify array is indeed an array
-            if (!pArrayEEType->IsArray)
-                ThrowHelpers.ThrowInvalidOperationException("Not an array type");
-
-            // Get the array's element type
-            EEType* arrayElementType = pArrayEEType->RelatedParameterType;
-
-            // Exact type match is always allowed
-            if (objEEType == arrayElementType)
-            {
-                SetArrayElement(array, index, obj);
-                return;
-            }
-
-            // Check if object can be assigned to the array's element type
-            if (IsAssignableFrom(arrayElementType, objEEType))
-            {
-                SetArrayElement(array, index, obj);
-                return;
-            }
-
-            // If we reach here, the assignment is not valid
-            ThrowHelpers.ThrowArrayTypeMismatchException();
         }
 
         /// <summary>
@@ -705,14 +666,11 @@ namespace System.Runtime
         /// </summary>
         private static unsafe void SetArrayElement(Array array, int index, object obj)
         {
-            fixed (int* lengthPtr = &array._numComponents)
-            {
-                var ptr = (byte*)lengthPtr;
-                ptr += sizeof(void*);   // Array length is padded to 8 bytes on 64-bit
-                ptr += index * array.m_pEEType->ComponentSize;
-                var pp = (IntPtr*)ptr;
-                *pp = obj == null ? IntPtr.Zero : Unsafe.As<object, IntPtr>(ref obj);
-            }
+            var elementSize = array.m_pEEType->ComponentSize;
+            var arrayData = (byte*)Unsafe.AsPointer(ref array);
+            var elementPtr = arrayData + sizeof(int) + index * elementSize;
+            var pp = (IntPtr*)elementPtr;
+            *pp = obj == null ? IntPtr.Zero : Unsafe.As<object, IntPtr>(ref obj);
         }
     }
 }

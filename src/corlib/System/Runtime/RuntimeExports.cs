@@ -246,14 +246,11 @@ namespace System.Runtime
         {
             // In a typical runtime, this would use a write barrier
             // For a basic kernel implementation, we'll do a simple assignment
-            fixed (int* lengthPtr = &array._numComponents)
-            {
-                var ptr = (byte*)lengthPtr;
-                ptr += sizeof(void*);  // Skip array length
-                ptr += index * array.m_pEEType->ComponentSize;
-                var pp = (IntPtr*)ptr;
-                *pp = obj == null ? IntPtr.Zero : Unsafe.As<object, IntPtr>(ref obj);
-            }
+            byte* ptr = (byte*)Unsafe.AsPointer(ref array);
+            ptr += sizeof(int);  // Skip array length
+            ptr += index * array.m_pEEType->ComponentSize;
+            var pp = (IntPtr*)ptr;
+            *pp = obj == null ? IntPtr.Zero : Unsafe.As<object, IntPtr>(ref obj);
         }
     }
 }

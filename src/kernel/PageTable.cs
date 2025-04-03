@@ -94,7 +94,7 @@ namespace Kernel
             }
 
             // Asignar nueva tabla
-            ulong* newTable = (ulong*)Allocator.Allocate(0x1000);
+            ulong* newTable = (ulong*)Allocator.malloc(0x1000);
             if (newTable == null)
             {
                 Console.WriteLine($"[ERROR] Failed to allocate new page table");

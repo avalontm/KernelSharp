@@ -35,7 +35,7 @@ namespace System.Runtime.CompilerServices
         /// null }</c>.
         /// </remarks>
 #nullable enable
-        public TupleElementNamesAttribute(string?[] transformNames)
+        public TupleElementNamesAttribute(string[] transformNames)
 #nullable disable
         {
             //ArgumentNullException.ThrowIfNull(transformNames);
@@ -49,7 +49,7 @@ namespace System.Runtime.CompilerServices
         /// meant to carry element names.
         /// </summary>
 #nullable enable
-        public List<string?> TransformNames => new(_transformNames);
+        public List<string?> TransformNames => new();
 #nullable disable
     }
 }

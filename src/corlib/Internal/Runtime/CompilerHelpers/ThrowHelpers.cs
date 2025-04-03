@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -185,6 +186,11 @@ namespace Internal.Runtime.CompilerHelpers
             Panic("ArgumentOutOfRangeException: " + message);
         }
 
+        internal static void ArgumentNullException(string message, string parm)
+        {
+            Panic("ArgumentOutOfRangeException: " + message + " " + parm);
+        }
+
         internal static void OverflowException(string message)
         {
             Panic("OverflowException: " + message);
@@ -278,6 +284,102 @@ namespace Internal.Runtime.CompilerHelpers
         internal static void InvalidCastException(string message)
         {
             Panic($"ThrowArrayTypeMismatchException: {message}");
+        }
+
+        /// <summary>
+        /// Throws a TypeLoadException with the specified message.
+        /// </summary>
+        /// <param name="message">The exception message.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowTypeLoadException(string message)
+        {
+            Panic("TypeLoadException: " + message);
+        }
+
+        /// <summary>
+        /// Throws a TypeLoadException with the specified message and returns a default value.
+        /// </summary>
+        /// <typeparam name="T">The type of value to return (never actually returns).</typeparam>
+        /// <param name="message">The exception message.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowTypeLoadException<T>(string message)
+        {
+            Panic("TypeLoadException: " + message);
+            return default;
+        }
+
+        /// <summary>
+        /// Throws a TypeLoadException with an argument name.
+        /// </summary>
+        /// <param name="argumentName">The name of the argument that caused the exception.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowTypeLoadExceptionWithArgument(string argumentName)
+        {
+            Panic("TypeLoadException: " + argumentName);
+        }
+
+        /// <summary>
+        /// Throws a TypeLoadException with an argument name and returns a default value.
+        /// </summary>
+        /// <typeparam name="T">The type of value to return (never actually returns).</typeparam>
+        /// <param name="argumentName">The name of the argument that caused the exception.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowTypeLoadExceptionWithArgument<T>(string argumentName)
+        {
+            Panic("TypeLoadException: " + argumentName);
+            return default;
+        }
+
+        internal static void ThrowNullReferenceException(string message)
+        {
+            Panic("ThrowNullReferenceException: " + message);
+        }
+
+        internal static void ThrowMissingMethodException(string message)
+        {
+            Panic("ThrowMissingMethodException: " + message);
+        }
+
+        internal static void ThrowKeyNotFoundException()
+        {
+            Panic("ThrowKeyNotFoundException:");
+        }
+
+        internal static void KeyNotFoundException(string message)
+        {
+            Panic("ThrowKeyNotFoundException: " + message);
+        }
+
+        internal static void ArgumentException(string v1, string v2)
+        {
+            Panic("ArgumentException: " + v1 +  ", " + v2);
+        }
+
+        /// <summary>
+        /// Lanza una excepción por funcionalidad no soportada por la plataforma
+        /// </summary>
+        /// <param name="message">Mensaje descriptivo opcional</param>
+        public static void ThrowPlatformNotSupportedException(string message = null)
+        {
+            string errorMessage = message ?? "Esta funcionalidad no está soportada en la plataforma actual.";
+            Panic($"PlatformNotSupportedException: {errorMessage}");
+        }
+
+        /// <summary>
+        /// Lanza una excepción por funcionalidad no soportada por la plataforma y devuelve un valor por defecto
+        /// </summary>
+        /// <typeparam name="T">Tipo de retorno</typeparam>
+        /// <param name="message">Mensaje descriptivo opcional</param>
+        /// <returns>Valor por defecto del tipo T (nunca se ejecuta realmente)</returns>
+        public static T ThrowPlatformNotSupportedException<T>(string message = null)
+        {
+            ThrowPlatformNotSupportedException(message);
+            return default; // Nunca se ejecuta, pero necesario para compilar
+        }
+
+        internal static void InvalidOperationException(string message)
+        {
+            Panic("InvalidOperationException: " + message);
         }
     }
 }

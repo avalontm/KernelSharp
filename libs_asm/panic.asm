@@ -1,32 +1,32 @@
-; kernel_functions64.asm - Funciones básicas de kernel en ensamblador para x86_64
+; kernel_functions64.asm - Basic Kernel Functions in x86_64 Assembly
 
 section .text
 global _panic
 global _kernel_print
 
-; Constantes para el buffer de video en modo texto
+; Constants for text video buffer
 %define VIDEO_MEMORY 0xB8000
 %define SCREEN_WIDTH 80
 %define SCREEN_HEIGHT 25
-%define DEFAULT_ATTR 0x0F      ; Blanco brillante sobre fondo negro
+%define DEFAULT_ATTR 0x0F      ; Bright white on black background
 
-; Variables para mantener la posición del cursor
+; Variables to track cursor position
 section .bss
-cursor_x resq 1                ; Posición X del cursor (columna)
-cursor_y resq 1                ; Posición Y del cursor (fila)
+cursor_x resq 1                ; X position of cursor (column)
+cursor_y resq 1                ; Y position of cursor (row)
 
-; Función de pánico - detiene el sistema
+; Panic function - stops the system
 _panic:
-    cli                        ; Deshabilitar interrupciones
+    cli                        ; Disable interrupts
 
 .hang:
-    hlt                        ; Detener el procesador hasta la próxima interrupción
-    jmp .hang                  ; Bucle infinito
+    hlt                        ; Halt processor until next interrupt
+    jmp .hang                  ; Infinite loop
 
-; Función para imprimir texto en la pantalla
-; Parámetros:
-;   - rdi: puntero al texto (char*)
-;   - rsi: longitud del texto (int)
+; Function to print text on screen
+; Parameters:
+;   - rdi: pointer to text (char*)
+;   - rsi: text length (int)
 _kernel_print:
     push rbx
     push rsi
@@ -34,52 +34,52 @@ _kernel_print:
     push rbp
     mov rbp, rsp
     
-    ; Si la longitud es cero, salir
+    ; If length is zero, exit
     test rsi, rsi
     jz .done
 
-    ; Calcular la dirección base del buffer de video
+    ; Calculate base address of video buffer
     mov rdi, VIDEO_MEMORY
     
-    ; Calcular la posición inicial basada en cursor_x y cursor_y
+    ; Calculate initial position based on cursor_x and cursor_y
     mov rax, [cursor_y]
     imul rax, SCREEN_WIDTH
     add rax, [cursor_x]
-    shl rax, 1                ; Multiplicar por 2 (cada carácter ocupa 2 bytes)
-    add rdi, rax              ; Ajustar el puntero de escritura
+    shl rax, 1                ; Multiply by 2 (each character is 2 bytes)
+    add rdi, rax              ; Adjust write pointer
     
 .print_loop:
-    lodsb                      ; Cargar byte desde [rsi] en al, incrementar rsi
+    lodsb                      ; Load byte from [rsi] into al, increment rsi
     
-    ; Verificar si es un carácter especial
-    cmp al, 10                 ; Comprobar si es '\n' (nueva línea)
+    ; Check for special characters
+    cmp al, 10                 ; Check if it's '\n' (newline)
     je .newline
     
-    ; Carácter normal, escribir en la pantalla
-    mov [rdi], al              ; Guardar el carácter
-    mov byte [rdi+1], DEFAULT_ATTR ; Establecer el atributo de color
-    add rdi, 2                 ; Avanzar en el buffer de video
+    ; Normal character, write to screen
+    mov [rdi], al              ; Store the character
+    mov byte [rdi+1], DEFAULT_ATTR ; Set color attribute
+    add rdi, 2                 ; Move forward in video buffer
     
-    ; Actualizar posición X
+    ; Update X position
     inc qword [cursor_x]
     cmp qword [cursor_x], SCREEN_WIDTH
     jl .next_char
     
-    ; Si llegamos al final de la línea, hacer salto de línea
+    ; If we reach end of line, perform newline
 .newline:
-    mov qword [cursor_x], 0    ; Reiniciar cursor_x
-    inc qword [cursor_y]       ; Avanzar cursor_y
+    mov qword [cursor_x], 0    ; Reset cursor_x
+    inc qword [cursor_y]       ; Advance cursor_y
     
-    ; Si llegamos al final de la pantalla, hacer scroll
+    ; If we reach bottom of screen, scroll
     cmp qword [cursor_y], SCREEN_HEIGHT
     jl .calc_position
     
-    ; Desplazar el contenido hacia arriba (scroll)
+    ; Shift content upwards (scroll)
     call .scroll_screen
-    dec qword [cursor_y]       ; Ajustar cursor_y después del scroll
+    dec qword [cursor_y]       ; Adjust cursor_y after scroll
     
 .calc_position:
-    ; Recalcular la posición en el buffer de video
+    ; Recalculate position in video buffer
     mov rdi, VIDEO_MEMORY
     mov rax, [cursor_y]
     imul rax, SCREEN_WIDTH
@@ -98,24 +98,24 @@ _kernel_print:
     pop rbx
     ret
 
-; Función para desplazar la pantalla hacia arriba (scroll)
+; Function to scroll screen upwards
 .scroll_screen:
     push rsi
     push rdi
     push rcx
     
-    ; Copiar líneas 1-24 a las líneas 0-23
-    mov rsi, VIDEO_MEMORY + (SCREEN_WIDTH * 2) ; Origen: segunda línea
-    mov rdi, VIDEO_MEMORY                      ; Destino: primera línea
+    ; Copy lines 1-24 to lines 0-23
+    mov rsi, VIDEO_MEMORY + (SCREEN_WIDTH * 2) ; Source: second line
+    mov rdi, VIDEO_MEMORY                      ; Destination: first line
     mov rcx, (SCREEN_HEIGHT - 1) * SCREEN_WIDTH
-    rep movsw                                  ; Copiar palabra por palabra
+    rep movsw                                  ; Copy word by word
     
-    ; Limpiar la última línea
+    ; Clear the last line
     mov rdi, VIDEO_MEMORY + ((SCREEN_HEIGHT - 1) * SCREEN_WIDTH * 2)
     mov rcx, SCREEN_WIDTH
 
 .clear_last_line:
-    mov word [rdi], (DEFAULT_ATTR << 8) | ' '  ; Espacio con atributo de color
+    mov word [rdi], (DEFAULT_ATTR << 8) | ' '  ; Space with color attribute
     add rdi, 2
     loop .clear_last_line
     
