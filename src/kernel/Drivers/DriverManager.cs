@@ -94,6 +94,7 @@ namespace Kernel.Drivers
         {
             if (driver == null)
                 return;
+
             // Prevenir duplicados
             if (_drivers.ContainsKey(driver.Id))
             {

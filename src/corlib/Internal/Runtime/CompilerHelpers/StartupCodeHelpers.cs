@@ -214,7 +214,7 @@ namespace Internal.Runtime.CompilerHelpers
                         IntPtr pPreInitDataAddr = *(pBlock + 1);
                         fixed (byte* p = &obj.GetRawData())
                         {
-                            Buffer.MemCpy(p, (byte*)pPreInitDataAddr, obj.GetRawDataSize());
+                            MemoryHelpers.MemCpy(p, (byte*)pPreInitDataAddr, obj.GetRawDataSize());
                         }
                     }
 

@@ -13,15 +13,15 @@ namespace Kernel
 {
     static unsafe class Program
     {
+
         [RuntimeExport("Entry")]
         public static void Entry(MultibootInfo* multibootInfo, IntPtr trampoline)
         {   
             // Initialize serial debug
             SerialDebug.Initialize();
-
             // Initialize memory subsystem
             Allocator.Initialize((IntPtr)0x200000);
-           // StartupCodeHelpers.InitializeModules(0x200000);
+            //StartupCodeHelpers.InitializeModules((IntPtr)trampoline);
             PageTable.Initialize();
  
             // Show welcome message
@@ -55,6 +55,7 @@ namespace Kernel
 
             // Inicializar SMBIOS
             Console.WriteLine("Inicializando detección de hardware SMBIOS...");
+
             if (SMBIOS.Initialize())
             {
                 // Mostrar información básica del sistema
@@ -65,11 +66,13 @@ namespace Kernel
                 Console.WriteLine("No se pudo detectar información SMBIOS");
             }
 
-            // Initialize GDT first
-            GDTManager.Initialize();
+            IDTManager.Disable();
 
-            // Initialize IDT after memory
+            GDTManager.Initialize();
             IDTManager.Initialize();
+            InterruptManager.Initialize();
+
+            IDTManager.Enable();
 
             Console.WriteLine("Sistema de interrupciones inicializado");
 
@@ -111,10 +114,7 @@ namespace Kernel
                 Console.WriteLine("Error al inicializar ACPI. Funcionalidades avanzadas deshabilitadas.");
             }
 
-            // Initialize interrupt handlers
-            InterruptManager.Initialize();
 
-      
             PCIManager.Initialize();
             DriverManager.Initialize();
             RegisterPCIDrivers();

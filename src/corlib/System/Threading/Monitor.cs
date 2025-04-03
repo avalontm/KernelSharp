@@ -6,7 +6,7 @@ namespace System.Threading
     {
         public static void Enter(object obj)
         {
-           //Lock();
+           Lock();
         }
 
         public static void Exit(object obj)

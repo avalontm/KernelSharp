@@ -32,7 +32,6 @@ namespace System.Collections.Generic
             _freeList = -1;  
         }
 
-
         public int Count => _count - _freeCount;
 
         public void Add(TKey key, TValue value)

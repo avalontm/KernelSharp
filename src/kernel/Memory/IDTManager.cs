@@ -63,7 +63,7 @@ namespace Kernel.Memory
         /// </summary>
         public static void Initialize()
         {
-            Console.WriteLine("Inicializando tabla de descriptores de interrupciones (IDT)...");
+            SerialDebug.Info("Inicializando tabla de descriptores de interrupciones (IDT)...");
 
             // Asignar memoria para la IDT
             _idt = (IDTEntry*)Allocator.malloc((nuint)(sizeof(IDTEntry) * IDT_SIZE));
@@ -93,11 +93,11 @@ namespace Kernel.Memory
                 {
                     LoadIDT(idtPtr);
                 }
-                Console.WriteLine("IDT inicializada correctamente");
+                SerialDebug.Info("IDT inicializada correctamente");
             }
             else
             {
-                Console.WriteLine("ERROR: No se pudo obtener la dirección del stub de interrupción");
+                SerialDebug.Info("ERROR: No se pudo obtener la dirección del stub de interrupción");
             }
         }
 
@@ -123,6 +123,17 @@ namespace Kernel.Memory
             _idt[index].TypeAttr = (byte)type;
             _idt[index].IST = ist;
             _idt[index].Reserved = 0;
+        }
+
+        internal static void Disable()
+        {
+            Native.CLI();
+        }
+
+        internal static void Enable()
+        {
+           
+            Native.STI();
         }
 
         /// <summary>

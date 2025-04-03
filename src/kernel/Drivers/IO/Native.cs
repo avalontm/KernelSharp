@@ -68,14 +68,14 @@ namespace Kernel
         /// <summary>
         /// Deshabilita las interrupciones
         /// </summary>
-        [DllImport("*", EntryPoint = "_DisableInterrupts")]
-        public static extern void DisableInterrupts();
+        [DllImport("*", EntryPoint = "_STI")]
+        public static extern void STI();
 
         /// <summary>
         /// Habilita las interrupciones
         /// </summary>
-        [DllImport("*", EntryPoint = "_EnableInterrupts")]
-        public static extern void EnableInterrupts();
+        [DllImport("*", EntryPoint = "_CLI")]
+        public static extern void CLI();
 
         /// <summary>
         /// Lee un byte desde un puerto de E/S

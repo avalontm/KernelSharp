@@ -22,12 +22,35 @@ global _SetRFlags            ; Set RFLAGS
 ; Load IDT
 ; void _LoadIDT(void* idtPointer)
 _LoadIDT:
-    push rbx
-    mov rbx, [rsp+16]       ; Get idtPointer parameter
-    lidt [rbx]              ; Load IDT from the provided pointer
-
+    push rbp                 ; Save base pointer
+    mov rbp, rsp             ; Set up new base pointer
+    
+    ; Save critical registers that might be affected
+    push rax
+    
+    ; Disable interrupts while loading IDT
+    cli
+    
+    ; Load the IDT using LIDT instruction
+    ; RDI already contains the address of the IDTR structure
+    lidt [rdi]
+    
+    ; Brief delay to ensure IDT is properly loaded
+    ; This can help with some hardware that might need time to process
+    nop
+    nop
+    nop
+    
+    ; Re-enable interrupts
+    sti
+    
+    ; Restore registers
+    pop rax
+    
+    ; Restore stack frame
+    pop rbp
+    
     ; Return
-    pop rbx
     ret
 
 ; Read the value of CR0 register

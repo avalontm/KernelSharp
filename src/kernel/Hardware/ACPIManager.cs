@@ -184,12 +184,12 @@ namespace Kernel.Hardware
             if (_initialized)
                 return true;
 
-            Console.WriteLine("Inicializando subsistema ACPI...");
+           SerialDebug.Info("Inicializando subsistema ACPI...");
 
             // Buscar la tabla RSDP
             if (!FindRSDP())
             {
-                Console.WriteLine("No se encontró la tabla RSDP. ACPI no disponible.");
+               SerialDebug.Info("No se encontró la tabla RSDP. ACPI no disponible.");
                 return false;
             }
 
@@ -198,7 +198,7 @@ namespace Kernel.Hardware
 
             if (_acpiVersion2)
             {
-                Console.WriteLine($"Detectado ACPI {_rsdp->Revision.ToString()}.0");
+               SerialDebug.Info($"Detectado ACPI {_rsdp->Revision.ToString()}.0");
 
                 // Usar XSDT para ACPI 2.0+
                 if (_rsdp->XsdtAddress != 0)
@@ -206,14 +206,14 @@ namespace Kernel.Hardware
                     _xsdt = (ACPISDTHeader*)_rsdp->XsdtAddress;
                     if (!ValidateTable(_xsdt))
                     {
-                        Console.WriteLine("XSDT inválida, intentando con RSDT...");
+                       SerialDebug.Info("XSDT inválida, intentando con RSDT...");
                         _xsdt = null;
                     }
                 }
             }
             else
             {
-                Console.WriteLine("Detectado ACPI 1.0");
+               SerialDebug.Info("Detectado ACPI 1.0");
             }
 
             // Si no hay XSDT válida o es ACPI 1.0, usar RSDT
@@ -222,7 +222,7 @@ namespace Kernel.Hardware
                 _rsdt = (ACPISDTHeader*)_rsdp->RsdtAddress;
                 if (!ValidateTable(_rsdt))
                 {
-                    Console.WriteLine("RSDT inválida. No se puede continuar.");
+                   SerialDebug.Info("RSDT inválida. No se puede continuar.");
                     return false;
                 }
             }
@@ -230,7 +230,7 @@ namespace Kernel.Hardware
             // Buscar las tablas principales
             if (!FindTables())
             {
-                Console.WriteLine("Error al buscar tablas ACPI importantes.");
+               SerialDebug.Info("Error al buscar tablas ACPI importantes.");
                 return false;
             }
 
@@ -238,7 +238,7 @@ namespace Kernel.Hardware
             DetectResetMethod();
 
             _initialized = true;
-            Console.WriteLine("Subsistema ACPI inicializado correctamente.");
+           SerialDebug.Info("Subsistema ACPI inicializado correctamente.");
             return true;
         }
 
@@ -275,7 +275,7 @@ namespace Kernel.Hardware
 
                             if (sum != 0)
                             {
-                                Console.WriteLine("RSDP extendido inválido (checksum).");
+                               SerialDebug.Info("RSDP extendido inválido (checksum).");
                                 return false;
                             }
                         }
@@ -345,7 +345,7 @@ namespace Kernel.Hardware
 
                 if (!ValidateTable(_dsdt))
                 {
-                    Console.WriteLine("DSDT inválida.");
+                   SerialDebug.Info("DSDT inválida.");
                     _dsdt = null;
                 }
             }
@@ -353,7 +353,7 @@ namespace Kernel.Hardware
             // Verificar que encontramos lo mínimo necesario
             if (_fadt == null)
             {
-                Console.WriteLine("No se encontró la tabla FADT.");
+               SerialDebug.Info("No se encontró la tabla FADT.");
                 return false;
             }
 
@@ -411,7 +411,7 @@ namespace Kernel.Hardware
             {
                 _resetType = ResetType.Register;
                 _resetValue = _fadt->ResetValue;
-                Console.WriteLine("Método de reinicio: Registro ACPI");
+               SerialDebug.Info("Método de reinicio: Registro ACPI");
                 return;
             }
 
@@ -419,7 +419,7 @@ namespace Kernel.Hardware
             _resetType = ResetType.IO;
             _resetPort = 0x64; // Puerto de control de teclado
             _resetValue = 0xFE; // Valor de reinicio
-            Console.WriteLine("Método de reinicio: Puerto de teclado (KB Controller)");
+           SerialDebug.Info("Método de reinicio: Puerto de teclado (KB Controller)");
         }
 
         /// <summary>
@@ -429,11 +429,11 @@ namespace Kernel.Hardware
         {
             if (!_initialized)
             {
-                Console.WriteLine("ACPI no inicializado. No se puede reiniciar.");
+               SerialDebug.Info("ACPI no inicializado. No se puede reiniciar.");
                 return;
             }
 
-            Console.WriteLine("Reiniciando sistema...");
+           SerialDebug.Info("Reiniciando sistema...");
 
             switch (_resetType)
             {
@@ -460,12 +460,12 @@ namespace Kernel.Hardware
                     break;
 
                 default:
-                    Console.WriteLine("No hay método de reinicio disponible.");
+                   SerialDebug.Info("No hay método de reinicio disponible.");
                     break;
             }
 
             // Si llegamos aquí, el reinicio falló
-            Console.WriteLine("El reinicio falló. Sistema detenido.");
+           SerialDebug.Info("El reinicio falló. Sistema detenido.");
             while (true) { Native.Halt(); }
         }
 
@@ -476,11 +476,11 @@ namespace Kernel.Hardware
         {
             if (!_initialized || _fadt == null)
             {
-                Console.WriteLine("ACPI no inicializado. No se puede apagar.");
+               SerialDebug.Info("ACPI no inicializado. No se puede apagar.");
                 return;
             }
 
-            Console.WriteLine("Apagando sistema...");
+           SerialDebug.Info("Apagando sistema...");
 
             // Escribir en los registros PM1a y PM1b para apagar
             if (_fadt->PM1aControlBlock != 0)
@@ -499,7 +499,7 @@ namespace Kernel.Hardware
             }
 
             // Si llegamos aquí, el apagado falló
-            Console.WriteLine("El apagado falló. Sistema detenido.");
+           SerialDebug.Info("El apagado falló. Sistema detenido.");
             while (true) { Native.Halt(); }
         }
 
@@ -531,19 +531,19 @@ namespace Kernel.Hardware
         {
             if (!_initialized)
             {
-                Console.WriteLine("ACPI no inicializado.");
+               SerialDebug.Info("ACPI no inicializado.");
                 return;
             }
 
-            Console.WriteLine("\n=== Información ACPI ===");
+           SerialDebug.Info("\n=== Información ACPI ===");
 
             if (_acpiVersion2)
             {
-                Console.WriteLine("Versión ACPI: 2.0+");
+               SerialDebug.Info("Versión ACPI: 2.0+");
             }
             else
             {
-                Console.WriteLine("Versión ACPI: 1.0");
+               SerialDebug.Info("Versión ACPI: 1.0");
             }
 
             // Extraer OEM ID
@@ -552,41 +552,41 @@ namespace Kernel.Hardware
             {
                 oemId += (char)_rsdp->OemId[i];
             }
-            Console.WriteLine($"OEM ID: {oemId}");
+           SerialDebug.Info($"OEM ID: {oemId}");
 
             // RSDT/XSDT
             if (_xsdt != null)
             {
                 //Console.WriteLine($"XSDT: 0x{((ulong)_xsdt).ToStringHex()}");
                 int entries = (int)(_xsdt->Length - sizeof(ACPISDTHeader)) / 8;
-                Console.WriteLine($"Entradas en XSDT: {entries.ToString()}");
+               SerialDebug.Info($"Entradas en XSDT: {entries.ToString()}");
             }
 
             if (_rsdt != null)
             {
                 ///Console.WriteLine($"RSDT: 0x{((ulong)_rsdt).ToStringHex()}");
                 int entries = (int)(_rsdt->Length - sizeof(ACPISDTHeader)) / 4;
-                Console.WriteLine($"Entradas en RSDT: {entries.ToString()}");
+               SerialDebug.Info($"Entradas en RSDT: {entries.ToString()}");
             }
 
             // Tablas importantes
             if (_fadt != null)
-               // Console.WriteLine($"FADT: 0x{((ulong)_fadt).ToStringHex()}");
+               //SerialDebug.Info($"FADT: 0x{((ulong)_fadt).ToStringHex()}");
 
             if (_dsdt != null)
-               // Console.WriteLine($"DSDT: 0x{((ulong)_dsdt).ToStringHex()}");
+               //SerialDebug.Info($"DSDT: 0x{((ulong)_dsdt).ToStringHex()}");
 
             if (_madt != null)
             {
                 //Console.WriteLine($"MADT: 0x{((ulong)_madt).ToStringHex()}");
-                Console.WriteLine($"Local APIC Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
-                Console.WriteLine($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
+               SerialDebug.Info($"Local APIC Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
+               SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
             }
 
             // Método de reinicio
             //Console.WriteLine($"Método de reinicio: {_resetType.ToString()}");
 
-            Console.WriteLine("========================\n");
+           SerialDebug.Info("========================\n");
         }
     }
 }
