@@ -1,4 +1,6 @@
 ﻿using Internal.Runtime.CompilerHelpers;
+using Internal.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace System.Collections.Generic
@@ -6,17 +8,20 @@ namespace System.Collections.Generic
     /// <summary>
     /// Optimized Dictionary implementation for kernel environment
     /// </summary>
-    public class Dictionary<TKey, TValue>
+    public unsafe class Dictionary<TKey, TValue>
     {
+        // Simple initialization to prevent null reference issues
+        private static readonly int[] s_emptyBuckets = new int[0];
+
         /// <summary>
         /// Entry struct for dictionary items
         /// </summary>
         private struct Entry
         {
             public int HashCode;    // Hash code for the key (masked to be non-negative)
+            public int Next;        // Index of next entry in the same bucket (-1 if last)
             public TKey Key;        // The key
             public TValue Value;    // The value
-            public int Next;        // Index of next entry in the same bucket (-1 if last)
         }
 
         private Entry[] _entries;   // Array of entries
@@ -37,16 +42,25 @@ namespace System.Collections.Generic
                 ThrowHelpers.ArgumentException("Capacity cannot be negative");
             }
 
-            capacity = capacity == 0 ? InitialCapacity : capacity;
-
-            _buckets = new int[capacity];
-            _entries = new Entry[capacity];
-            _keys = new TKey[capacity];
-
-            // Initialize buckets to -1 (empty)
-            for (int i = 0; i < capacity; i++)
+            if (capacity == 0)
             {
-                _buckets[i] = -1;
+                _buckets = s_emptyBuckets;
+                _entries = new Entry[0];
+                _keys = new TKey[0];
+            }
+            else
+            {
+                capacity = capacity < InitialCapacity ? InitialCapacity : capacity;
+
+                _buckets = new int[capacity];
+                _entries = new Entry[capacity];
+                _keys = new TKey[capacity];
+
+                // Initialize buckets to -1 (empty)
+                for (int i = 0; i < capacity; i++)
+                {
+                    _buckets[i] = -1;
+                }
             }
 
             _freeList = -1;
@@ -71,13 +85,19 @@ namespace System.Collections.Generic
                 ThrowHelpers.ArgumentException("Key cannot be null");
             }
 
-            int hashCode = key.GetHashCode() & 0x7FFFFFFF;
+            // Initialize if needed
+            if (_buckets == null || _buckets.Length == 0)
+            {
+                Initialize(InitialCapacity);
+            }
+
+            int hashCode = GetKeyHashCode(key);
             int targetBucket = hashCode % _buckets.Length;
 
             // Check if the key already exists in the dictionary
             for (int i = _buckets[targetBucket]; i >= 0; i = _entries[i].Next)
             {
-                if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
+                if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
                 {
                     ThrowHelpers.ArgumentException("Key already exists");
                 }
@@ -104,7 +124,8 @@ namespace System.Collections.Generic
                 _count++;
             }
 
-            // Assign the entry to the dictionary
+            Debug.WriteLine($"Adding key: {key}, value: {value}, index: {index}, bucket: {targetBucket}");
+
             _entries[index].HashCode = hashCode;
             _entries[index].Key = key;
             _entries[index].Value = value;
@@ -112,19 +133,54 @@ namespace System.Collections.Generic
             _buckets[targetBucket] = index;
 
             // Make sure the keys array is large enough
-            if (index >= _keys.Length)
-            {
-                int newSize = _keys.Length * 2;
-                TKey[] newKeys = new TKey[newSize];
-                for (int i = 0; i < _keys.Length; i++)
-                {
-                    newKeys[i] = _keys[i];
-                }
-                _keys = newKeys;
-            }
+            EnsureKeysCapacity(index);
 
             // Assign the key to the keys array
             _keys[index] = key;
+            Debug.WriteLine("DONE");
+        }
+
+        /// <summary>
+        /// Ensures the keys array has enough capacity
+        /// </summary>
+        private void EnsureKeysCapacity(int index)
+        {
+            if (index >= _keys.Length)
+            {
+                int newSize = _keys.Length == 0 ? InitialCapacity : _keys.Length * 2;
+                TKey[] newKeys = new TKey[newSize];
+                if (_keys.Length > 0)
+                {
+                    Array.Copy(_keys, 0, newKeys, 0, _keys.Length);
+                }
+                _keys = newKeys;
+            }
+        }
+
+        /// <summary>
+        /// Initialize the dictionary with given capacity
+        /// </summary>
+        private void Initialize(int capacity)
+        {
+            int size = capacity;
+            _buckets = new int[size];
+            _entries = new Entry[size];
+            _keys = new TKey[size];
+
+            // Initialize buckets to -1 (empty)
+            for (int i = 0; i < size; i++)
+            {
+                _buckets[i] = -1;
+            }
+        }
+
+        /// <summary>
+        /// Gets a consistent hash code for a key
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int GetKeyHashCode(TKey key)
+        {
+            return key.GetHashCode() & 0x7FFFFFFF; // Make sure it's non-negative
         }
 
         /// <summary>
@@ -144,15 +200,29 @@ namespace System.Collections.Generic
             }
             set
             {
-                int index = FindEntry(key);
-                if (index >= 0)
+                if (key == null)
                 {
-                    _entries[index].Value = value;
+                    ThrowHelpers.ArgumentException("Key cannot be null");
                 }
-                else
+
+                if (_buckets == null || _buckets.Length == 0)
                 {
-                    Add(key, value);
+                    Initialize(InitialCapacity);
                 }
+
+                int hashCode = GetKeyHashCode(key);
+                int targetBucket = hashCode % _buckets.Length;
+
+                for (int i = _buckets[targetBucket]; i >= 0; i = _entries[i].Next)
+                {
+                    if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
+                    {
+                        _entries[i].Value = value;
+                        return;
+                    }
+                }
+
+                Add(key, value);
             }
         }
 
@@ -212,18 +282,18 @@ namespace System.Collections.Generic
                 ThrowHelpers.ArgumentException("Key cannot be null");
             }
 
-            if (_buckets == null)
+            if (_buckets == null || _count == 0)
             {
                 return false;
             }
 
-            int hashCode = key.GetHashCode() & 0x7FFFFFFF;
+            int hashCode = GetKeyHashCode(key);
             int bucket = hashCode % _buckets.Length;
             int last = -1;
 
             for (int i = _buckets[bucket]; i >= 0; last = i, i = _entries[i].Next)
             {
-                if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
+                if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
                 {
                     if (last < 0)
                     {
@@ -262,14 +332,8 @@ namespace System.Collections.Generic
                     _buckets[i] = -1;
                 }
 
-                for (int i = 0; i < _count; i++)
-                {
-                    _entries[i].HashCode = -1;
-                    _entries[i].Next = -1;
-                    _entries[i].Key = default(TKey);
-                    _entries[i].Value = default(TValue);
-                    _keys[i] = default(TKey);
-                }
+                Array.Clear(_entries, 0, _count);
+                Array.Clear(_keys, 0, _count);
 
                 _freeList = -1;
                 _count = 0;
@@ -288,14 +352,14 @@ namespace System.Collections.Generic
                 ThrowHelpers.ArgumentException("Key cannot be null");
             }
 
-            if (_buckets != null)
+            if (_buckets != null && _count > 0)
             {
-                int hashCode = key.GetHashCode() & 0x7FFFFFFF;
+                int hashCode = GetKeyHashCode(key);
                 int bucket = hashCode % _buckets.Length;
 
                 for (int i = _buckets[bucket]; i >= 0; i = _entries[i].Next)
                 {
-                    if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
+                    if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
                     {
                         return i;
                     }
@@ -310,7 +374,7 @@ namespace System.Collections.Generic
         /// </summary>
         private void Resize()
         {
-            // Double the size with a minimum of 4
+            // Double the size with a minimum of InitialCapacity
             int newSize = Math.Max(_entries.Length * 2, InitialCapacity);
 
             // Create new arrays
@@ -324,14 +388,14 @@ namespace System.Collections.Generic
             }
 
             // Copy the old entries to the new arrays
+            Array.Copy(_entries, 0, newEntries, 0, _count);
+
+            // Rehash all entries
             for (int i = 0; i < _count; i++)
             {
-                newEntries[i] = _entries[i];
-
-                // Rehash entries to new bucket array
-                if (_entries[i].HashCode >= 0) // Skip entries in free list
+                if (newEntries[i].HashCode >= 0) // Skip entries in free list
                 {
-                    int bucket = _entries[i].HashCode % newSize;
+                    int bucket = newEntries[i].HashCode % newSize;
                     newEntries[i].Next = newBuckets[bucket];
                     newBuckets[bucket] = i;
                 }
@@ -341,13 +405,8 @@ namespace System.Collections.Generic
             _buckets = newBuckets;
             _entries = newEntries;
 
-            // Update the keys array
-            TKey[] newKeys = new TKey[newSize];
-            for (int i = 0; i < _count; i++)
-            {
-                newKeys[i] = _keys[i];
-            }
-            _keys = newKeys;
+            // Ensure keys array capacity
+            EnsureKeysCapacity(newSize - 1);
         }
     }
 }

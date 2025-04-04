@@ -1,6 +1,6 @@
 BITS 32
 
-; Constantes Multiboot
+; Multiboot Constants
 MODULEALIGN       equ     1<<0
 MEMINFO           equ     1<<1
 FLAGS             equ     MODULEALIGN | MEMINFO
@@ -9,10 +9,9 @@ CHECKSUM          equ     -(MAGIC + FLAGS)
 
 section .text
 global _start
-global kernel_trampoline
 extern Entry
 
-; Cabecera Multiboot (primeros 8KB)
+; Multiboot Header
 align 4
 mb_header:
     dd MAGIC
@@ -21,44 +20,49 @@ mb_header:
 
 _start:
     cli
-    mov [multiboot_ptr], ebx  ; Guardar puntero Multiboot
-    mov esp, stack_top        ; Configurar stack
+    mov [multiboot_ptr], ebx  ; Save Multiboot pointer
+    mov esp, stack_top        ; Configure stack
 
-    ; Limpiar pantalla
+    ; Clear screen
     mov edi, 0xB8000
     mov ecx, 80*25
     mov ax, 0x0720
     rep stosw
 
-    ; Mensaje inicial
+    ; Initial message
     mov esi, init_msg
     mov edi, 0xB8000
     call print_string
 
-    ; Verificar CPUID
+    ; Mask all PIC interrupts
+    mov al, 0xFF
+    out 0xA1, al  ; Slave PIC
+    out 0x21, al  ; Master PIC
+
+    ; Check CPUID
     call check_cpuid
     test eax, eax
     jz no_cpuid
 
-    ; Verificar Long Mode
+    ; Check Long Mode
     call check_long_mode
     test eax, eax
     jz no_long_mode
 
-    ; Configurar paginación
+    ; Setup paging
     call setup_paging
 
-    ; Habilitar SSE
+    ; Enable SSE
     call enable_sse
 
-    ; Entrar en modo 64-bit
+    ; Enter 64-bit mode
     call enter_long_mode
 
-    ; Nunca debería llegar aquí
+    ; Should never reach here
     jmp system_halt
 
 ;----------------------------------------------------------
-; Funciones básicas
+; Basic Functions
 ;----------------------------------------------------------
 
 print_string:
@@ -76,7 +80,7 @@ print_string:
     ret
 
 ;----------------------------------------------------------
-; Verificaciones del sistema
+; System Checks
 ;----------------------------------------------------------
 
 check_cpuid:
@@ -135,22 +139,22 @@ system_halt:
     jmp system_halt
 
 ;----------------------------------------------------------
-; Configuración para 64-bit
+; 64-bit Configuration
 ;----------------------------------------------------------
 
 setup_paging:
-    ; Mensaje
+    ; Message
     mov esi, paging_msg
     mov edi, 0xB8000 + 160
     call print_string
 
-    ; Limpiar tablas de páginas
+    ; Clear page tables
     mov edi, pml4_table
     xor eax, eax
     mov ecx, 4096*3        ; PML4, PDPT, PD
     rep stosb
 
-    ; Mapeo recursivo (opcional para depuración)
+    ; Recursive mapping (optional for debugging)
     mov eax, pml4_table
     or eax, 0b11
     mov [pml4_table + 511*8], eax
@@ -165,14 +169,14 @@ setup_paging:
     or eax, 0b11
     mov [pdpt_table], eax
 
-    ; Mapear 1GB con páginas de 2MB
+    ; Map 1GB with 2MB pages
     mov edi, pd_table
-    mov eax, 0x00000083    ; Presente + RW + Tamaño de página (2MB)
-    mov ecx, 512           ; 512 entradas = 1GB
+    mov eax, 0x00000083    ; Present + RW + Page Size (2MB)
+    mov ecx, 512           ; 512 entries = 1GB
 
 .map_pd_entry:
     mov [edi], eax
-    add eax, 0x200000      ; Siguiente página de 2MB
+    add eax, 0x200000      ; Next 2MB page
     add edi, 8
     loop .map_pd_entry
     ret
@@ -183,133 +187,105 @@ enable_sse:
     or ax, 0x2             ; Set CR0.MP
     mov cr0, eax
     mov eax, cr4
-    or eax, (1 << 9) | (1 << 10) ; OSFXSR y OSXMMEXCPT
+    or eax, (1 << 9) | (1 << 10) ; OSFXSR and OSXMMEXCPT
     mov cr4, eax
     ret
 
 enter_long_mode:
-    ; Cargar tablas de páginas
+    ; Load page tables
     mov eax, pml4_table
     mov cr3, eax
 
-    ; Habilitar PAE
+    ; Enable PAE
     mov eax, cr4
     or eax, 1 << 5
     mov cr4, eax
 
-    ; Habilitar Long Mode
+    ; Enable Long Mode
     mov ecx, 0xC0000080
     rdmsr
     or eax, 1 << 8
     wrmsr
 
-    ; Habilitar paginación
+    ; Enable paging
     mov eax, cr0
     or eax, 1 << 31
     mov cr0, eax
 
-    ; Cargar GDT 64-bit
+    ; Load 64-bit GDT
     lgdt [gdt64.pointer]
 
-    ; Saltar a modo 64-bit
+    ; Jump to 64-bit mode
     jmp gdt64.code:long_mode_start
 
 ;----------------------------------------------------------
-; Trampolín 64-bit
+; 64-bit Code
 ;----------------------------------------------------------
 bits 64
-kernel_trampoline:
-    push rbp
-    mov rbp, rsp
-
-    ; Preservar registros importantes
-    push rbx
-    push r12
-    push r13
-    push r14
-    push r15
-
-    ; Pasar parámetros a Entry (FastCall)
-    mov rcx, [multiboot_ptr]  ; Primer parámetro en RCX
-    lea rdx, [rel kernel_trampoline]  ; Segundo parámetro en RDX
-
-    ; Llamar al punto de entrada del kernel
-    extern Entry
-    call Entry
-
-    ; Restaurar registros
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-
-    ; Restaurar stack
-    mov rsp, rbp
-    pop rbp
-    ret
-
-;----------------------------------------------------------
-; Código 64-bit
-;----------------------------------------------------------
 long_mode_start:
-    ; Configurar segmentos
-    mov ax, gdt64.data
+    ; Disable interrupts
+    cli
+
+    ; Clear segment registers
+    xor ax, ax
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
 
-    ; Limpiar pantalla
-    mov rdi, 0xB8000
-    mov rcx, 80*25/4       ; Usamos STOSQ para mayor eficiencia
-    mov rax, 0x0720072007200720
-    rep stosq
+    ; Clear general-purpose registers
+    xor rax, rax
+    xor rbx, rbx
+    xor rcx, rcx
+    xor rdx, rdx
+    xor rsi, rsi
+    xor rdi, rdi
+    xor rbp, rbp
+    xor r8, r8
+    xor r9, r9
+    xor r10, r10
+    xor r11, r11
+    xor r12, r12
+    xor r13, r13
+    xor r14, r14
+    xor r15, r15
 
-    ; Mensaje de éxito
-    mov rdi, 0xB8000
-    mov rsi, success64_msg
-    call print_string64
+    ; Set stack pointer
+    mov rsp, stack_top
 
-    ; Llamar al trampolín
-    call kernel_trampoline
+    ; Clear flags
+    push 0
+    popfq
 
-    ; En caso de retorno
+    ; Invalidate TLB
+    mov rax, cr3
+    mov cr3, rax
+
+    ; Prepare parameters for FastCall
+    ; RCX: Multiboot pointer
+    mov rcx, [multiboot_ptr]
+
+    ; Call kernel entry point
+    extern Entry
+    call Entry
+
+    ; In case of return
     cli
     hlt
     jmp $
 
-print_string64:
-    push rax
-    push rcx
-    mov ah, 0x0F
-.loop:
-    lodsb
-    test al, al
-    jz .done
-    mov [rdi], al
-    mov [rdi+1], ah
-    add rdi, 2
-    jmp .loop
-.done:
-    pop rcx
-    pop rax
-    ret
-
-
 ;----------------------------------------------------------
-; Sección de datos
+; Data Section
 ;----------------------------------------------------------
 section .data
-init_msg          db "KernelSharp: Inicializando loader...", 0
-cpuid_err_msg     db "ERROR: CPUID no soportado!", 0
-long_mode_err_msg db "ERROR: Modo 64-bit no soportado!", 0
-paging_msg        db "Configurando paginacion...", 0
-success64_msg     db "Modo 64-bit activado correctamente", 0
-halt_msg          db "Sistema detenido.", 0
+init_msg          db "KernelSharp: Initializing loader...", 0
+cpuid_err_msg     db "ERROR: CPUID not supported!", 0
+long_mode_err_msg db "ERROR: 64-bit mode not supported!", 0
+paging_msg        db "Configuring paging...", 0
+halt_msg          db "System halted.", 0
 
-; GDT 64-bit
+; 64-bit GDT
 align 16
 gdt64:
     .null: equ $ - gdt64
@@ -323,7 +299,7 @@ gdt64:
         dq gdt64
 
 ;----------------------------------------------------------
-; Sección BSS
+; BSS Section
 ;----------------------------------------------------------
 section .bss
 align 4096

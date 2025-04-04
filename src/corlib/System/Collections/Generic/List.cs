@@ -1,4 +1,5 @@
 ﻿using Internal.Runtime.CompilerHelpers;
+using Internal.Runtime.CompilerServices;
 using System.Runtime.CompilerServices;
 
 namespace System.Collections.Generic
@@ -6,8 +7,18 @@ namespace System.Collections.Generic
     /// <summary>
     /// Optimized List implementation for kernel environment
     /// </summary>
-    public class List<T>
+    public unsafe class List<T>
     {
+        // Static field for empty array to prevent null references
+        private static readonly T[] s_emptyArray = InitializeEmptyArray();
+
+        private static T[] InitializeEmptyArray()
+        {
+            EETypePtr et = EETypePtr.EETypePtrOf<T[]>();
+            object arrayObj = RuntimeImports.RhpNewArray(et._value, 0);
+            return Unsafe.As<object, T[]>(ref arrayObj);
+        }
+
         // Internal storage with dynamic resizing
         private T[] _items;
         private int _size;
@@ -32,8 +43,14 @@ namespace System.Collections.Generic
                 ThrowHelpers.ArgumentException("Capacity cannot be negative");
             }
 
-            capacity = capacity == 0 ? _defaultCapacity : capacity;
-            _items = new T[capacity];
+            if (capacity == 0)
+            {
+                _items = s_emptyArray;
+            }
+            else
+            {
+                _items = new T[capacity];
+            }
             _size = 0;
         }
 
@@ -72,7 +89,7 @@ namespace System.Collections.Generic
                     }
                     else
                     {
-                        _items = new T[_defaultCapacity];
+                        _items = s_emptyArray;
                     }
                 }
             }
@@ -89,7 +106,7 @@ namespace System.Collections.Generic
                 int newCapacity = _items.Length == 0 ? _defaultCapacity : _items.Length * 2;
 
                 // Safety check for very large arrays
-                if (_items.Length > 0x3FFFFFFF)
+                if ((uint)_items.Length > 0x3FFFFFFF)
                 {
                     // More conservative growth for very large arrays
                     newCapacity = _items.Length + (_items.Length / 2);
@@ -115,10 +132,7 @@ namespace System.Collections.Generic
                 // Copy existing elements
                 if (_size > 0)
                 {
-                    for (int i = 0; i < _size; i++)
-                    {
-                        newItems[i] = _items[i];
-                    }
+                    Array.Copy(_items, 0, newItems, 0, _size);
                 }
 
                 _items = newItems;
@@ -164,10 +178,7 @@ namespace System.Collections.Generic
             if (index < _size)
             {
                 // Shift elements down to fill the gap
-                for (int i = index; i < _size; i++)
-                {
-                    _items[i] = _items[i + 1];
-                }
+                Array.Copy(_items, index + 1, _items, index, _size - index);
             }
 
             // Clear the last element to allow GC to collect it if needed
@@ -196,10 +207,7 @@ namespace System.Collections.Generic
             if (_size > 0)
             {
                 // Clear references to allow GC collection
-                for (int i = 0; i < _size; i++)
-                {
-                    _items[i] = default(T);
-                }
+                Array.Clear(_items, 0, _size);
                 _size = 0;
             }
         }
@@ -209,27 +217,7 @@ namespace System.Collections.Generic
         /// </summary>
         public int IndexOf(T item)
         {
-            // Handle null items
-            if (item == null)
-            {
-                for (int i = 0; i < _size; i++)
-                {
-                    if (_items[i] == null) return i;
-                }
-            }
-            else
-            {
-                for (int i = 0; i < _size; i++)
-                {
-                    // For reference types, use reference equality or Equals
-                    if (Object.ReferenceEquals(_items[i], item) ||
-                        (_items[i] != null && _items[i].Equals(item)))
-                    {
-                        return i;
-                    }
-                }
-            }
-            return -1;
+            return Array.IndexOf(_items, item, 0, _size);
         }
 
         /// <summary>
@@ -247,14 +235,11 @@ namespace System.Collections.Generic
         {
             if (_size == 0)
             {
-                return new T[0];
+                return s_emptyArray;
             }
 
             T[] array = new T[_size];
-            for (int i = 0; i < _size; i++)
-            {
-                array[i] = _items[i];
-            }
+            Array.Copy(_items, 0, array, 0, _size);
             return array;
         }
 
@@ -264,6 +249,51 @@ namespace System.Collections.Generic
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);
+        }
+
+        /// <summary>
+        /// Adds a range of items from an array to the list
+        /// </summary>
+        public void AddRange(T[] collection)
+        {
+            if (collection == null)
+            {
+                ThrowHelpers.ArgumentNullException("collection");
+            }
+
+            int count = collection.Length;
+            if (count > 0)
+            {
+                EnsureCapacity(_size + count);
+                Array.Copy(collection, 0, _items, _size, count);
+                _size += count;
+            }
+        }
+
+        /// <summary>
+        /// Inserts an item at the specified index
+        /// </summary>
+        public void Insert(int index, T item)
+        {
+            // Check bounds (allow insert at _size)
+            if ((uint)index > (uint)_size)
+            {
+                ThrowHelpers.ArgumentException("Index out of range");
+            }
+
+            if (_size == _items.Length)
+            {
+                EnsureCapacity(_size + 1);
+            }
+
+            // Move items up to make space
+            if (index < _size)
+            {
+                Array.Copy(_items, index, _items, index + 1, _size - index);
+            }
+
+            _items[index] = item;
+            _size++;
         }
 
         /// <summary>
@@ -290,10 +320,21 @@ namespace System.Collections.Generic
                     _current = _list._items[_index];
                     return true;
                 }
+                _current = default(T);
                 return false;
             }
 
-            public T Current { get { return _current; } }
+            public T Current
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get { return _current; }
+            }
+
+            public void Reset()
+            {
+                _index = -1;
+                _current = default(T);
+            }
         }
     }
 }

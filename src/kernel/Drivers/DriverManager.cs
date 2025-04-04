@@ -108,7 +108,7 @@ namespace Kernel.Drivers
 
             // Add to drivers dictionary
             _drivers[driver.Id] = driver;
-
+            /*
             // Determine driver type
             DriverType type = DetermineDriverType(driver);
 
@@ -119,7 +119,7 @@ namespace Kernel.Drivers
             }
 
             _driversByType[type].Add(driver);
-
+            */
             SerialDebug.Info($"Registered driver: {driver.Id} ({driver.Name})");
         }
 

@@ -181,6 +181,10 @@ namespace Internal.Runtime.CompilerHelpers
             Panic("ArgumentOutOfRangeException: " + message);
         }
 
+        internal static void ArgumentNullException()
+        {
+            Panic("ArgumentOutOfRangeException:");
+        }
         internal static void ArgumentNullException(string message)
         {
             Panic("ArgumentOutOfRangeException: " + message);
@@ -380,6 +384,11 @@ namespace Internal.Runtime.CompilerHelpers
         internal static void InvalidOperationException(string message)
         {
             Panic("InvalidOperationException: " + message);
+        }
+
+        internal static void ArgumentException()
+        {
+            throw new NotImplementedException();
         }
     }
 }

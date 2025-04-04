@@ -143,7 +143,7 @@ namespace Kernel.Hardware
             }
 
             _initialized = true;
-            SerialDebug.Info($"SMBIOS initialized: version {_majorVersion}.{_minorVersion}");
+            SerialDebug.Info($"SMBIOS initialized: version {_majorVersion.ToString()}.{_minorVersion.ToString()}");
             return true;
         }
 
@@ -207,7 +207,7 @@ namespace Kernel.Hardware
                         // Perform basic validation
                         if (_tablePtr != IntPtr.Zero && _tableLength > 0 && _tableLength < 0x100000) // 1MB max
                         {
-                            SerialDebug.Info($"SMBIOS 2.x: v{_majorVersion}.{_minorVersion}, " +
+                            SerialDebug.Info($"SMBIOS 2.x: v{_majorVersion.ToString()}.{_minorVersion.ToString()}, " +
                                             $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
                             return true;
                         }
@@ -451,7 +451,7 @@ namespace Kernel.Hardware
             }
 
             SerialDebug.Info("\n===== SMBIOS INFORMATION =====");
-            SerialDebug.Info($"SMBIOS Version: {_majorVersion}.{_minorVersion}");
+            SerialDebug.Info($"SMBIOS Version: {_majorVersion.ToString()}.{_minorVersion.ToString()}");
 
             // BIOS
             IntPtr biosPtr = FindStructure(SMBIOSStructureType.BIOSInformation);
@@ -492,8 +492,8 @@ namespace Kernel.Hardware
                     SerialDebug.Info($"Socket: {GetString(cpuPtr, cpuInfo->SocketDesignation)}");
                     SerialDebug.Info($"Manufacturer: {GetString(cpuPtr, cpuInfo->ProcessorManufacturer)}");
                     SerialDebug.Info($"Version: {GetString(cpuPtr, cpuInfo->ProcessorVersion)}");
-                    SerialDebug.Info($"Current Speed: {cpuInfo->CurrentSpeed} MHz");
-                    SerialDebug.Info($"Max Speed: {cpuInfo->MaxSpeed} MHz");
+                    SerialDebug.Info($"Current Speed: {cpuInfo->CurrentSpeed.ToString()} MHz");
+                    SerialDebug.Info($"Max Speed: {cpuInfo->MaxSpeed.ToString()} MHz");
                 }
             }
 

@@ -197,7 +197,7 @@ namespace Kernel.Hardware
 
             if (_acpiVersion2)
             {
-                SerialDebug.Info($"Detected ACPI {_rsdp->Revision}.0");
+                SerialDebug.Info($"Detected ACPI {_rsdp->Revision.ToString()}.0");
 
                 // Use XSDT for ACPI 2.0+
                 if (_rsdp->XsdtAddress != 0)
@@ -317,7 +317,7 @@ namespace Kernel.Hardware
             // Add explicit bounds check to prevent potential overflow
             if (table->Length < sizeof(ACPISDTHeader) || table->Length > 0x100000) // 1MB max table size as sanity check
             {
-                SerialDebug.Info($"Invalid table length: {table->Length}");
+                SerialDebug.Info($"Invalid table length: {table->Length.ToString()}");
                 return false;
             }
 
@@ -380,7 +380,7 @@ namespace Kernel.Hardware
                 // Validate entry count for security
                 if (entries <= 0 || entries > 1000) // Sanity check - no more than 1000 tables
                 {
-                    SerialDebug.Info($"Invalid XSDT entry count: {entries}");
+                    SerialDebug.Info($"Invalid XSDT entry count: {entries.ToString()}");
                     return null;
                 }
 
@@ -416,7 +416,7 @@ namespace Kernel.Hardware
                 // Validate entry count for security
                 if (entries <= 0 || entries > 1000) // Sanity check
                 {
-                    SerialDebug.Info($"Invalid RSDT entry count: {entries}");
+                    SerialDebug.Info($"Invalid RSDT entry count: {entries.ToString()}");
                     return null;
                 }
 
@@ -627,24 +627,42 @@ namespace Kernel.Hardware
             {
                 oemId += (char)_rsdp->OemId[i];
             }
-            SerialDebug.Info($"OEM ID: {oemId}");
+            SerialDebug.Info($"OEM ID: {oemId.ToString()}");
 
             // RSDT/XSDT
             if (_xsdt != null)
             {
                 int entries = (int)(_xsdt->Length - sizeof(ACPISDTHeader)) / 8;
-                SerialDebug.Info($"XSDT Entries: {entries}");
+                SerialDebug.Info($"XSDT Entries: {entries.ToString()}");
             }
 
             if (_rsdt != null)
             {
                 int entries = (int)(_rsdt->Length - sizeof(ACPISDTHeader)) / 4;
-                SerialDebug.Info($"RSDT Entries: {entries}");
+                SerialDebug.Info($"RSDT Entries: {entries.ToString()}");
             }
 
             // Important tables
-            SerialDebug.Info($"FADT: {(_fadt != null ? "Found" : "Not found")}");
-            SerialDebug.Info($"DSDT: {(_dsdt != null ? "Found" : "Not found")}");
+            // Para FADT
+            if (_fadt != null)
+            {
+                SerialDebug.Info("FADT: Found");
+            }
+            else
+            {
+                SerialDebug.Info("FADT: Not found");
+            }
+
+            // Para DSDT
+            if (_dsdt != null)
+            {
+                SerialDebug.Info("DSDT: Found");
+            }
+            else
+            {
+                SerialDebug.Info("DSDT: Not found");
+            }
+
 
             if (_madt != null)
             {

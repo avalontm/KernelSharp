@@ -14,16 +14,15 @@ namespace Kernel
 {
     static unsafe class Program
     {
-
         [RuntimeExport("Entry")]
-        public static void Entry(MultibootInfo* multibootInfo, IntPtr trampoline)
+        public static void Entry(MultibootInfo* multibootInfo)
         {   
             // Initialize serial debug
             SerialDebug.Initialize();
             // Initialize memory subsystem
             Allocator.Initialize((IntPtr)0x200000);
             PageTable.Initialize();
- 
+
             // Show welcome message
             Console.ForegroundColor = ConsoleColor.Green;
             string welcomeMessage = "Welcome to KernelSharp!";
@@ -57,17 +56,14 @@ namespace Kernel
             Console.WriteLine("Multiboot info!");
             Console.WriteLine($"multibootInfo: 0x" + ((ulong)multibootInfo).ToStringHex());
 
-            Console.WriteLine($"Flag: {multibootInfo->Flags.ToString()}");
+            Console.WriteLine($"Flag: {multibootInfo->Flags}");
 
             GDTManager.Initialize();
             IDTManager.Initialize();
-
-            ACPIManager.Initialize();
-            SMPManager.Initialize();
-
-            APICController.Initialize();
-
             SMBIOS.Initialize();
+            SMPManager.Initialize();
+            ACPIManager.Initialize();
+            APICController.Initialize();
 
             PCIManager.Initialize();
             DriverManager.Initialize();
@@ -102,7 +98,7 @@ namespace Kernel
             // Obtener lista de dispositivos PCI detectados
             List<PCIDevice> pciDevices = PCIManager.GetDevices();
 
-            SerialDebug.Info($"pciDevices: {pciDevices.Count.ToString()}");
+            SerialDebug.Info($"pciDevices: {pciDevices.Count}");
             // Iterar dispositivos y registrar drivers según su clase
             for (int i = 0; i < pciDevices.Count; i++)
             {
@@ -160,20 +156,10 @@ namespace Kernel
         unsafe static int Main()
         {
             Console.WriteLine("Main Process");
-            // Kernel's main loop
-            uint idleCounter = 0;
 
             while (true)
             {
                 Native.Halt();
-                idleCounter++;
-
-                if (idleCounter >= 1)
-                {
-                    idleCounter = 0;
-                    // Show memory usage after a certain period
-                }
-
             }
         }
 

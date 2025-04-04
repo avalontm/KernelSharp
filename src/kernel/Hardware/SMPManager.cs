@@ -128,6 +128,7 @@ namespace Kernel.Hardware
             SerialDebug.Info("Initializing SMP system...");
 
             _cpuInfos = new CPUInfo[MAX_CPUS];
+            
             // First try to use ACPI information from ACPIManager if available
             if (ACPIManager._initialized)
             {
@@ -266,7 +267,7 @@ namespace Kernel.Hardware
             // Check for reasonable length to prevent issues
             if (rsdt->Length > 0x10000) // 64KB max as sanity check
             {
-                SerialDebug.Info($"RSDT length too large: {rsdt->Length} bytes");
+                SerialDebug.Info($"RSDT length too large: {rsdt->Length.ToString()} bytes");
                 return false;
             }
 
@@ -275,7 +276,7 @@ namespace Kernel.Hardware
 
             if (entries <= 0 || entries > 1000) // Sanity check for entry count
             {
-                SerialDebug.Info($"Unreasonable RSDT entry count: {entries}");
+                SerialDebug.Info($"Unreasonable RSDT entry count: {entries.ToString()}");
                 return false;
             }
 
@@ -318,7 +319,7 @@ namespace Kernel.Hardware
             // Check for reasonable length to prevent issues
             if (xsdt->Length > 0x10000) // 64KB max as sanity check
             {
-                SerialDebug.Info($"XSDT length too large: {xsdt->Length} bytes");
+                SerialDebug.Info($"XSDT length too large: {xsdt->Length.ToString()} bytes");
                 return false;
             }
 
@@ -327,7 +328,7 @@ namespace Kernel.Hardware
 
             if (entries <= 0 || entries > 1000) // Sanity check for entry count
             {
-                SerialDebug.Info($"Unreasonable XSDT entry count: {entries}");
+                SerialDebug.Info($"Unreasonable XSDT entry count: {entries.ToString()}");
                 return false;
             }
 
@@ -390,7 +391,7 @@ namespace Kernel.Hardware
                 // Ensure length is valid
                 if (record->Length < 2 || current + record->Length > end)
                 {
-                    SerialDebug.Info($"Invalid MADT record length: {record->Length}");
+                    SerialDebug.Info($"Invalid MADT record length: {record->Length.ToString()}");
                     break;
                 }
 
@@ -411,7 +412,7 @@ namespace Kernel.Hardware
                                 _cpuInfos[_cpuCount].IsBootProcessor = (_cpuCount == 0);
                                 _cpuCount++;
 
-                                SerialDebug.Info($"Found CPU with APIC ID: {localApic->ApicId}");
+                                SerialDebug.Info($"Found CPU with APIC ID: {localApic->ApicId.ToString()}");
                             }
                         }
                         break;
@@ -421,7 +422,7 @@ namespace Kernel.Hardware
                         {
                             MADTIOApic* ioApic = (MADTIOApic*)record;
                             _ioApicAddress = ioApic->IoApicAddress;
-                            SerialDebug.Info($"Found IO APIC at address: 0x{_ioApicAddress.ToStringHex()}, ID: {ioApic->IoApicId}");
+                            //SerialDebug.Info($"Found IO APIC at address: 0x{_ioApicAddress.ToStringHex()}, ID: {ioApic->IoApicId.ToString()}");
                         }
                         break;
                 }
@@ -477,8 +478,6 @@ namespace Kernel.Hardware
             // Verify the write
             uint newValue = *spuriousReg;
             SerialDebug.Info($"New Spurious Register Value: 0x{((ulong)newValue).ToStringHex()}");
-
-            // In a complete implementation, you would initialize APs (Application Processors) here
 
         }
 
@@ -536,7 +535,7 @@ namespace Kernel.Hardware
             }
 
             SerialDebug.Info("\n=== Processor Information ===");
-            SerialDebug.Info($"Total CPU count: {_cpuCount}");
+            SerialDebug.Info($"Total CPU count: {_cpuCount.ToString()}");
             SerialDebug.Info($"Local APIC Address: 0x{_localApicAddress.ToStringHex()}");
             if (_ioApicAddress != 0)
                 SerialDebug.Info($"IO APIC Address: 0x{_ioApicAddress.ToStringHex()}");
@@ -545,7 +544,7 @@ namespace Kernel.Hardware
             {
                 string processorType = _cpuInfos[i].IsBootProcessor ? "BSP" : "AP";
                 string enabledStatus = _cpuInfos[i].IsEnabled ? "Enabled" : "Disabled";
-                SerialDebug.Info($"CPU {i}: APIC ID {_cpuInfos[i].ApicId}, {processorType}, {enabledStatus}");
+                SerialDebug.Info($"CPU {i.ToString()}: APIC ID {_cpuInfos[i].ApicId.ToString()}, {processorType}, {enabledStatus}");
             }
             SerialDebug.Info("=============================\n");
         }

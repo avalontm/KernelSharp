@@ -9,18 +9,18 @@ namespace System
     public abstract unsafe partial class Array
     {
         internal int _numComponents;
-
-        // We impose limits on maximum array length in each dimension to allow efficient
-        // implementation of advanced range check elimination in future.
-        // Keep in sync with vm\gcscan.cpp and HashHelpers.MaxPrimeArrayLength.
-        // The constants are defined in this method: inline SIZE_T MaxArrayLength(SIZE_T componentSize) from gcscan
-        // We have different max sizes for arrays with elements of size 1 for backwards compatibility
         public const int MaxLength = 0x7FFFFFC7;
-
-        // This is the threshold where Introspective sort switches to Insertion sort.
-        // Empirically, 16 seems to speed up most cases without slowing down others, at least for integers.
-        // Large value types may benefit from a smaller number.
         internal const int IntrosortSizeThreshold = 16;
+
+        // Static field for empty array initialization
+        private static readonly Array s_emptyArray = InitializeEmptyArray();
+
+        private static Array InitializeEmptyArray()
+        {
+            EETypePtr et = EETypePtr.EETypePtrOf<object[]>();
+            Array arrayObj = (Array)RuntimeImports.RhpNewArray(et._value, 0);
+            return arrayObj;
+        }
 
         // This ctor exists solely to prevent C# from generating a protected .ctor that violates the surface area.
         private protected Array() { }
@@ -29,6 +29,22 @@ namespace System
         private ref int GetRawMultiDimArrayBounds()
         {
             return ref Unsafe.AddByteOffset(ref _numComponents, (nuint)sizeof(void*));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal new ref byte GetRawData()
+        {
+            // The array data starts after the _numComponents field and any bounds.
+            // For single-dimensional arrays, this is immediately after _numComponents.
+            return ref Unsafe.AddByteOffset(ref Unsafe.As<int, byte>(ref _numComponents), (nuint)sizeof(int));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal new uint GetRawDataSize()
+        {
+            // Get the element size from the array's EEType
+            // This is a simplified implementation for low-level kernel
+            return (uint)sizeof(int); // Default to int size if unknown
         }
 
         public static void ForEach<T>(T[] array, Action<T> action)
@@ -73,12 +89,12 @@ namespace System
             for (int i = 0; i < rank; i++)
             {
                 int length = pLengths[i];
-                
-				if (length > MaxLength)
-				{
-					ThrowHelpers.ThrowArgumentOutOfRangeException("length");
-				}
-				
+
+                if (length > MaxLength)
+                {
+                    ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+                }
+
 
                 totalLength *= (ulong)length;
             }
@@ -115,11 +131,11 @@ namespace System
 
         public static void Resize<T>(ref T[] array, int newSize)
         {
-            
-			if (newSize < 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("newSize");
-			}
+
+            if (newSize < 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("newSize");
+            }
 
             T[] larray = array;
 
@@ -139,118 +155,116 @@ namespace System
 
         public static Array CreateInstance<T>(uint length)
         {
-			if (length < MaxLength)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("length");
-			}
-			
+            if (length < MaxLength)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+            }
+
             return new T[length];
         }
 
-            /// <summary>
-            /// Copia elementos de un array de origen a un array de destino.
-            /// </summary>
-            /// <param name="sourceArray">Array de origen</param>
-            /// <param name="destinationArray">Array de destino</param>
-            public static void Copy(Array sourceArray, Array destinationArray)
+        /// <summary>
+        /// Copia elementos de un array de origen a un array de destino.
+        /// </summary>
+        /// <param name="sourceArray">Array de origen</param>
+        /// <param name="destinationArray">Array de destino</param>
+        public static void Copy(Array sourceArray, Array destinationArray)
+        {
+            if (sourceArray == null)
+                ThrowHelpers.ArgumentNullException("sourceArray");
+
+            if (destinationArray == null)
+                ThrowHelpers.ArgumentNullException("destinationArray");
+
+            Copy(sourceArray, 0, destinationArray, 0, Math.Min(sourceArray.Length, destinationArray.Length));
+        }
+
+        /// <summary>
+        /// Copia elementos de un array de origen a un array de destino con un índice de inicio.
+        /// </summary>
+        /// <param name="sourceArray">Array de origen</param>
+        /// <param name="destinationArray">Array de destino</param>
+        /// <param name="startIndex">Índice de inicio en el array de origen</param>
+        public static void Copy(Array sourceArray, Array destinationArray, int startIndex)
+        {
+            if (sourceArray == null)
+                ThrowHelpers.ArgumentNullException("sourceArray");
+
+            if (destinationArray == null)
+                ThrowHelpers.ArgumentNullException("destinationArray");
+
+            Copy(sourceArray, startIndex, destinationArray, 0, Math.Min(sourceArray.Length - startIndex, destinationArray.Length));
+        }
+
+        /// <summary>
+        /// Copia elementos de un array de origen a un array de destino con índices de origen y destino.
+        /// </summary>
+        /// <param name="sourceArray">Array de origen</param>
+        /// <param name="sourceIndex">Índice de inicio en el array de origen</param>
+        /// <param name="destinationArray">Array de destino</param>
+        /// <param name="destinationIndex">Índice de inicio en el array de destino</param>
+        /// <param name="length">Número de elementos a copiar</param>
+        public static void Copy(Array sourceArray, int sourceIndex, Array destinationArray, int destinationIndex, int length)
+        {
+            if (sourceArray == null)
+                ThrowHelpers.ArgumentNullException("sourceArray");
+
+            if (destinationArray == null)
+                ThrowHelpers.ArgumentNullException("destinationArray");
+
+            // Validar índices y longitud
+            if (sourceIndex < 0)
+                ThrowHelpers.ArgumentOutOfRangeException("sourceIndex");
+
+            if (destinationIndex < 0)
+                ThrowHelpers.ArgumentOutOfRangeException("destinationIndex");
+
+            if (length < 0)
+                ThrowHelpers.ArgumentOutOfRangeException("length");
+
+            if (sourceIndex + length > sourceArray.Length)
+                ThrowHelpers.ArgumentException("Source array too short");
+
+            if (destinationIndex + length > destinationArray.Length)
+                ThrowHelpers.ArgumentException("Destination array too short");
+
+
+            fixed (void* sourcePtr = &sourceArray.GetRawData(), destPtr = &destinationArray.GetRawData())
             {
-                if (sourceArray == null)
-                    ThrowHelpers.ArgumentNullException("sourceArray");
-
-                if (destinationArray == null)
-                    ThrowHelpers.ArgumentNullException("destinationArray");
-
-                Copy(sourceArray, 0, destinationArray, 0, Math.Min(sourceArray.Length, destinationArray.Length));
+                byte* src = (byte*)sourcePtr + (sourceIndex * sourceArray.GetRawDataSize());
+                byte* dest = (byte*)destPtr + (destinationIndex * destinationArray.GetRawDataSize());
+                MemoryHelpers.Movsb(dest, src, (ulong)(length * sourceArray.GetRawDataSize()));
             }
 
-            /// <summary>
-            /// Copia elementos de un array de origen a un array de destino con un índice de inicio.
-            /// </summary>
-            /// <param name="sourceArray">Array de origen</param>
-            /// <param name="destinationArray">Array de destino</param>
-            /// <param name="startIndex">Índice de inicio en el array de origen</param>
-            public static void Copy(Array sourceArray, Array destinationArray, int startIndex)
-            {
-                if (sourceArray == null)
-                    ThrowHelpers.ArgumentNullException("sourceArray");
+        }
 
-                if (destinationArray == null)
-                    ThrowHelpers.ArgumentNullException("destinationArray");
+        /// <summary>
+        /// Copia elementos de un array de origen a un array de destino de tipo genérico.
+        /// </summary>
+        public static void Copy<T>(T[] sourceArray, T[] destinationArray)
+        {
+            if (sourceArray == null)
+                ThrowHelpers.ArgumentNullException("sourceArray");
 
-                Copy(sourceArray, startIndex, destinationArray, 0, Math.Min(sourceArray.Length - startIndex, destinationArray.Length));
-            }
+            if (destinationArray == null)
+                ThrowHelpers.ArgumentNullException("destinationArray");
 
-            /// <summary>
-            /// Copia elementos de un array de origen a un array de destino con índices de origen y destino.
-            /// </summary>
-            /// <param name="sourceArray">Array de origen</param>
-            /// <param name="sourceIndex">Índice de inicio en el array de origen</param>
-            /// <param name="destinationArray">Array de destino</param>
-            /// <param name="destinationIndex">Índice de inicio en el array de destino</param>
-            /// <param name="length">Número de elementos a copiar</param>
-            public static void Copy(Array sourceArray, int sourceIndex, Array destinationArray, int destinationIndex, int length)
-            {
-                if (sourceArray == null)
-                    ThrowHelpers.ArgumentNullException("sourceArray");
+            Copy(sourceArray, 0, destinationArray, 0, Math.Min(sourceArray.Length, destinationArray.Length));
+        }
 
-                if (destinationArray == null)
-                    ThrowHelpers.ArgumentNullException("destinationArray");
+        /// <summary>
+        /// Copia elementos de un array de origen a un array de destino de tipo genérico con un índice de inicio.
+        /// </summary>
+        public static void Copy<T>(T[] sourceArray, T[] destinationArray, int startIndex)
+        {
+            if (sourceArray == null)
+                ThrowHelpers.ArgumentNullException("sourceArray");
 
-                // Validar índices y longitud
-                if (sourceIndex < 0)
-                    ThrowHelpers.ArgumentOutOfRangeException("sourceIndex");
+            if (destinationArray == null)
+                ThrowHelpers.ArgumentNullException("destinationArray");
 
-                if (destinationIndex < 0)
-                    ThrowHelpers.ArgumentOutOfRangeException("destinationIndex");
-
-                if (length < 0)
-                    ThrowHelpers.ArgumentOutOfRangeException("length");
-
-                if (sourceIndex + length > sourceArray.Length)
-                    ThrowHelpers.ArgumentException("Source array too short");
-
-                if (destinationIndex + length > destinationArray.Length)
-                    ThrowHelpers.ArgumentException("Destination array too short");
-
-                // Copia de memoria segura usando punteros
-                unsafe
-                {
-                    fixed (void* sourcePtr = &sourceArray.GetRawData(), destPtr = &destinationArray.GetRawData())
-                    {
-                        byte* src = (byte*)sourcePtr + (sourceIndex * sourceArray.GetRawDataSize());
-                        byte* dest = (byte*)destPtr + (destinationIndex * destinationArray.GetRawDataSize());
-                        MemoryHelpers.Movsb(dest, src, (ulong)(length * sourceArray.GetRawDataSize()));
-                    }
-                }
-            }
-
-            /// <summary>
-            /// Copia elementos de un array de origen a un array de destino de tipo genérico.
-            /// </summary>
-            public static void Copy<T>(T[] sourceArray, T[] destinationArray)
-            {
-                if (sourceArray == null)
-                    ThrowHelpers.ArgumentNullException("sourceArray");
-
-                if (destinationArray == null)
-                    ThrowHelpers.ArgumentNullException("destinationArray");
-
-                Copy(sourceArray, 0, destinationArray, 0, Math.Min(sourceArray.Length, destinationArray.Length));
-            }
-
-            /// <summary>
-            /// Copia elementos de un array de origen a un array de destino de tipo genérico con un índice de inicio.
-            /// </summary>
-            public static void Copy<T>(T[] sourceArray, T[] destinationArray, int startIndex)
-            {
-                if (sourceArray == null)
-                    ThrowHelpers.ArgumentNullException("sourceArray");
-
-                if (destinationArray == null)
-                    ThrowHelpers.ArgumentNullException("destinationArray");
-
-                Copy(sourceArray, startIndex, destinationArray, 0, Math.Min(sourceArray.Length - startIndex, destinationArray.Length));
-            }
+            Copy(sourceArray, startIndex, destinationArray, 0, Math.Min(sourceArray.Length - startIndex, destinationArray.Length));
+        }
 
         /// <summary>
         /// Copia elementos de un array de origen a un array de destino de tipo genérico con índices de origen y destino.
@@ -279,19 +293,9 @@ namespace System
             if (destinationIndex + length > destinationArray.Length)
                 ThrowHelpers.ArgumentException("Destination array too short");
 
-            // Copia segura de memoria para arrays de tipo genérico
-            unsafe
+            for (int i = 0; i < length; i++)
             {
-                fixed (T* sourcePtr = sourceArray, destPtr = destinationArray)
-                {
-                    T* src = sourcePtr + sourceIndex;
-                    T* dest = destPtr + destinationIndex;
-
-                    for (int i = 0; i < length; i++)
-                    {
-                        dest[i] = src[i];
-                    }
-                }
+                destinationArray[destinationIndex + i] = sourceArray[sourceIndex + i];
             }
         }
 
@@ -319,22 +323,19 @@ namespace System
             if (length > destinationArray.Length)
                 ThrowHelpers.ArgumentException("Destination array too short");
 
-            // Copia de memoria segura usando punteros
-            unsafe
-            {
-                fixed (void* sourcePtr = &sourceArray.GetRawData(), destPtr = &destinationArray.GetRawData())
-                {
-                    int elementSize = (int)sourceArray.GetRawDataSize();
-                    byte* src = (byte*)sourcePtr + (startIndex * elementSize);
-                    byte* dest = (byte*)destPtr;
 
-                    MemoryHelpers.Movsb(dest, src, (ulong)(length * elementSize));
-                }
+            fixed (void* sourcePtr = &sourceArray.GetRawData(), destPtr = &destinationArray.GetRawData())
+            {
+                int elementSize = (int)sourceArray.GetRawDataSize();
+                byte* src = (byte*)sourcePtr + (startIndex * elementSize);
+                byte* dest = (byte*)destPtr;
+
+                MemoryHelpers.Movsb(dest, src, (ulong)(length * elementSize));
             }
         }
 
-        // Sobrecarga genérica para arrays de tipo específico
-        public static unsafe void Copy<T>(T[] sourceArray, T[] destinationArray, int startIndex, int length)
+        // Copia segura de memoria para arrays de tipo genérico
+        public static void Copy<T>(T[] sourceArray, T[] destinationArray, int startIndex, int length)
         {
             // Validar arrays de entrada
             if (sourceArray == null)
@@ -358,20 +359,7 @@ namespace System
             if (length > destinationArray.Length)
                 ThrowHelpers.ArgumentException("Destination array too short");
 
-            // Copia segura de memoria para arrays de tipo genérico
-            unsafe
-            {
-                fixed (T* sourcePtr = sourceArray, destPtr = destinationArray)
-                {
-                    T* src = sourcePtr + startIndex;
-                    T* dest = destPtr;
-
-                    for (int i = 0; i < length; i++)
-                    {
-                        dest[i] = src[i];
-                    }
-                }
-            }
+            Copy(sourceArray, startIndex, destinationArray, 0, length);
         }
 
         // Clear method for non-generic Array
@@ -427,10 +415,10 @@ namespace System
         public virtual object GetValue(long index)
         {
             int iindex = (int)index;
-			if (index != iindex)
-			{
-				ThrowHelpers.ThrowArgumentException("index");
-			}
+            if (index != iindex)
+            {
+                ThrowHelpers.ThrowArgumentException("index");
+            }
 
             return GetValue(iindex);
         }
@@ -445,15 +433,15 @@ namespace System
             int iindex1 = (int)index1;
             int iindex2 = (int)index2;
 
-			if (index1 != iindex1)
-			{
-				ThrowHelpers.ThrowArgumentException("index1");
-			}
+            if (index1 != iindex1)
+            {
+                ThrowHelpers.ThrowArgumentException("index1");
+            }
 
-			if (index2 != iindex2)
-			{
-				ThrowHelpers.ThrowArgumentException("index2");
-			}
+            if (index2 != iindex2)
+            {
+                ThrowHelpers.ThrowArgumentException("index2");
+            }
 
 
             return GetValue(iindex1, iindex2);
@@ -466,20 +454,20 @@ namespace System
             int iindex3 = (int)index3;
 
 
-			if (index1 != iindex1)
-			{
-				ThrowHelpers.ThrowArgumentException("index1");
-			}
+            if (index1 != iindex1)
+            {
+                ThrowHelpers.ThrowArgumentException("index1");
+            }
 
-			if (index2 != iindex2)
-			{
-				ThrowHelpers.ThrowArgumentException("index2");
-			}
+            if (index2 != iindex2)
+            {
+                ThrowHelpers.ThrowArgumentException("index2");
+            }
 
-			if (index3 != iindex3)
-			{
-				ThrowHelpers.ThrowArgumentException("index3");
-			}
+            if (index3 != iindex3)
+            {
+                ThrowHelpers.ThrowArgumentException("index3");
+            }
 
             return GetValue(iindex1, iindex2, iindex3);
         }
@@ -488,10 +476,10 @@ namespace System
         {
             int iindex = (int)index;
 
-			if (index != iindex)
-			{
-				ThrowHelpers.ThrowArgumentException("index");
-			}
+            if (index != iindex)
+            {
+                ThrowHelpers.ThrowArgumentException("index");
+            }
 
             SetValue(value, iindex);
         }
@@ -506,15 +494,15 @@ namespace System
             int iindex1 = (int)index1;
             int iindex2 = (int)index2;
 
-			if (index1 != iindex1)
-			{
-				ThrowHelpers.ThrowArgumentException("index1");
-			}
+            if (index1 != iindex1)
+            {
+                ThrowHelpers.ThrowArgumentException("index1");
+            }
 
-			if (index2 != iindex2)
-			{
-				ThrowHelpers.ThrowArgumentException("index2");
-			}
+            if (index2 != iindex2)
+            {
+                ThrowHelpers.ThrowArgumentException("index2");
+            }
 
             SetValue(value, iindex1, iindex2);
         }
@@ -525,20 +513,20 @@ namespace System
             int iindex2 = (int)index2;
             int iindex3 = (int)index3;
 
-			if (index1 != iindex1)
-			{
-				ThrowHelpers.ThrowArgumentException("index1");
-			}
+            if (index1 != iindex1)
+            {
+                ThrowHelpers.ThrowArgumentException("index1");
+            }
 
-			if (index2 != iindex2)
-			{
-				ThrowHelpers.ThrowArgumentException("index2");
-			}
+            if (index2 != iindex2)
+            {
+                ThrowHelpers.ThrowArgumentException("index2");
+            }
 
-			if (index3 != iindex3)
-			{
-				ThrowHelpers.ThrowArgumentException("index3");
-			}
+            if (index3 != iindex3)
+            {
+                ThrowHelpers.ThrowArgumentException("index3");
+            }
 
             SetValue(value, iindex1, iindex2, iindex3);
         }
@@ -592,10 +580,10 @@ namespace System
 
         public static void Fill<T>(T[] array, T value)
         {
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("Fill: array");
-			}
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("Fill: array");
+            }
 
             for (int i = 0; i < array.Length; i++)
             {
@@ -606,20 +594,20 @@ namespace System
         public static void Fill<T>(T[] array, T value, int startIndex, int count)
         {
 
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("Fill: array");
-			}
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("Fill: array");
+            }
 
-			if (startIndex < 0 || startIndex > array.Length)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex, array.Length");
-			}
+            if (startIndex < 0 || startIndex > array.Length)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex, array.Length");
+            }
 
-			if (count < 0 || startIndex > array.Length - count)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("count, array.Length - count, startIndex");
-			}
+            if (count < 0 || startIndex > array.Length - count)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("count, array.Length - count, startIndex");
+            }
 
             for (int i = startIndex; i < startIndex + count; i++)
             {
@@ -708,17 +696,17 @@ namespace System
 
         public static int IndexOf(Array array, object value, int startIndex)
         {
-            
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("IndexOf: array");
-			}
 
-			if ((uint)startIndex > (uint)array.Length)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex, array.Length");
-			}
-			
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("IndexOf: array");
+            }
+
+            if ((uint)startIndex > (uint)array.Length)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex, array.Length");
+            }
+
 
             for (int i = startIndex; i < array.Length; i++)
             {
@@ -738,17 +726,17 @@ namespace System
 
         public static int IndexOf<T>(T[] array, T value, int startIndex)
         {
-            
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("IndexOf: array");
-			}
 
-			if ((uint)startIndex > (uint)array.Length)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex, array.Length");
-			}
-			
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("IndexOf: array");
+            }
+
+            if ((uint)startIndex > (uint)array.Length)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("startIndex, array.Length");
+            }
+
 
             for (int i = startIndex; i < startIndex + array.Length; i++)
             {
@@ -759,45 +747,35 @@ namespace System
             }
             return -1;
         }
-        // Reverses all elements of the given array. Following a call to this
-        // method, an element previously located at index i will now be
-        // located at index length - i - 1, where length is the
-        // length of the array.
-        //
+
         public static void Reverse(ref Array array)
         {
             Reverse(ref array, 0, array.Length);
         }
 
-        // Reverses the elements in a range of an array. Following a call to this
-        // method, an element in the range given by index and count
-        // which was previously located at index i will now be located at
-        // index index + (index + count - i - 1).
-        // Reliability note: This may fail because it may have to box objects.
-        //
         public static void Reverse(ref Array array, int index, int length)
         {
-            
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("Reverse: array");
-			}
 
-			if (index < 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("index");
-			}
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("Reverse: array");
+            }
 
-			if (length < 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("length");
-			}
+            if (index < 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("index");
+            }
 
-			if (array.Length - index < length)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException("length, index");
-			}
-			
+            if (length < 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("length");
+            }
+
+            if (array.Length - index < length)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException("length, index");
+            }
+
 
             if (length <= 1)
             {
@@ -812,36 +790,37 @@ namespace System
             }
             array = o;
         }
+
         public static int LastIndexOf(Array array, object value, int startIndex, int count)
         {
-            
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("LastIndexOf: array");
-			}
-			
+
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("LastIndexOf: array");
+            }
+
 
             if (array.Length == 0)
             {
                 return -1;
             }
 
-            
-			if (startIndex < 0 || startIndex >= array.Length)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException(SR.ArgumentOutOfRange_Index);
-			}
 
-			if (count < 0)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException(SR.ArgumentOutOfRange_Count);
-			}
+            if (startIndex < 0 || startIndex >= array.Length)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException(SR.ArgumentOutOfRange_Index);
+            }
 
-			if (count > startIndex - 1)
-			{
-				ThrowHelpers.ThrowArgumentOutOfRangeException(SR.ArgumentOutOfRange_EndIndexStartIndex);
-			}
-			
+            if (count < 0)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException(SR.ArgumentOutOfRange_Count);
+            }
+
+            if (count > startIndex - 1)
+            {
+                ThrowHelpers.ThrowArgumentOutOfRangeException(SR.ArgumentOutOfRange_EndIndexStartIndex);
+            }
+
 
             int endIndex = startIndex - count + 1;
             if (value == null)
@@ -875,27 +854,27 @@ namespace System
 
         public static void Reverse<T>(ref T[] array, int index, int length)
         {
-            
-			if (array == null)
-			{
-				ThrowHelpers.ThrowArgumentNullException("Reverse: array");
-			}
 
-			if (index < 0)
-			{
-				ThrowHelpers.ThrowArgumentNullException("Reverse: index");
-			}
+            if (array == null)
+            {
+                ThrowHelpers.ThrowArgumentNullException("Reverse: array");
+            }
 
-			if (length < 0)
-			{
-				ThrowHelpers.ThrowArgumentNullException("Reverse: length");
-			}
+            if (index < 0)
+            {
+                ThrowHelpers.ThrowArgumentNullException("Reverse: index");
+            }
 
-			if (array.Length - index < length)
-			{
-				ThrowHelpers.ThrowArgumentNullException("array.Length, index, length");
-			}
-			
+            if (length < 0)
+            {
+                ThrowHelpers.ThrowArgumentNullException("Reverse: length");
+            }
+
+            if (array.Length - index < length)
+            {
+                ThrowHelpers.ThrowArgumentNullException("array.Length, index, length");
+            }
+
 
             if (length <= 1)
             {
@@ -912,6 +891,6 @@ namespace System
         }
     }
 
-    public class Array<T> : Array { }
+     public class Array<T> : Array { }
 
 }

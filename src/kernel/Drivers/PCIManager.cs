@@ -71,8 +71,6 @@ namespace Kernel.Drivers
             _devices = new List<PCIDevice>();
             // Scan all buses
             ScanAllBuses();
-            // Print detected devices
-            PrintDevices();
         }
 
         /// <summary>
@@ -410,20 +408,6 @@ namespace Kernel.Drivers
             {
                 // Single PCI host controller - scan bus 0
                 ScanBus(0);
-            }
-        }
-
-        /// <summary>
-        /// Print detected PCI devices
-        /// </summary>
-        private static void PrintDevices()
-        {
-            SerialDebug.Info($"Detected {_devices.Count.ToString()} PCI devices:");
-
-            for (int i = 0; i < _devices.Count; i++)
-            {
-                PCIDevice device = _devices[i];
-                SerialDebug.Info($"  {device.ToString()}");
             }
         }
     }
