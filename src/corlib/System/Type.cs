@@ -18,6 +18,16 @@ namespace System
         // Nombre del tipo (opcional, podría cargarse bajo demanda)
         private string _name;
 
+        // Minimal constructor
+        public Type() { }
+
+        // Optional: Constructor with name
+        public Type(string name)
+        {
+            Name = name;
+            FullName = name;
+        }
+
         // Constructor privado - los tipos se obtienen a través de métodos estáticos
         private Type(EETypePtr eeTypePtr)
         {
@@ -103,6 +113,10 @@ namespace System
                 }
                 return _name;
             }
+            private set
+            {
+                _name = value;
+            }
         }
 
         /// <summary>
@@ -115,6 +129,10 @@ namespace System
                 string fullName = FullName;
                 int lastDot = fullName.LastIndexOf('.');
                 return lastDot > 0 ? fullName.Substring(lastDot + 1) : fullName;
+            }
+            private set
+            {
+                Name = value;
             }
         }
 

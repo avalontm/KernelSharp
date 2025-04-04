@@ -19,10 +19,6 @@ SECTIONS {
         *(.bss)                 /* Uninitialized data */
     }
 
-    .reloc : {
-        *(.reloc)               /* Relocation data */
-    }
-
     /* Read-only data */
     .rdata : {
         *(.rdata)                /* Read-only data */
@@ -34,5 +30,6 @@ SECTIONS {
         *(.comment)
         *(.pdata)  /* Important to remove */
         *(.xdata)
+        *(.reloc)
     }
 }

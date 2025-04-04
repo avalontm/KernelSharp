@@ -1,8 +1,7 @@
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace System
 {
@@ -11,7 +10,7 @@ namespace System
         internal int _numComponents;
         public const int MaxLength = 0x7FFFFFC7;
         internal const int IntrosortSizeThreshold = 16;
-
+        /*
         // Static field for empty array initialization
         private static readonly Array s_emptyArray = InitializeEmptyArray();
 
@@ -21,7 +20,7 @@ namespace System
             Array arrayObj = (Array)RuntimeImports.RhpNewArray(et._value, 0);
             return arrayObj;
         }
-
+        */
         // This ctor exists solely to prevent C# from generating a protected .ctor that violates the surface area.
         private protected Array() { }
 
@@ -891,6 +890,6 @@ namespace System
         }
     }
 
-     public class Array<T> : Array { }
+    public class Array<T> : Array { }
 
 }

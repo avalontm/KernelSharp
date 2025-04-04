@@ -1,5 +1,6 @@
 ﻿using Internal.Runtime.CompilerHelpers;
 using Internal.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace System.Collections.Generic
@@ -29,6 +30,7 @@ namespace System.Collections.Generic
         /// </summary>
         public List()
         {
+            Debug.WriteLine("List constructor called");
             _items = new T[_defaultCapacity];
             _size = 0;
         }
@@ -100,6 +102,7 @@ namespace System.Collections.Generic
         /// </summary>
         public void Add(T item)
         {
+            Debug.WriteLine("Add method called");
             if (_size == _items.Length)
             {
                 // Growth factor of 2 is efficient for most scenarios

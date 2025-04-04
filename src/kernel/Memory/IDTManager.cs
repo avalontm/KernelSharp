@@ -1,6 +1,5 @@
 ﻿using Kernel.Diagnostics;
 using System;
-using System.Runtime;
 using System.Runtime.InteropServices;
 
 namespace Kernel.Memory
@@ -53,10 +52,10 @@ namespace Kernel.Memory
         private const int IDT_SIZE = 256;
 
         // The IDT
-        private static IDTEntry* _idt;
+        internal static IDTEntry* _idt;
 
         // IDT Pointer for LIDT instruction
-        private static IDTPointer _idtPointer;
+        internal static IDTPointer _idtPointer;
 
         /// <summary>
         /// Initializes the IDT
@@ -68,38 +67,36 @@ namespace Kernel.Memory
             // Allocate memory for the IDT
             _idt = (IDTEntry*)Allocator.malloc((nuint)(sizeof(IDTEntry) * IDT_SIZE));
 
-            // Initialize all entries to zero
-            for (int i = 0; i < IDT_SIZE; i++)
-            {
-                _idt[i] = new IDTEntry();
-            }
-
-            // Configure IDT pointer
-            _idtPointer.Limit = (ushort)(IDT_SIZE * sizeof(IDTEntry) - 1);
-            _idtPointer.Base = (ulong)_idt;
-
-            // Configure interrupt stub handler that redirects to HandleInterrupt
+            // Verificación detallada de la dirección del stub
             IntPtr stubHandler = GetInterruptStubAddress();
 
-            if (stubHandler != IntPtr.Zero)
-            {
-                // Register the stub for all entries
-                for (int i = 0; i < IDT_SIZE; i++)
-                {
-                    SetIDTEntry(i, stubHandler, 0x08, IDTGateType.InterruptGate);
-                }
+            // Log de diagnóstico
+            SerialDebug.Info($"Interrupt Stub Address: 0x{((ulong)stubHandler).ToStringHex()}");
 
-                // Load the IDT
-                fixed (IDTPointer* idtPtr = &_idtPointer)
-                {
-                    LoadIDT(idtPtr);
-                }
-                SerialDebug.Info("IDT initialized successfully");
-            }
-            else
+            if (stubHandler == IntPtr.Zero)
             {
-                SerialDebug.Info("ERROR: Could not get interrupt stub address");
+                // Método de detención de bajo nivel
+                SerialDebug.Error("CRITICAL: Cannot obtain interrupt stub address");
+                Native.CLI();  // Deshabilitar interrupciones
+                while (true)
+                {
+                    Native.Halt(); // Detener el sistema
+                }
             }
+
+            // Configurar todas las entradas de la IDT
+            for (int i = 0; i < IDT_SIZE; i++)
+            {
+                SetIDTEntry(i, stubHandler, 0x08, IDTGateType.InterruptGate);
+            }
+
+            // Cargar IDT
+            fixed (IDTPointer* idtPtr = &_idtPointer)
+            {
+                LoadIDT(idtPtr);
+            }
+
+            SerialDebug.Info("IDT initialized successfully");
         }
 
         /// <summary>
@@ -124,16 +121,6 @@ namespace Kernel.Memory
             _idt[index].TypeAttr = (byte)type;
             _idt[index].IST = ist;
             _idt[index].Reserved = 0;
-        }
-
-        internal static void Disable()
-        {
-            Native.CLI();
-        }
-
-        internal static void Enable()
-        {
-            Native.STI();
         }
 
         /// <summary>

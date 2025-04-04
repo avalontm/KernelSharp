@@ -1,4 +1,7 @@
 ﻿using Kernel.Diagnostics;
+using Kernel.Drivers.Audio;
+using Kernel.Drivers.Network;
+using System;
 using System.Collections.Generic;
 
 namespace Kernel.Drivers
@@ -44,7 +47,7 @@ namespace Kernel.Drivers
     /// <summary>
     /// Possible states for a driver
     /// </summary>
-    public enum DriverState
+    public enum DriverState 
     {
         Unloaded,
         Initializing,
@@ -56,7 +59,7 @@ namespace Kernel.Drivers
     /// <summary>
     /// Types of drivers
     /// </summary>
-    public enum DriverType
+    public enum DriverType 
     {
         Graphics,
         Network,
@@ -69,58 +72,111 @@ namespace Kernel.Drivers
     /// <summary>
     /// System driver manager
     /// </summary>
-    public static class DriverManager
+    public unsafe static class DriverManager
     {
-        // Collection of registered drivers
-        private static Dictionary<string, IDriver> _drivers;
+        // Arrays to store drivers
+        private static IDriver[] _registeredDrivers;
+        private static int _driverCount = 0;
 
-        // Dictionary of drivers by type
-        private static Dictionary<DriverType, List<IDriver>> _driversByType;
+        // Parallel arrays for driver type management
+        private static int[] _driverTypes;
 
         /// <summary>
         /// Initializes the Driver Manager
         /// </summary>
         public static void Initialize()
         {
-            SerialDebug.Info("Initializing Driver Manager...");
-            _drivers = new Dictionary<string, IDriver>();
-            _driversByType = new Dictionary<DriverType, List<IDriver>>();
-            SerialDebug.Info("Driver Manager initialized successfully");
+            SerialDebug.Info("Initializing Lightweight Driver Manager...");
+            // Reset arrays
+            _registeredDrivers = new IDriver[64];
+            _driverTypes = new int[64];
+            _driverCount = 0;
+            SerialDebug.Info("Lightweight Driver Manager initialized successfully");
         }
 
         /// <summary>
         /// Registers a new driver in the system
         /// </summary>
         /// <param name="driver">Driver to register</param>
-        public static void RegisterDriver(IDriver driver)
+        public static bool RegisterDriver(IDriver driver)
         {
             if (driver == null)
-                return;
+                return false;
 
-            // Prevent duplicates
-            if (_drivers.ContainsKey(driver.Id))
+            SerialDebug.Info($"Registering driver: {driver.Id} ({driver.Name})");
+            // Check for duplicate
+            for (int i = 0; i < _driverCount; i++)
             {
-                SerialDebug.Warning($"Driver {driver.Id} already registered. Skipping.");
-                return;
+                if (_registeredDrivers[i] != null)
+                {
+                    if (_registeredDrivers[i].Id == driver.Id)
+                    {
+                        SerialDebug.Warning($"Driver {driver.Id} already registered. Skipping.");
+                        return false;
+                    }
+                }
             }
 
-            SerialDebug.Info("Registering driver: " + driver.Name);
-
-            // Add to drivers dictionary
-            _drivers[driver.Id] = driver;
-            /*
-            // Determine driver type
-            DriverType type = DetermineDriverType(driver);
-
-            // Add to list by type
-            if (!_driversByType.ContainsKey(type))
+            SerialDebug.Info($"Driver {driver.Id} not found. Proceeding with registration.");
+            // Ensure capacity
+            if (_driverCount >= _registeredDrivers.Length)
             {
-                _driversByType[type] = new List<IDriver>();
+                SerialDebug.Warning("Maximum driver capacity reached. Cannot register more drivers.");
+                return false;
             }
 
-            _driversByType[type].Add(driver);
-            */
+            SerialDebug.Info($"Driver {driver.Id} is valid. Proceeding with registration.");
+            // Register driver
+            _registeredDrivers[_driverCount] = driver;
+            _driverTypes[_driverCount] = DetermineDriverType(driver);
+            _driverCount++;
+
             SerialDebug.Info($"Registered driver: {driver.Id} ({driver.Name})");
+            return true;
+        }
+
+        /// <summary>
+        /// Gets a driver by its ID
+        /// </summary>
+        public static IDriver GetDriver(string id)
+        {
+            for (int i = 0; i < _driverCount; i++)
+            {
+                if (_registeredDrivers[i].Id == id)
+                {
+                    return _registeredDrivers[i];
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Gets all drivers of a specific type
+        /// </summary>
+        public static IDriver[] GetDriversByType(DriverType type)
+        {
+            // Count matching drivers first
+            int matchCount = 0;
+            for (int i = 0; i < _driverCount; i++)
+            {
+                if (_driverTypes[i] == type)
+                {
+                    matchCount++;
+                }
+            }
+
+            // Create and populate result array
+            IDriver[] result = new IDriver[matchCount];
+            int index = 0;
+            for (int i = 0; i < _driverCount; i++)
+            {
+                if (_driverTypes[i] == type)
+                {
+                    result[index++] = _registeredDrivers[i];
+                }
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -130,93 +186,31 @@ namespace Kernel.Drivers
         {
             SerialDebug.Info("Initializing all drivers...");
 
-            // Initialization order by driver type priority
-            DriverType[] initOrder = new DriverType[]
+
+            // Iterate through priority order
+            for (int o = 0; o < 6; o++)
             {
-                DriverType.Graphics,
-                DriverType.Storage,
-                DriverType.Network,
-                DriverType.Input,
-                DriverType.Audio,
-                DriverType.Other
-            };
-
-            for (int typeIndex = 0; typeIndex < initOrder.Length; typeIndex++)
-            {
-                DriverType type = initOrder[typeIndex];
-                List<IDriver> drivers = null;
-
-                if (!_driversByType.TryGetValue(type, out drivers))
-                    continue;
-
-                for (int driverIndex = 0; driverIndex < drivers.Count; driverIndex++)
+                for (int i = 0; i < _driverCount; i++)
                 {
-                    IDriver driver = drivers[driverIndex];
+                    // Check if driver matches current type
+                    if (_driverTypes[i] == o)
+                    {
+                        IDriver driver = _registeredDrivers[i];
+                        SerialDebug.Info($"Initializing driver: {driver.Id}");
 
-                    SerialDebug.Info($"Initializing driver: {driver.Id}");
-                    if (driver.Initialize())
-                    {
-                        SerialDebug.Info($"Driver initialized successfully: {driver.Id}");
-                    }
-                    else
-                    {
-                        SerialDebug.Warning($"Failed to initialize driver: {driver.Id}");
+                        if (driver.Initialize())
+                        {
+                            SerialDebug.Info($"Driver initialized successfully: {driver.Id}");
+                        }
+                        else
+                        {
+                            SerialDebug.Warning($"Failed to initialize driver: {driver.Id}");
+                        }
                     }
                 }
             }
 
             SerialDebug.Info("All drivers initialization complete");
-        }
-
-        /// <summary>
-        /// Gets a driver by its ID
-        /// </summary>
-        public static IDriver GetDriver(string id)
-        {
-            IDriver driver = null;
-            _drivers.TryGetValue(id, out driver);
-            return driver;
-        }
-
-        /// <summary>
-        /// Gets all drivers of a specific type
-        /// </summary>
-        public static IDriver[] GetDriversByType(DriverType type)
-        {
-            List<IDriver> drivers = null;
-            if (_driversByType.TryGetValue(type, out drivers))
-            {
-                return drivers.ToArray();
-            }
-            return new IDriver[0];
-        }
-
-        /// <summary>
-        /// Determines the type of driver
-        /// </summary>
-        private static DriverType DetermineDriverType(IDriver driver)
-        {
-            // Logic to determine driver type
-            // Can be expanded as needed
-            string name = driver.Name.ToUpper();
-
-            if (name.Contains("GRAPHICS") || name.Contains("VIDEO") || name.Contains("DISPLAY"))
-                return DriverType.Graphics;
-
-            if (name.Contains("NETWORK") || name.Contains("ETHERNET") || name.Contains("WIFI"))
-                return DriverType.Network;
-
-            if (name.Contains("STORAGE") || name.Contains("DISK") || name.Contains("IDE") ||
-                name.Contains("SATA") || name.Contains("NVME"))
-                return DriverType.Storage;
-
-            if (name.Contains("INPUT") || name.Contains("KEYBOARD") || name.Contains("MOUSE"))
-                return DriverType.Input;
-
-            if (name.Contains("AUDIO") || name.Contains("SOUND"))
-                return DriverType.Audio;
-
-            return DriverType.Other;
         }
 
         /// <summary>
@@ -226,97 +220,169 @@ namespace Kernel.Drivers
         {
             SerialDebug.Info("Shutting down all drivers...");
 
-            // Get all drivers from dictionary
-            int count = _drivers.Count;
-            IDriver[] driversArray = new IDriver[count];
-            int index = 0;
-
-            // Extract all driver values directly without using CopyTo
-            string[] keysArray = _drivers.Keys;
-            for (int i = 0; i < keysArray.Length; i++)
+            // Shutdown in reverse order
+            for (int i = _driverCount - 1; i >= 0; i--)
             {
-                IDriver driver = null;
-                if (_drivers.TryGetValue(keysArray[i], out driver))
-                {
-                    driversArray[index++] = driver;
-                }
-            }
-
-            // Shutdown each driver
-            for (int i = 0; i < index; i++)
-            {
-                IDriver driver = driversArray[i];
+                IDriver driver = _registeredDrivers[i];
                 SerialDebug.Info($"Shutting down driver: {driver.Id}");
                 driver.Shutdown();
-                SerialDebug.Info($"Driver shut down: {driver.Id}");
             }
 
             SerialDebug.Info("All drivers shutdown complete");
         }
 
         /// <summary>
-        /// Enables memory space for a PCI device
+        /// Determines the type of driver
         /// </summary>
-        public static void EnableMemorySpace(PCIDevice pciDevice)
+        private static int DetermineDriverType(IDriver driver)
         {
-            if (pciDevice == null)
-                return;
+            // Logic to determine driver type (same as previous implementation)
+            string name = driver.Name.ToUpper();
+            SerialDebug.Info($"Determining driver type for: {name}");
+            if (name.Contains("GRAPHICS") || name.Contains("VIDEO") || name.Contains("DISPLAY"))
+                return (int)DriverType.Graphics;
 
-            // Read current command register
-            ushort command = PCIManager.ReadConfig16(
-                pciDevice.Location.Bus,
-                pciDevice.Location.Device,
-                pciDevice.Location.Function,
-                0x04 // Command register
-            );
+            if (name.Contains("NETWORK") || name.Contains("ETHERNET") || name.Contains("WIFI"))
+                return (int)DriverType.Network;
 
-            // Enable memory space bit (bit 1)
-            command |= 0x02;
+            if (name.Contains("STORAGE") || name.Contains("DISK") || name.Contains("IDE") ||
+                name.Contains("SATA") || name.Contains("NVME"))
+                return (int)DriverType.Storage;
 
-            // Write updated command register
-            PCIManager.WriteConfig16(
-                pciDevice.Location.Bus,
-                pciDevice.Location.Device,
-                pciDevice.Location.Function,
-                0x04, // Command register
-                command
-            );
+            if (name.Contains("INPUT") || name.Contains("KEYBOARD") || name.Contains("MOUSE"))
+                return (int)DriverType.Input;
 
-            SerialDebug.Info($"Memory space enabled for device {pciDevice.Location.ToString()}");
+            if (name.Contains("AUDIO") || name.Contains("SOUND"))
+                return (int)DriverType.Audio;
+
+            return (int)DriverType.Other;
+        }
+
+
+        public static void RegisterPCIDrivers()
+        {
+            SerialDebug.Info("Registering PCI drivers...");
+            // Obtener lista de dispositivos PCI detectados
+            List<PCIDevice> pciDevices = PCIManager.GetDevices();
+
+            SerialDebug.Info($"pciDevices: {pciDevices.Count}");
+            // Iterar dispositivos y registrar drivers según su clase
+            for (int i = 0; i < pciDevices.Count; i++)
+            {
+                PCIDevice device = pciDevices[i];
+                switch (device.ID.ClassCode)
+                {
+                    case 0x02: // Dispositivos de red
+                        RegisterNetworkDriver(device);
+                        break;
+
+                    case 0x03: // Controladores de gráficos
+                               // RegisterGraphicsDriver(device);
+                        break;
+
+                    case 0x01: // Controladores de almacenamiento
+                               // RegisterStorageDriver(device);
+                        break;
+                    case 0x04: // Dispositivos multimedia (audio)
+                        RegisterAudioDriver(device);
+                        break;
+                    default:
+                        // Registrar drivers genéricos para otros tipos de dispositivos
+                        // RegisterGenericDriver(device);
+                        break;
+                }
+            }
         }
 
         /// <summary>
-        /// Enables bus mastering for a PCI device
+        /// Registra controladores de dispositivos de audio
         /// </summary>
-        public static void EnableBusMastering(PCIDevice pciDevice)
+        /// <param name="device">Dispositivo PCI de audio</param>
+        static void RegisterAudioDriver(PCIDevice device)
         {
-            if (pciDevice == null)
-                return;
+            SerialDebug.Info($"Detecting audio device: VendorID=0x{((ulong)device.ID.VendorID).ToStringHex()}, DeviceID=0x{((ulong)device.ID.DeviceID).ToStringHex()}");
 
-            // Read current command register
-            ushort command = PCIManager.ReadConfig16(
-                pciDevice.Location.Bus,
-                pciDevice.Location.Device,
-                pciDevice.Location.Function,
-                0x04 // Command register
-            );
+            // Intel AC97 Audio Controller
+            if (device.ID.VendorID == 0x8086 && device.ID.DeviceID == 0x2415)
+            {
+                SerialDebug.Info("Detected Intel AC97 Audio Controller");
+                AC97AudioDriver driver = new AC97AudioDriver(device);
+                DriverManager.RegisterDriver(driver);
+            }
+            // Intel High Definition Audio Controller
+            else if (device.ID.VendorID == 0x8086 &&
+                    (device.ID.DeviceID == 0x2668 || device.ID.DeviceID == 0x27d8 ||
+                     device.ID.DeviceID == 0x269a || device.ID.DeviceID == 0x284b))
+            {
+                SerialDebug.Info("Detected Intel HD Audio Controller (not supported yet)");
+                // HDAAudioDriver driver = new HDAAudioDriver(device);
+                // DriverManager.RegisterDriver(driver);
+            }
+            // Ensoniq AudioPCI (ES1370)
+            else if (device.ID.VendorID == 0x1274 && device.ID.DeviceID == 0x5000)
+            {
+                SerialDebug.Info("Detected Ensoniq AudioPCI (ES1370)");
+                // ES1370Driver driver = new ES1370Driver(device);
+                // DriverManager.RegisterDriver(driver);
+            }
+            // Creative Sound Blaster
+            else if (device.ID.VendorID == 0x1102)
+            {
+                SerialDebug.Info("Detected Creative Sound Blaster device");
+                // SoundBlasterDriver driver = new SoundBlasterDriver(device);
+                // DriverManager.RegisterDriver(driver);
+            }
+            // Genérico para cualquier otro dispositivo de audio
+            else
+            {
+                SerialDebug.Info($"Detected unknown audio device (Subclass: 0x{((ulong)device.ID.Subclass).ToStringHex()})");
+                // Podrías intentar cargar un driver genérico según la subclase
 
-            // Enable bus mastering bit (bit 2)
-            command |= 0x04;
+                // Audio genérico
+                if (device.ID.Subclass == 0x01)
+                {
+                    // GenericAudioDriver driver = new GenericAudioDriver(device);
+                    // DriverManager.RegisterDriver(driver);
+                }
+            }
+        }
 
-            // Write updated command register
-            PCIManager.WriteConfig16(
-                pciDevice.Location.Bus,
-                pciDevice.Location.Device,
-                pciDevice.Location.Function,
-                0x04, // Command register
-                command
-            );
+        static void RegisterNetworkDriver(PCIDevice device)
+        {
+            // Drivers específicos para diferentes vendedores de red
+            switch (device.ID.VendorID)
+            {
+                case 0x8086: // Intel
+                    if (device.ID.DeviceID == 0x100E) // E1000
+                    {
+                       // RegisterDriver(new Intel8254XDriver(device));
+                    }
+                    break;
 
-            SerialDebug.Info($"Bus mastering enabled for device {pciDevice.Location.ToString()}");
+                case 0x10EC: // Realtek
+                             // Agregar soporte para otros dispositivos Realtek
+                    break;
+
+                // Otros vendedores de red
+                default:
+                    // Driver genérico de red
+                    // DriverManager.RegisterDriver(new GenericNetworkDriver(device));
+                    break;
+            }
+        }
+
+        internal static void EnableMemorySpace(PCIDevice pciDevice)
+        {
+          
+        }
+
+        internal static void EnableBusMastering(PCIDevice pciDevice)
+        {
+         
         }
     }
 
+    
     /// <summary>
     /// Abstract base class for basic driver implementation
     /// </summary>
@@ -374,11 +440,18 @@ namespace Kernel.Drivers
         /// <summary>
         /// Method to be implemented by specific drivers for initialization
         /// </summary>
-        protected abstract bool OnInitialize();
+        protected virtual bool OnInitialize()
+        {
+            // Default implementation does nothing
+            return true;
+        }
 
         /// <summary>
         /// Method to be implemented by specific drivers for shutdown
         /// </summary>
-        protected abstract void OnShutdown();
+        protected virtual void OnShutdown()
+        {
+            // Default implementation does nothing
+        }
     }
 }

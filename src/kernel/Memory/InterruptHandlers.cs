@@ -1,10 +1,17 @@
 ﻿using Kernel.Diagnostics;
+using Kernel.Drivers.IO;
+using Kernel.Memory;
 using System;
 using System.Runtime;
 using System.Runtime.InteropServices;
 
-namespace Kernel.Memory
+namespace Kernel
 {
+    /// <summary>
+    /// Delegate para manejadores de interrupciones de hardware (IRQ)
+    /// </summary>
+    public delegate void InterruptDelegate();
+
     /// <summary>
     /// Structure representing CPU state during an interrupt
     /// </summary>
@@ -39,21 +46,33 @@ namespace Kernel.Memory
     public static unsafe class InterruptManager
     {
         // Table of pointers to interrupt handlers
-        public static IntPtr* _handlerTable;
+        private static IntPtr* _handlerTable;
         internal static bool _initialized;
 
+        // Table de manejadores de IRQ para hardware
+        private static InterruptDelegate[] _irqHandlers;
+
+        // Puertos para comunicación con el PIC
+        private const ushort PIC1_COMMAND = 0x20;
+        private const ushort PIC1_DATA = 0x21;
+        private const ushort PIC2_COMMAND = 0xA0;
+        private const ushort PIC2_DATA = 0xA1;
+
+        // Comandos del PIC
+        private const byte PIC_EOI = 0x20;
+
         /// <summary>
-        /// Initializes the interrupt manager
+        /// Inicializa el gestor de interrupciones
         /// </summary>
         public static void Initialize()
         {
-            if(_initialized)
+            if (_initialized)
             {
                 return;
             }
 
             SerialDebug.Info("Initializing interrupt manager...");
-
+            _irqHandlers = new InterruptDelegate[16];
             // Allocate memory for the handler table (256 possible interrupts)
             _handlerTable = (IntPtr*)Allocator.malloc((nuint)(sizeof(IntPtr) * 256));
 
@@ -61,7 +80,12 @@ namespace Kernel.Memory
             for (int i = 0; i < 256; i++)
             {
                 _handlerTable[i] = IntPtr.Zero;
+            }
 
+            // Initialize IRQ handlers
+            for (int i = 0; i < 16; i++)
+            {
+                _irqHandlers[i] = null;
             }
 
             // Register handlers for important exceptions
@@ -71,14 +95,250 @@ namespace Kernel.Memory
             RegisterHandler(13, &GeneralProtectionHandler); // General protection
             RegisterHandler(14, &PageFaultHandler);        // Page fault
 
+            // Registrar manejadores para las IRQs básicas (32-47 en Intel x86)
+            for (int i = 0; i < 16; i++)
+            {
+                RegisterHandler(32 + i, &IRQHandler);
+            }
+
             _initialized = true;
             // Report that the manager is initialized
             SerialDebug.Info("Interrupt manager initialized successfully");
         }
 
+        public static void DiagnoseInterruptSystem()
+        {
+            SerialDebug.Info("Starting Interrupt System Diagnosis");
+
+            // Verificar inicialización
+            if (!_initialized)
+            {
+                SerialDebug.Warning("Interrupt manager not initialized");
+                return;
+            }
+
+            // Verificar tabla de manejadores
+            int validHandlers = 0;
+            for (int i = 0; i < 256; i++)
+            {
+                if (_handlerTable[i] != IntPtr.Zero)
+                {
+                    validHandlers++;
+                }
+            }
+
+            SerialDebug.Info($"Total valid interrupt handlers: {validHandlers}");
+
+            // Verificar manejadores de IRQ
+            int activeIRQHandlers = 0;
+            for (int i = 0; i < 16; i++)
+            {
+                if (_irqHandlers[i] != null)
+                {
+                    activeIRQHandlers++;
+                }
+            }
+
+            SerialDebug.Info($"Active IRQ handlers: {activeIRQHandlers}");
+
+            // Prueba de habilitación/deshabilitación de interrupciones
+            SerialDebug.Info("Testing interrupt enable/disable");
+
+            DisableInterrupts();
+            SerialDebug.Info("Interrupts disabled");
+
+            EnableInterrupts();
+            SerialDebug.Info("Interrupts enabled");
+        }
+
         /// <summary>
-        /// Registers a handler for a specific interrupt number
+        /// Función genérica para manejar las IRQs de hardware
         /// </summary>
+        /// <param name="frame">Frame con información de la interrupción</param>
+        public static void IRQHandler(InterruptFrame* frame)
+        {
+            // Calcular el número de IRQ (0-15) a partir del número de interrupción (32-47)
+            int irqNumber = (int)(frame->InterruptNumber - 32);
+
+            // Verificar que sea un IRQ válido
+            if (irqNumber >= 0 && irqNumber < 16)
+            {
+                // Llamar al manejador específico si existe
+                if (_irqHandlers[irqNumber] != null)
+                {
+                    _irqHandlers[irqNumber]();
+                }
+
+                // Enviar End-Of-Interrupt al PIC
+                SendEndOfInterrupt((byte)irqNumber);
+            }
+        }
+
+        /// <summary>
+        /// Registra un manejador para una IRQ específica (0-15)
+        /// </summary>
+        /// <param name="irq">Número de IRQ (0-15)</param>
+        /// <param name="handler">Delegado que maneja la IRQ</param>
+        public static void RegisterIRQHandler(byte irq, InterruptDelegate handler)
+        {
+            if (irq < 16)
+            {
+                _irqHandlers[irq] = handler;
+                SerialDebug.Info($"Registered handler for IRQ {irq}");
+            }
+        }
+
+        /// <summary>
+        /// Habilita una IRQ específica en el PIC
+        /// </summary>
+        /// <param name="irq">Número de IRQ (0-15)</param>
+        public static void EnableIRQ(byte irq)
+        {
+            // Deshabilitar interrupciones globalmente
+            DisableInterrupts();
+
+            SerialDebug.Info($"Attempting to enable IRQ {irq}");
+
+            if (irq < 16)
+            {
+                if (irq < 8)
+                {
+                    // IRQs 0-7 en PIC maestro
+                    byte mask = IOPort.InByte(PIC1_DATA);
+                    SerialDebug.Info($"Master PIC Initial Mask: 0x{((ulong)mask).ToStringHex()}");
+
+                    // Limpiar el bit correspondiente para habilitar
+                    mask &= (byte)~(1 << irq);
+
+                    SerialDebug.Info($"Calculated Mask: 0x{((ulong)mask).ToStringHex()}");
+
+                    // IMPORTANTE: Escribir la máscara explícitamente
+                    IOPort.OutByte(PIC1_DATA, mask);
+
+                    // Verificar la máscara después de escribirla
+                    byte verifyMask = IOPort.InByte(PIC1_DATA);
+                    SerialDebug.Info($"Verified Master PIC Mask: 0x{((ulong)verifyMask).ToStringHex()}");
+
+                    // Verificación adicional
+                    if (verifyMask != mask)
+                    {
+                        SerialDebug.Warning($"Mask write failed. Expected 0x{((ulong)mask).ToStringHex()}, got 0x{((ulong)verifyMask).ToStringHex()}");
+                    }
+                }
+                else
+                {
+                    // Código para IRQs 8-15 (similar)
+                    byte slaveMask = IOPort.InByte(PIC2_DATA);
+                    slaveMask &= (byte)~(1 << (irq - 8));
+                    IOPort.OutByte(PIC2_DATA, slaveMask);
+
+                    // Habilitar línea de cascada en PIC maestro
+                    byte masterMask = IOPort.InByte(PIC1_DATA);
+                    masterMask &= unchecked((byte)~(1 << 2));
+                    IOPort.OutByte(PIC1_DATA, masterMask);
+
+                    SerialDebug.Info($"Slave PIC Mask: 0x{((ulong)slaveMask).ToStringHex()}");
+                    SerialDebug.Info($"Master PIC Cascade Mask: 0x{((ulong)masterMask).ToStringHex()}");
+                }
+            }
+            else
+            {
+                SerialDebug.Warning($"Invalid IRQ number: {irq}");
+            }
+
+
+            EnableInterrupts();
+
+            DiagnoseInterruptInitialization();
+
+            SerialDebug.Info($"IRQ {irq} enabled successfully");
+        }
+
+        public static void DiagnoseInterruptInitialization()
+        {
+            SerialDebug.Info("Comprehensive Interrupt System Diagnosis");
+
+            // Verificar configuración de IDT
+            SerialDebug.Info($"IDT Base Address: 0x{((ulong)IDTManager._idt).ToStringHex()}");
+            SerialDebug.Info($"IDT Limit: {((ulong)IDTManager._idtPointer.Limit).ToStringHex()}");
+
+            // Verificar manejadores registrados
+            int validHandlers = 0;
+            for (int i = 0; i < 256; i++)
+            {
+                if (_handlerTable[i] != IntPtr.Zero)
+                {
+                    validHandlers++;
+
+                    // Log de dirección de manejadores
+                    SerialDebug.Info($"Handler for Interrupt {i}: 0x{((ulong)_handlerTable[i]).ToStringHex()}");
+                }
+            }
+            SerialDebug.Info($"Total Valid Interrupt Handlers: {validHandlers}");
+
+            // Verificar configuración de PIC
+            byte masterMask = IOPort.InByte(PIC1_DATA);
+            byte slaveMask = IOPort.InByte(PIC2_DATA);
+
+            SerialDebug.Info($"Master PIC Mask: 0x{((ulong)masterMask).ToStringHex()}");
+            SerialDebug.Info($"Slave PIC Mask: 0x{((ulong)slaveMask).ToStringHex()}");
+        }
+
+        /// <summary>
+        /// Verifica si una IRQ específica está habilitada
+        /// </summary>
+        private static bool IsIRQEnabled(byte irq)
+        {
+            if (irq < 8)
+            {
+                byte mask = IOPort.InByte(PIC1_DATA);
+                return (mask & (1 << irq)) == 0;
+            }
+            else if (irq < 16)
+            {
+                byte slaveMask = IOPort.InByte(PIC2_DATA);
+                byte masterMask = IOPort.InByte(PIC1_DATA);
+
+                // Verificar máscara del PIC esclavo y la línea de cascada del maestro
+                return (slaveMask & (1 << (irq - 8))) == 0 &&
+                       (masterMask & (1 << 2)) == 0;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Deshabilita una IRQ específica en el PIC
+        /// </summary>
+        /// <param name="irq">Número de IRQ (0-15)</param>
+        public static void DisableIRQ(byte irq)
+        {
+            if (irq < 16)
+            {
+                if (irq < 8)
+                {
+                    // IRQs 0-7 están en el PIC maestro
+                    byte mask = IOPort.InByte(PIC1_DATA);
+                    mask |= (byte)(1 << irq);
+                    IOPort.OutByte(PIC1_DATA, mask);
+                }
+                else
+                {
+                    // IRQs 8-15 están en el PIC esclavo
+                    byte mask = IOPort.InByte(PIC2_DATA);
+                    mask |= (byte)(1 << (irq - 8));
+                    IOPort.OutByte(PIC2_DATA, mask);
+                }
+
+                SerialDebug.Info($"Disabled IRQ {irq}");
+            }
+        }
+
+        /// <summary>
+        /// Registra un manejador para una interrupción específica
+        /// </summary>
+        /// <param name="interruptNumber">Número de interrupción</param>
+        /// <param name="handler">Puntero a la función manejadora</param>
         private static void RegisterHandler(int interruptNumber, delegate*<InterruptFrame*, void> handler)
         {
             if (interruptNumber >= 0 && interruptNumber < 256)
@@ -244,11 +504,27 @@ namespace Kernel.Memory
             if (irq >= 8)
             {
                 // Send EOI to slave PIC (port 0xA0)
-                Native.OutByte(0xA0, 0x20);
+                IOPort.OutByte(PIC2_COMMAND, PIC_EOI);
             }
 
             // Send EOI to master PIC (port 0x20)
-            Native.OutByte(0x20, 0x20);
+            IOPort.OutByte(PIC1_COMMAND, PIC_EOI);
+        }
+
+        /// <summary>
+        /// Habilita todas las interrupciones (STI)
+        /// </summary>
+        public static void EnableInterrupts()
+        {
+            Native.STI();
+        }
+
+        /// <summary>
+        /// Deshabilita todas las interrupciones (CLI)
+        /// </summary>
+        public static void DisableInterrupts()
+        {
+            Native.CLI();
         }
     }
 }

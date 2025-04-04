@@ -2,12 +2,10 @@ using Internal.Runtime.CompilerHelpers;
 using Kernel.Boot;
 using Kernel.Diagnostics;
 using Kernel.Drivers;
-using Kernel.Drivers.Network;
+using Kernel.Drivers.Input;
 using Kernel.Hardware;
 using Kernel.Memory;
-using Kernel.Threading;
 using System;
-using System.Collections.Generic;
 using System.Runtime;
 
 namespace Kernel
@@ -16,12 +14,13 @@ namespace Kernel
     {
         [RuntimeExport("Entry")]
         public static void Entry(MultibootInfo* multibootInfo)
-        {   
+        {
             // Initialize serial debug
             SerialDebug.Initialize();
             // Initialize memory subsystem
             Allocator.Initialize((IntPtr)0x200000);
             PageTable.Initialize();
+            StartupCodeHelpers.InitializeModules((IntPtr)0x200000);
 
             // Show welcome message
             Console.ForegroundColor = ConsoleColor.Green;
@@ -64,15 +63,17 @@ namespace Kernel
             SMPManager.Initialize();
             ACPIManager.Initialize();
             APICController.Initialize();
-
             PCIManager.Initialize();
-            DriverManager.Initialize();
-            RegisterPCIDrivers();
-            DriverManager.InitializeAllDrivers();
+            // DriverManager.Initialize();
+            // DriverManager.RegisterPCIDrivers();
+            // DriverManager.InitializeAllDrivers();
 
             InterruptManager.Initialize();
+            InterruptManager.DiagnoseInterruptSystem();
+            Keyboard.Initialize();
+            KeyboardTest.TestTextInput();
 
-            ThreadPool.Initialize();
+            //ThreadPool.Initialize();
 
             // Show basic system information
             SerialDebug.Info("Initializing system...");
@@ -91,63 +92,6 @@ namespace Kernel
 
             // Enter the main loop
             Main();
-        }
-
-        private static void RegisterPCIDrivers()
-        {
-            // Obtener lista de dispositivos PCI detectados
-            List<PCIDevice> pciDevices = PCIManager.GetDevices();
-
-            SerialDebug.Info($"pciDevices: {pciDevices.Count}");
-            // Iterar dispositivos y registrar drivers según su clase
-            for (int i = 0; i < pciDevices.Count; i++)
-            {
-                PCIDevice device = pciDevices[i];
-
-                switch (device.ID.ClassCode)
-                {
-                    case 0x02: // Dispositivos de red
-                        RegisterNetworkDriver(device);
-                        break;
-
-                    case 0x03: // Controladores de gráficos
-                        //RegisterGraphicsDriver(device);
-                        break;
-
-                    case 0x01: // Controladores de almacenamiento
-                               // RegisterStorageDriver(device);
-                        break;
-
-                    default:
-                        // Registrar drivers genéricos para otros tipos de dispositivos
-                        // RegisterGenericDriver(device);
-                        break;
-                }
-            }
-        }
-
-        private static void RegisterNetworkDriver(PCIDevice device)
-        {
-            // Drivers específicos para diferentes vendedores de red
-            switch (device.ID.VendorID)
-            {
-                case 0x8086: // Intel
-                    if (device.ID.DeviceID == 0x100E) // E1000
-                    {
-                        DriverManager.RegisterDriver(new E1000NetworkDriver(device));
-                    }
-                    break;
-
-                case 0x10EC: // Realtek
-                             // Agregar soporte para otros dispositivos Realtek
-                    break;
-
-                // Otros vendedores de red
-                default:
-                    // Driver genérico de red
-                   // DriverManager.RegisterDriver(new GenericNetworkDriver(device));
-                    break;
-            }
         }
 
         /// <summary>
@@ -191,18 +135,6 @@ namespace Kernel
                 for (int i = 0; i < stringArray.Length; i++)
                 {
                     SerialDebug.Info(stringArray[i]);
-                }
-
-                SerialDebug.Info("\nList of numbers:");
-                List<PCIDevice> devices = new List<PCIDevice>();
-
-                devices.Add(new PCIDevice(new PCIDeviceID(), new PCILocation(), 0, 0,0, new uint[6], true, 0, 0));
-                devices.Add(new PCIDevice(new PCIDeviceID(), new PCILocation(), 0, 0, 0, new uint[6], true, 0, 0));
-                devices.Add(new PCIDevice(new PCIDeviceID(), new PCILocation(), 0, 0, 0, new uint[6], true, 0, 0));
-
-                for (int i = 0; i < devices.Count; i++)
-                {
-                    SerialDebug.Info(devices[i].ID.ToString());
                 }
 
                 SerialDebug.Info("==========================");

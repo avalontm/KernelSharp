@@ -10,6 +10,7 @@ namespace System
 {
     public sealed unsafe class String
     {
+        internal const int MaxLength = 0x3FFFFFDF;
         // Campo estático para almacenar la cadena vacía y método de inicialización
         internal static readonly string s_emptyString = InitializeEmptyString();
 

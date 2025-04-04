@@ -2,7 +2,6 @@
 section .text
 global _Stosb
 global _Movsb
-global _Pause
 global _ReadMSR
 global _WriteMSR
 global _GetAPICID
@@ -51,13 +50,6 @@ _KBControllerSendCommand:
     mov al, cl           ; Restaurar el comando
     out 64h, al          ; Enviar al puerto de comando (0x64)
     ret
-
-; Instrucción PAUSE para esperas activas eficientes
-; void Pause()
-_Pause:
-    pause                ; Instrucción PAUSE (ahorra energía en esperas activas)
-    ret
-
 
 ; Función para obtener el valor del registro CR2 (dirección que causó la falta de página)
 global _GetCR2

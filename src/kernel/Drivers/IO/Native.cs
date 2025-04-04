@@ -210,5 +210,33 @@ namespace Kernel
         /// <param name="command">Comando a enviar</param>
         [DllImport("*", EntryPoint = "_KBControllerSendCommand")]
         public static extern void KBControllerSendCommand(byte command);
+
+        /// <summary>
+        /// Ejecuta la instrucción CPUID
+        /// </summary>
+        /// <param name="leaf">Función CPUID a ejecutar</param>
+        /// <param name="eax">Registro EAX (entrada/salida)</param>
+        /// <param name="ebx">Registro EBX (salida)</param>
+        /// <param name="ecx">Registro ECX (entrada/salida)</param>
+        /// <param name="edx">Registro EDX (salida)</param>
+        [DllImport("*", EntryPoint = "_CPUID")]
+        public static extern void Cpuid(uint leaf, ref uint eax, ref uint ebx, ref uint ecx, ref uint edx);
+
+        /// <summary>
+        /// Ejecuta la instrucción CPUID con el valor de función especificado
+        /// </summary>
+        /// <param name="function">Función CPUID a ejecutar</param>
+        /// <returns>Valor de EDX después de ejecutar CPUID</returns>
+        public static uint CPUID(uint function)
+        {
+            uint eax = function;
+            uint ebx = 0;
+            uint ecx = 0;
+            uint edx = 0;
+
+            Cpuid(function, ref eax, ref ebx, ref ecx, ref edx);
+
+            return edx;
+        }
     }
 }

@@ -47,14 +47,13 @@ namespace System
             {
                 return false;
             }
-
-            // Optimizaci�n: comparaci�n directa de punteros primero
             if (Unsafe.As<object, IntPtr>(ref a) == Unsafe.As<object, IntPtr>(ref b))
                 return true;
 
             // Si son tipos diferentes, no pueden ser iguales
             if (a.m_pEEType != b.m_pEEType)
                 return false;
+
 
             switch (a.m_pEEType->ElementType)
             {
@@ -82,10 +81,12 @@ namespace System
                     return ((UIntPtr)a == (UIntPtr)b);
                 case EETypeElementType.Char:
                     return ((Char)a == (Char)b);
+                case EETypeElementType.Enum:
+                    return ((int)a == (int)b);
                 case EETypeElementType.Class:
                     return (a == b);
                 default:
-                    return false;
+                    return ((ulong)a == (ulong)b);
             }
         }
 
@@ -123,6 +124,7 @@ namespace System
                         case EETypeElementType.Single: return "System.Single";
                         case EETypeElementType.Double: return "System.Double";
                         case EETypeElementType.Array: return "System.Array";
+                        case EETypeElementType.Enum: return "System.Enum";
                         case EETypeElementType.Class: return kind == EETypeKind.CanonicalEEType ? "System.Object" : "Class";
                         case EETypeElementType.ValueType: return "ValueType";
                         default: return "Object";
@@ -174,7 +176,7 @@ namespace System
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public virtual int GetHashCode()
         {
-            IntPtr ptr = Unsafe.As<object, IntPtr>(ref Unsafe.AsRef(this));
+            IntPtr ptr = (IntPtr)this.m_pEEType;
             long longPtr = ptr.ToInt64();
             return (int)longPtr ^ (int)(longPtr >> 32);
         }
@@ -219,6 +221,8 @@ namespace System
                     return ((Double)obj).ToString();
                 case EETypeElementType.Array:
                     return ArrayToString((Array)obj);
+                case EETypeElementType.Enum:
+                    return EnumToString(obj);
                 case EETypeElementType.Class:
                     if (obj.GetType() != typeof(Object))
                     {
@@ -228,6 +232,15 @@ namespace System
                 default:
                     return typeStr;
             }
+        }
+
+        // Helper method to convert Enum to string
+        private unsafe string EnumToString(object enumObj)
+        {
+            if (enumObj == null)
+                return "null";
+
+            return ((int)enumObj).ToString();
         }
 
         private string ArrayToString(Array arr)

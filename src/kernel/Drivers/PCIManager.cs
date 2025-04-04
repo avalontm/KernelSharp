@@ -69,8 +69,10 @@ namespace Kernel.Drivers
         {
             SerialDebug.Info("Initializing PCI device detection...");
             _devices = new List<PCIDevice>();
+            SerialDebug.Info("Scanning PCI buses...");
             // Scan all buses
             ScanAllBuses();
+            SerialDebug.Info($"Detected {_devices.Count} PCI devices");
         }
 
         /// <summary>
@@ -366,7 +368,7 @@ namespace Kernel.Drivers
         private static void ProcessFunction(byte bus, byte device, byte function)
         {
             // Create a unique device location ID
-            PCIDevice pciDevice = GetDeviceInfo(bus, device, function);   
+            PCIDevice pciDevice = GetDeviceInfo(bus, device, function);
 
             _devices.Add(pciDevice);
 

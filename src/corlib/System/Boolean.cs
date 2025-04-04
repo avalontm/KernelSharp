@@ -8,7 +8,6 @@
         internal const string FalseLiteral = "False";
         public static readonly string TrueString = TrueLiteral;
         public static readonly string FalseString = FalseLiteral;
-
         public override string ToString()
         {
             return false == this ? FalseLiteral : TrueLiteral;

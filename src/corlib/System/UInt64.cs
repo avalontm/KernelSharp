@@ -30,7 +30,7 @@ namespace System
 
         public unsafe string ToString(string format)
         {
-            if (format == "x2")
+            if (format.ToUpper() == "X2")
             {
                 format.Dispose();
                 return this.ToStringHex();

@@ -1,5 +1,4 @@
 ﻿using Internal.Runtime.CompilerHelpers;
-using Internal.Runtime.CompilerServices;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -97,7 +96,7 @@ namespace System.Collections.Generic
             // Check if the key already exists in the dictionary
             for (int i = _buckets[targetBucket]; i >= 0; i = _entries[i].Next)
             {
-                if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
+                if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
                 {
                     ThrowHelpers.ArgumentException("Key already exists");
                 }
@@ -124,11 +123,12 @@ namespace System.Collections.Generic
                 _count++;
             }
 
-            Debug.WriteLine($"Adding key: {key}, value: {value}, index: {index}, bucket: {targetBucket}");
-
             _entries[index].HashCode = hashCode;
+            Debug.WriteLine($"Key: ");
             _entries[index].Key = key;
+            Debug.WriteLine($"Value: ");
             _entries[index].Value = value;
+            Debug.WriteLine($"Next: ");
             _entries[index].Next = _buckets[targetBucket];
             _buckets[targetBucket] = index;
 
@@ -137,7 +137,6 @@ namespace System.Collections.Generic
 
             // Assign the key to the keys array
             _keys[index] = key;
-            Debug.WriteLine("DONE");
         }
 
         /// <summary>
@@ -215,7 +214,7 @@ namespace System.Collections.Generic
 
                 for (int i = _buckets[targetBucket]; i >= 0; i = _entries[i].Next)
                 {
-                    if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
+                    if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
                     {
                         _entries[i].Value = value;
                         return;
@@ -265,7 +264,11 @@ namespace System.Collections.Generic
             int index = FindEntry(key);
             if (index >= 0)
             {
+                Debug.WriteLine($"TryGetValue: {index}");
+                Debug.WriteLine($"Index: {index}");
+                Debug.WriteLine($"Value: {_entries[index].Value}");
                 value = _entries[index].Value;
+                Debug.WriteLine($"Value: {value}");
                 return true;
             }
             value = default(TValue);
@@ -293,7 +296,7 @@ namespace System.Collections.Generic
 
             for (int i = _buckets[bucket]; i >= 0; last = i, i = _entries[i].Next)
             {
-                if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
+                if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
                 {
                     if (last < 0)
                     {
@@ -359,7 +362,7 @@ namespace System.Collections.Generic
 
                 for (int i = _buckets[bucket]; i >= 0; i = _entries[i].Next)
                 {
-                    if (_entries[i].HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(_entries[i].Key, key))
+                    if (_entries[i].HashCode == hashCode && _entries[i].Key.Equals(key))
                     {
                         return i;
                     }
@@ -409,4 +412,5 @@ namespace System.Collections.Generic
             EnsureKeysCapacity(newSize - 1);
         }
     }
+
 }

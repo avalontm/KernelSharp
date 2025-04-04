@@ -1,6 +1,4 @@
-﻿using Kernel.Drivers;
-using Kernel.Hardware;
-using Kernel.Diagnostics;
+﻿using Kernel.Diagnostics;
 using System;
 
 namespace Kernel.Drivers.Network
@@ -24,7 +22,7 @@ namespace Kernel.Drivers.Network
         /// Constructor del driver E1000
         /// </summary>
         /// <param name="device">Dispositivo PCI del controlador E1000</param>
-        public E1000NetworkDriver(PCIDevice device): base($"e1000_{device.Location}", "Intel E1000 Network Driver")
+        public E1000NetworkDriver(PCIDevice device) : base($"e1000_{device.Location}", "Intel E1000 Network Driver")
         {
             _pciDevice = device;
         }

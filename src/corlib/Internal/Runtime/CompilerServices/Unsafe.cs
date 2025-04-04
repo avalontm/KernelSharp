@@ -392,7 +392,7 @@ namespace Internal.Runtime.CompilerServices
             value = Read<T>(dummy);
         }
 
-        // Métodos adicionales para tipos específicos (evita problemas con __Canon)
+        // Mï¿½todos adicionales para tipos especï¿½ficos (evita problemas con __Canon)
 
         /// <summary>
         /// Returns the size of an int.
