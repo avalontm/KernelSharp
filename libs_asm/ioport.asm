@@ -5,6 +5,20 @@ global _OutWord
 global _InWord
 global _OutDword
 global _InDword
+global _Out32
+global _In32
+
+_In32:
+    mov dx, di     ; dx = puerto (ushort)
+    in eax, dx     ; leer 32 bits desde el puerto
+    ret
+    
+_Out32:
+    mov dx, di     ; dx = puerto (ushort)
+    mov eax, esi   ; eax = valor (uint)
+    out dx, eax    ; salida del valor de 32 bits
+    ret
+
 
 ; void _OutByte(ushort port, byte value)
 ; RCX = port, RDX = value

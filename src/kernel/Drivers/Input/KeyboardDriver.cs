@@ -158,26 +158,11 @@ namespace Kernel.Drivers.Input
             // Deshabilitar ambos puertos PS/2 durante la inicialización
             SendCommand(CMD_DISABLE_FIRST_PORT);
             SendCommand(CMD_DISABLE_SECOND_PORT);
-            SerialDebug.Info("Disabled both PS/2 ports");
+
             // Vaciar cualquier dato en el buffer
             while ((IOPort.InByte(STATUS_PORT) & 0x01) != 0)
             {
                 IOPort.InByte(DATA_PORT);
-            }
-
-            // Realizar auto-test del controlador
-            SendCommand(CMD_TEST_CONTROLLER);
-            if (ReadData() != 0x55)
-            {
-                SerialDebug.Warning("Keyboard controller self-test failed");
-            }
-
-            // Probar el primer puerto (teclado)
-            SendCommand(CMD_TEST_FIRST_PORT);
-            byte result = ReadData();
-            if (result != 0x00)
-            {
-                SerialDebug.Warning($"Keyboard port test failed: 0x{((ulong)result).ToStringHex()}");
             }
 
             // Configurar el controlador
@@ -185,9 +170,8 @@ namespace Kernel.Drivers.Input
             SendCommand(CMD_READ_CONFIG);
             byte config = ReadData();
 
-            // Modificar configuración: habilitar IRQ del teclado, deshabilitar IRQ del ratón
+            // Modificar configuración: habilitar IRQ del teclado
             config |= 0x01;    // Habilitar IRQ1 (teclado)
-            config &= 0xFD;    // Deshabilitar IRQ12 (ratón)
 
             // Escribir nueva configuración
             SendCommand(CMD_WRITE_CONFIG);
@@ -196,26 +180,38 @@ namespace Kernel.Drivers.Input
             // Habilitar el primer puerto (teclado)
             SendCommand(CMD_ENABLE_FIRST_PORT);
 
-            // Resetear el teclado
-            SendData(DEV_RESET);
-            if (ReadData() != 0xAA)
-            {
-                SerialDebug.Warning("Keyboard reset failed");
-            }
 
-            // Habilitar escaneo del teclado
+            // Habilitar escaneo del teclado directamente - método más directo
             SendData(DEV_ENABLE_SCANNING);
 
-            // Configurar LEDs iniciales
-            UpdateLEDs();
+            // No esperamos necesariamente una respuesta - algunas VMs no la envían correctamente
 
             // Registrar manejador de interrupciones
             InterruptDelegate handler = new InterruptDelegate(HandleInterrupt);
             InterruptManager.RegisterIRQHandler(1, handler);  // IRQ 1 para teclado PS/2
+
+            // Este es un paso crucial - habilitar la IRQ en el IOAPIC
             InterruptManager.EnableIRQ(1);
+
+            // Asegurarnos de que las interrupciones globales estén habilitadas
+            Native.STI();
 
             SerialDebug.Info("Keyboard controller initialized successfully");
             return true;
+        }
+
+
+        /// <summary>
+        /// Manejador de interrupciones del teclado
+        /// </summary>
+        public void HandleInterrupt()
+        {
+            // Leer el código de escaneo
+            byte scanCode = IOPort.InByte(DATA_PORT);
+            SerialDebug.Info($"Keyboard IRQ: Scan code 0x{scanCode}");
+
+            // Procesar el código de escaneo
+            ProcessScanCode(scanCode);
         }
 
         /// <summary>
@@ -509,19 +505,6 @@ namespace Kernel.Drivers.Input
         }
 
         /// <summary>
-        /// Manejador de interrupciones del teclado
-        /// </summary>
-        public void HandleInterrupt()
-        {
-            SerialDebug.Info("Keyboard interrupt received");
-            // Leer el código de escaneo
-            byte scanCode = IOPort.InByte(DATA_PORT);
-
-            // Procesar el código de escaneo
-            ProcessScanCode(scanCode);
-        }
-
-        /// <summary>
         /// Método para enviar un comando al controlador de teclado
         /// </summary>
         private void SendCommand(byte command)
@@ -661,7 +644,7 @@ namespace Kernel.Drivers.Input
             // Añadir el evento al buffer
             if (AddEventToBuffer(keyEvent))
             {
-                //SerialDebug.Info($"Key event: {key}, Pressed: {!isBreak}, Char: {keyEvent.Character}");
+                SerialDebug.Info($"Taclado Evento");
             }
         }
 

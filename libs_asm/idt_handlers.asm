@@ -10,28 +10,63 @@ global _Halt
 global _Pause
 global _InterruptCommon
 global _GetInterruptStubAddress
+global _LoadIDT              ; Load IDT
 
 ; Declare external references to C# functions
 extern HandleInterrupt     ; Main handler function in C#
 extern _handlerTable       ; Table of interrupt handlers in C#
 
 section .data
-; Table of interrupt stub addresses
+
+; Interrupt Descriptor Table (IDT)
+; Define 256 interrupt stubs (address array for IDT)
 InterruptStubTable:
+    ; Assign 256 stubs
     %assign i 0
     %rep 256
-        dq _InterruptStub %+ i     ; Create an entry for each stub
+        dq _InterruptStub %+ i  ; Add address of each stub to the table
     %assign i i+1
     %endrep
 
 section .text
 
-; Sets up the interrupt system
+; Load the IDT
+_LoadIDT:
+    push rbp                 ; Save base pointer
+    mov rbp, rsp             ; Set up new base pointer
+    
+    ; Save critical registers that might be affected
+    push rax
+    
+    ; Disable interrupts while loading IDT
+    cli
+    
+    ; Load the IDT using LIDT instruction
+    ; RDI already contains the address of the IDTR structure
+    lidt [rdi]
+    
+    ; Brief delay to ensure IDT is properly loaded
+    nop
+    nop
+    nop
+    
+    ; Re-enable interrupts
+    sti
+    
+    ; Restore registers
+    pop rax
+    
+    ; Restore stack frame
+    pop rbp
+    
+    ; Return
+    ret
+
+; Setup the interrupt system
 _SetupInterrupts:
     ret
 
 ; Returns the address of a specific interrupt stub
-; RCX = Interrupt number (0-255)
 _GetInterruptStub:
     cmp rcx, 256          ; Check if number is valid
     jae .invalid
@@ -62,9 +97,8 @@ _Pause:
     ret
 
 ; Common part of the interrupt handler
-; RCX contains the interrupt number
 _InterruptCommon:
-    ; Save all general purpose registers
+    ; Save all general-purpose registers
     push rax
     push rcx
     push rdx
@@ -101,14 +135,12 @@ _InterruptCommon:
     ; Return from interrupt
     iretq
 
-section .text
+; Address of the first interrupt stub
 _GetInterruptStubAddress:
-    ; Devolver la dirección del primer stub de interrupción
     mov rax, _InterruptStub0
     ret
-; Now define 256 unique interrupt stubs
-; Each loads its own interrupt number in RCX and then jumps to common code
 
+; Macro for generating interrupt stubs
 %macro INTERRUPT_STUB 1
 _InterruptStub%1:
     %if (%1 = 8) || (%1 >= 10 && %1 <= 14) || (%1 = 17) || (%1 = 30)

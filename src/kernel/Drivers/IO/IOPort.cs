@@ -57,6 +57,23 @@ namespace Kernel.Drivers.IO
         public static extern uint InDword(ushort port);
 
         /// <summary>
+        /// Escribe un valor de 32 bits (4 bytes) en un puerto de salida
+        /// </summary>
+        /// <param name="port">Número de puerto (0-65535)</param>
+        /// <param name="value">Valor a escribir (32 bits)</param>
+        [DllImport("*", EntryPoint = "_Out32")]
+        public static extern void Out32(ushort port, uint value);
+
+        /// <summary>
+        /// Lee un valor de 32 bits (4 bytes) desde un puerto de entrada
+        /// </summary>
+        /// <param name="port">Número de puerto (0-65535)</param>
+        /// <returns>Valor leído (32 bits)</returns>
+        [DllImport("*", EntryPoint = "_In32")]
+        public static extern uint In32(ushort port);
+
+
+        /// <summary>
         /// Espera un breve periodo (útil entre operaciones de E/S)
         /// </summary>
         public static void Wait()

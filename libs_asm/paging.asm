@@ -3,7 +3,6 @@
 ; To be compiled with NASM
 
 section .text
-global _LoadIDT              ; Load IDT
 global _ReadCR0              ; Read CR0 register
 global _WriteCR0             ; Write to CR0 register
 global _ReadCR2              ; Read CR2 register (page fault address)
@@ -12,46 +11,11 @@ global _WriteCR3             ; Write to CR3 register
 global _ReadCR4              ; Read CR4 register
 global _WriteCR4             ; Write to CR4 register
 global _Invlpg               ; Invalidate a TLB entry
-global _EnableInterrupts     ; Enable interrupts
-global _DisableInterrupts    ; Disable interrupts
+
 global _Hlt                  ; HLT instruction
 global _Reset                ; System reset
 global _GetRFlags            ; Get RFLAGS
 global _SetRFlags            ; Set RFLAGS
-
-; Load IDT
-; void _LoadIDT(void* idtPointer)
-_LoadIDT:
-    push rbp                 ; Save base pointer
-    mov rbp, rsp             ; Set up new base pointer
-    
-    ; Save critical registers that might be affected
-    push rax
-    
-    ; Disable interrupts while loading IDT
-    cli
-    
-    ; Load the IDT using LIDT instruction
-    ; RDI already contains the address of the IDTR structure
-    lidt [rdi]
-    
-    ; Brief delay to ensure IDT is properly loaded
-    ; This can help with some hardware that might need time to process
-    nop
-    nop
-    nop
-    
-    ; Re-enable interrupts
-    sti
-    
-    ; Restore registers
-    pop rax
-    
-    ; Restore stack frame
-    pop rbp
-    
-    ; Return
-    ret
 
 ; Read the value of CR0 register
 ; uint64_t _ReadCR0()
@@ -111,18 +75,6 @@ _Invlpg:
     mov rbx, [rsp+16]       ; Get address parameter
     invlpg [rbx]            ; Invalidate TLB entry for the address
     pop rbx
-    ret
-
-; Enable interrupts
-; void _EnableInterrupts()
-_EnableInterrupts:
-    sti                     ; Set interrupt flag
-    ret
-
-; Disable interrupts
-; void _DisableInterrupts()
-_DisableInterrupts:
-    cli                     ; Clear interrupt flag
     ret
 
 ; Halt CPU execution until an interrupt occurs

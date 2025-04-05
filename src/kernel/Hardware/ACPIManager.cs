@@ -22,6 +22,17 @@ namespace Kernel.Hardware
         private const uint HPET_SIGNATURE = 0x54455048; // "HPET"
         private const uint MCFG_SIGNATURE = 0x4746434D; // "MCFG"
 
+        // MADT entry types
+        private const byte MADT_TYPE_LOCAL_APIC = 0;
+        private const byte MADT_TYPE_IO_APIC = 1;
+        private const byte MADT_TYPE_INT_OVERRIDE = 2;
+        private const byte MADT_TYPE_NMI_SOURCE = 3;
+        private const byte MADT_TYPE_LOCAL_APIC_NMI = 4;
+        private const byte MADT_TYPE_LOCAL_APIC_OVERRIDE = 5;
+        private const byte MADT_TYPE_IO_SAPIC = 6;
+        private const byte MADT_TYPE_LOCAL_SAPIC = 7;
+        private const byte MADT_TYPE_PLATFORM_INT_SOURCE = 8;
+
         // Manager state
         internal static bool _initialized = false;
         private static bool _acpiVersion2 = false;
@@ -33,6 +44,12 @@ namespace Kernel.Hardware
         private static FADT* _fadt = null;
         private static ACPISDTHeader* _dsdt = null;
         private static MADT* _madt = null;
+
+        // APIC information
+        private static ulong _ioApicAddress = 0;
+        private static byte _ioApicId = 0;
+        private static byte _localApicCount = 0;
+        private static byte _ioApicCount = 0;
 
         // System reset information
         private static ResetType _resetType = ResetType.None;
@@ -163,6 +180,54 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
+        /// MADT Entry Header
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        public struct MADTEntryHeader
+        {
+            public byte Type;
+            public byte Length;
+        }
+
+        /// <summary>
+        /// MADT Local APIC Entry
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        public struct MADTLocalApicEntry
+        {
+            public MADTEntryHeader Header;
+            public byte ProcessorId;
+            public byte ApicId;
+            public uint Flags; // Bit 0: Processor Enabled, Bit 1: Online Capable
+        }
+
+        /// <summary>
+        /// MADT I/O APIC Entry
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        public struct MADTIOApicEntry
+        {
+            public MADTEntryHeader Header;
+            public byte IOApicId;
+            public byte Reserved;
+            public uint IOApicAddress;
+            public uint GlobalSystemInterruptBase;
+        }
+
+        /// <summary>
+        /// MADT Interrupt Source Override Entry
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        public struct MADTInterruptOverrideEntry
+        {
+            public MADTEntryHeader Header;
+            public byte Bus;          // 0 = ISA
+            public byte Source;       // IRQ source
+            public uint GlobalSystemInterrupt;
+            public ushort Flags;      // Polarity, Trigger Mode
+        }
+
+        /// <summary>
         /// ACPI Generic Address Structure
         /// </summary>
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -233,12 +298,109 @@ namespace Kernel.Hardware
                 return false;
             }
 
+            // Parse MADT to find APIC information
+            ParseMADT();
+
             // Detect system reset method
             DetectResetMethod();
 
             _initialized = true;
             SerialDebug.Info("ACPI subsystem initialized successfully.");
             return true;
+        }
+
+        /// <summary>
+        /// Parses the MADT table to extract APIC information
+        /// </summary>
+        private static void ParseMADT()
+        {
+            if (_madt == null)
+            {
+                SerialDebug.Info("MADT table not found. Cannot determine APIC configuration.");
+                return;
+            }
+
+            SerialDebug.Info("Parsing MADT to locate APIC controllers...");
+
+            // Starting address of the first MADT entry
+            byte* currentPtr = (byte*)_madt + sizeof(MADT);
+            byte* endPtr = (byte*)_madt + _madt->Header.Length;
+
+            // Parse through all entries
+            while (currentPtr < endPtr)
+            {
+                MADTEntryHeader* entryHeader = (MADTEntryHeader*)currentPtr;
+
+                // Validate entry
+                if (entryHeader->Length == 0 || currentPtr + entryHeader->Length > endPtr)
+                {
+                    SerialDebug.Warning("Invalid MADT entry found. Stopping parse.");
+                    break;
+                }
+
+                switch (entryHeader->Type)
+                {
+                    case MADT_TYPE_LOCAL_APIC:
+                        {
+                            MADTLocalApicEntry* localApic = (MADTLocalApicEntry*)currentPtr;
+                            bool enabled = (localApic->Flags & 0x1) != 0;
+
+                            if (enabled)
+                            {
+                                _localApicCount++;
+                                SerialDebug.Info($"Local APIC: ID {localApic->ApicId}, Processor {localApic->ProcessorId}, Enabled: " + enabled);
+                            }
+                        }
+                        break;
+
+                    case MADT_TYPE_IO_APIC:
+                        {
+                            MADTIOApicEntry* ioApic = (MADTIOApicEntry*)currentPtr;
+
+                            // Store the first IO APIC info
+                            if (_ioApicAddress == 0)
+                            {
+                                _ioApicAddress = ioApic->IOApicAddress;
+                                _ioApicId = ioApic->IOApicId;
+                            }
+
+                            _ioApicCount++;
+                            SerialDebug.Info($"I/O APIC: ID {ioApic->IOApicId}, Address 0x{((ulong)ioApic->IOApicAddress).ToStringHex()}, GSI Base {ioApic->GlobalSystemInterruptBase}");
+                        }
+                        break;
+
+                    case MADT_TYPE_INT_OVERRIDE:
+                        {
+                            MADTInterruptOverrideEntry* intOverride = (MADTInterruptOverrideEntry*)currentPtr;
+                            SerialDebug.Info($"Interrupt Override: IRQ {intOverride->Source} -> GSI {intOverride->GlobalSystemInterrupt}, Flags 0x{((ulong)intOverride->Flags).ToStringHex()}");
+
+                            // Special handling for well-known IRQs
+                            if (intOverride->Source == 1) // Keyboard IRQ
+                            {
+                                SerialDebug.Info($"Keyboard IRQ override: ISA IRQ 1 -> GSI {intOverride->GlobalSystemInterrupt}");
+                            }
+                        }
+                        break;
+
+                    case MADT_TYPE_NMI_SOURCE:
+                    case MADT_TYPE_LOCAL_APIC_NMI:
+                    case MADT_TYPE_LOCAL_APIC_OVERRIDE:
+                    case MADT_TYPE_IO_SAPIC:
+                    case MADT_TYPE_LOCAL_SAPIC:
+                    case MADT_TYPE_PLATFORM_INT_SOURCE:
+                        // These entry types could be parsed for more advanced interrupt handling
+                        break;
+
+                    default:
+                        SerialDebug.Info($"Unknown MADT entry type: {entryHeader->Type}");
+                        break;
+                }
+
+                // Move to the next entry
+                currentPtr += entryHeader->Length;
+            }
+
+            SerialDebug.Info($"MADT parsing complete. Found {_localApicCount} Local APICs and {_ioApicCount} I/O APICs.");
         }
 
         /// <summary>
@@ -582,6 +744,122 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
+        /// Gets the I/O APIC controller address
+        /// </summary>
+        public static ulong GetIOApicAddress()
+        {
+            if (_ioApicAddress != 0)
+            {
+                return _ioApicAddress;
+            }
+
+            // Fallback to the default address if not found
+            // Most systems use a fixed address for the I/O APIC
+            SerialDebug.Info("Using default I/O APIC address 0xFEC00000");
+            return 0xFEC00000;
+        }
+
+        /// <summary>
+        /// Obtiene el ID del APIC Local del procesador actual
+        /// </summary>
+        /// <returns>ID del APIC Local o 0 si no está disponible</returns>
+        public static byte GetLocalAPICId()
+        {
+            if (!_initialized)
+                return 0;
+
+            // Si tenemos un APIC configurado, leer directamente del registro
+            if (_madt != null)
+            {
+                // Obtener la dirección base del APIC Local
+                ulong localApicBase = GetLocalAPICBase();
+
+                // La dirección del registro ID del APIC Local es offset 0x20
+                uint idRegister = *(uint*)((byte*)localApicBase + 0x20);
+
+                // El ID del APIC Local está en los bits 24-31 del registro
+                byte apicId = (byte)((idRegister >> 24) & 0xFF);
+
+                return apicId;
+            }
+
+            // Alternativa: utilizar CPUID para obtener el ID del APIC Local
+            uint eax = 1; // Leaf 1 para información de procesador
+            uint ebx = 0;
+            uint ecx = 0;
+            uint edx = 0;
+
+            // Usar la versión completa de CPUID que recibe todos los registros
+            Native.Cpuid(eax, ref eax, ref ebx, ref ecx, ref edx);
+
+            // El ID del APIC Local está en los bits 24-31 de EBX
+            byte apicIdFromCpuid = (byte)((ebx >> 24) & 0xFF);
+
+            return apicIdFromCpuid;
+        }
+
+        /// <summary>
+        /// Gets the I/O APIC ID
+        /// </summary>
+        public static byte GetIOApicId()
+        {
+            return _ioApicId;
+        }
+
+        /// <summary>
+        /// Obtiene la dirección base del APIC Local
+        /// </summary>
+        /// <returns>Dirección base del APIC Local</returns>
+        public static ulong GetLocalAPICBase()
+        {
+            if (!_initialized)
+                return 0;
+
+            // Si tenemos la dirección desde ACPI MADT, usarla
+            if (_madt != null)
+            {
+                return _madt->LocalApicAddress;
+            }
+
+            // Alternativa: leer desde el MSR IA32_APIC_BASE (0x1B)
+            ulong msr = Native.ReadMSR(0x1B);
+
+            // La dirección base está en los bits 12-35
+            ulong apicBase = msr & 0xFFFFF000;
+
+            return apicBase;
+        }
+
+        /// <summary>
+        /// Verifica si el APIC Local está habilitado
+        /// </summary>
+        /// <returns>True si el APIC Local está habilitado, False en caso contrario</returns>
+        public static bool IsLocalAPICEnabled()
+        {
+            if (!_initialized)
+                return false;
+
+            // Método 1: Verificar el bit en el MSR IA32_APIC_BASE (0x1B)
+            ulong msr = Native.ReadMSR(0x1B);
+
+            // El bit 11 indica si el APIC está habilitado
+            bool enabledInMSR = (msr & (1UL << 11)) != 0;
+
+            // Método 2: Si el MADT está presente, verificar los flags
+            if (_madt != null)
+            {
+                // El bit 0 de los flags MADT indica si el sistema está en modo APIC
+                // 0 = PIC Mode, 1 = APIC Mode
+                bool apicModeInMADT = (_madt->Flags & 1) != 0;
+
+                // Verificar ambas condiciones
+                return enabledInMSR && apicModeInMADT;
+            }
+
+            return enabledInMSR;
+        }
+
+        /// <summary>
         /// Gets the ACPI Power Management Timer address
         /// </summary>
         /// <returns>The address of the PM Timer, or 0 if not available</returns>
@@ -597,6 +875,22 @@ namespace Kernel.Hardware
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// Gets the number of detected Local APICs
+        /// </summary>
+        public static byte GetLocalApicCount()
+        {
+            return _localApicCount;
+        }
+
+        /// <summary>
+        /// Gets the number of detected I/O APICs
+        /// </summary>
+        public static byte GetIOApicCount()
+        {
+            return _ioApicCount;
         }
 
         /// <summary>
@@ -643,7 +937,6 @@ namespace Kernel.Hardware
             }
 
             // Important tables
-            // Para FADT
             if (_fadt != null)
             {
                 SerialDebug.Info("FADT: Found");
@@ -653,7 +946,6 @@ namespace Kernel.Hardware
                 SerialDebug.Info("FADT: Not found");
             }
 
-            // Para DSDT
             if (_dsdt != null)
             {
                 SerialDebug.Info("DSDT: Found");
@@ -663,12 +955,18 @@ namespace Kernel.Hardware
                 SerialDebug.Info("DSDT: Not found");
             }
 
-
             if (_madt != null)
             {
                 SerialDebug.Info($"MADT: Found");
                 SerialDebug.Info($"Local APIC Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
                 SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
+                SerialDebug.Info($"Local APIC Count: {_localApicCount}");
+                SerialDebug.Info($"I/O APIC Count: {_ioApicCount}");
+                if (_ioApicAddress != 0)
+                {
+                    SerialDebug.Info($"I/O APIC Address: 0x{_ioApicAddress.ToStringHex()}");
+                    SerialDebug.Info($"I/O APIC ID: {_ioApicId}");
+                }
             }
             else
             {
@@ -681,6 +979,88 @@ namespace Kernel.Hardware
             SerialDebug.Info("========================\n");
         }
 
+        /// <summary>
+        /// Prints detailed information about APIC configuration detected from MADT
+        /// </summary>
+        public static void PrintAPICInfo()
+        {
+            if (!_initialized || _madt == null)
+            {
+                SerialDebug.Info("APIC information not available.");
+                return;
+            }
 
+            SerialDebug.Info("\n=== APIC Configuration ===");
+            SerialDebug.Info($"Local APIC Base Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
+            SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
+            SerialDebug.Info($"  - PIC Mode: {(_madt->Flags & 1) == 0}");
+            SerialDebug.Info($"  - APIC Mode: {(_madt->Flags & 1) != 0}");
+
+            SerialDebug.Info($"Detected {_localApicCount} Local APICs");
+            SerialDebug.Info($"Detected {_ioApicCount} I/O APICs");
+
+            if (_ioApicAddress != 0)
+            {
+                SerialDebug.Info($"Primary I/O APIC:");
+                SerialDebug.Info($"  - ID: {_ioApicId}");
+                SerialDebug.Info($"  - Address: 0x{_ioApicAddress.ToStringHex()}");
+            }
+
+            // Other APIC information could be added here from the parsed MADT
+            SerialDebug.Info("===========================\n");
+        }
+
+        /// <summary>
+        /// Gets information about the IRQ override for a specific ISA IRQ
+        /// </summary>
+        /// <param name="isaIrq">ISA IRQ number (0-15)</param>
+        /// <param name="gsi">Output GSI (Global System Interrupt) number</param>
+        /// <param name="flags">Output flags (bit 0-1: Polarity, bit 2-3: Trigger Mode)</param>
+        /// <returns>True if an override was found, false otherwise</returns>
+        public static bool GetIRQOverride(byte isaIrq, out uint gsi, out ushort flags)
+        {
+            gsi = isaIrq;  // Default: GSI == ISA IRQ
+            flags = 0;     // Default: Active High, Edge-triggered
+
+            if (!_initialized || _madt == null)
+                return false;
+
+            // Parse MADT to find interrupt overrides
+            byte* currentPtr = (byte*)_madt + sizeof(MADT);
+            byte* endPtr = (byte*)_madt + _madt->Header.Length;
+
+            while (currentPtr < endPtr)
+            {
+                MADTEntryHeader* entryHeader = (MADTEntryHeader*)currentPtr;
+
+                if (entryHeader->Length == 0 || currentPtr + entryHeader->Length > endPtr)
+                    break;
+
+                if (entryHeader->Type == MADT_TYPE_INT_OVERRIDE)
+                {
+                    MADTInterruptOverrideEntry* intOverride = (MADTInterruptOverrideEntry*)currentPtr;
+
+                    if (intOverride->Source == isaIrq)
+                    {
+                        gsi = intOverride->GlobalSystemInterrupt;
+                        flags = intOverride->Flags;
+                        return true;
+                    }
+                }
+
+                currentPtr += entryHeader->Length;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Helper method to check if legacy PIC mode is active according to MADT
+        /// </summary>
+        public static bool IsLegacyPICModeActive()
+        {
+            // If MADT flags bit 0 is clear, system is in legacy PIC mode
+            return _madt != null && (_madt->Flags & 1) == 0;
+        }
     }
 }

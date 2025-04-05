@@ -5,8 +5,7 @@ global _Movsb
 global _ReadMSR
 global _WriteMSR
 global _GetAPICID
-global _KBControllerSendCommand
-
+g
 ; Lee un registro MSR
 ; ulong ReadMSR(uint msr)
 _ReadMSR:
@@ -33,22 +32,6 @@ _GetAPICID:
     cpuid                ; Ejecutar CPUID
     shr ebx, 24          ; El ID APIC está en los bits 24-31 de EBX
     mov al, bl           ; Mover el resultado a AL para retorno
-    ret
-
-; Envía un comando al controlador de teclado
-; void KBControllerSendCommand(byte command)
-_KBControllerSendCommand:
-    mov al, cl           ; Comando está en CL (primer parámetro)
-    
-    ; Esperar a que el búfer de entrada esté vacío
-.wait_input_buffer:
-    in al, 64h           ; Leer estado del controlador KB
-    test al, 2           ; Probar bit 1 (búfer de entrada lleno)
-    jnz .wait_input_buffer
-    
-    ; Enviar comando
-    mov al, cl           ; Restaurar el comando
-    out 64h, al          ; Enviar al puerto de comando (0x64)
     ret
 
 ; Función para obtener el valor del registro CR2 (dirección que causó la falta de página)

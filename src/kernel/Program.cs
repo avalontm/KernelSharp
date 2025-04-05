@@ -56,21 +56,47 @@ namespace Kernel
             Console.WriteLine($"multibootInfo: 0x" + ((ulong)multibootInfo).ToStringHex());
 
             Console.WriteLine($"Flag: {multibootInfo->Flags}");
+            /*
+           DriverManager.Initialize();
+           DriverManager.RegisterPCIDrivers();
+           DriverManager.InitializeAllDrivers();
+          */
 
+            // Tablas de descriptores base del sistema
             GDTManager.Initialize();
             IDTManager.Initialize();
+
+            // Detección de hardware básico
             SMBIOS.Initialize();
             SMPManager.Initialize();
             ACPIManager.Initialize();
-            APICController.Initialize();
-            PCIManager.Initialize();
-            // DriverManager.Initialize();
-            // DriverManager.RegisterPCIDrivers();
-            // DriverManager.InitializeAllDrivers();
 
+            // Inicialización de controladores de interrupción
+            APICController.Initialize();
+
+            // Inicialización del IOAPIC explícitamente (FALTA)
+            IOAPIC.Initialize();  // <-- Añadir esta línea
+
+            // Diagnóstico del IOAPIC para verificar su estado
+            IOAPIC.Diagnose();    // <-- Añadir esta línea
+
+            // Verificar que el IOAPIC esté correctamente inicializado
+            if (!IOAPIC.IsInitialized())
+            {
+                SerialDebug.Error("IOAPIC initialization failed, interrupts may not work properly");
+            }
+
+            // Gestor de interrupciones y dispositivos PCI
             InterruptManager.Initialize();
+            PCIManager.Initialize();  // Mejor mover PCI después del gestor de interrupciones
+
+            // Diagnóstico de interrupciones
             InterruptManager.DiagnoseInterruptSystem();
+
+            // Inicialización de dispositivos de entrada
             Keyboard.Initialize();
+  
+            // Prueba del teclado
             KeyboardTest.TestTextInput();
 
             //ThreadPool.Initialize();

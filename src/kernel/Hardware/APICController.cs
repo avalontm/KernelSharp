@@ -266,7 +266,7 @@ namespace Kernel.Hardware
         {
             // Read MSR IA32_APIC_BASE (0x1B)
             ulong msr = Native.ReadMSR(0x1B);
-            SerialDebug.Info($"Initial MSR value: 0x{msr:X16}");
+            SerialDebug.Info($"Initial MSR value: 0x{((ulong)msr).ToStringHex()}");
 
             // Check if APIC is already enabled (bit 11)
             if ((msr & (1UL << 11)) != 0)
@@ -281,7 +281,7 @@ namespace Kernel.Hardware
             // Write updated MSR
             Native.WriteMSR(0x1B, msr);
 
-            SerialDebug.Info($"Updated MSR value: 0x{msr:X16}");
+            SerialDebug.Info($"Updated MSR value: 0x{((ulong)msr).ToStringHex()}");
             SerialDebug.Info("APIC enabled in MSR");
         }
 
@@ -365,7 +365,7 @@ namespace Kernel.Hardware
         /// <summary>
         /// Send End of Interrupt (EOI) command to APIC
         /// </summary>
-        public static void SendEoi()
+        public static void SendEOI()
         {
             if (!_initialized || !_apicEnabled)
                 return;
@@ -507,7 +507,7 @@ namespace Kernel.Hardware
             // Address must be 4K aligned and below 1MB
             if ((trampolineAddress & 0xFFF) != 0 || trampolineAddress >= 0x100000)
             {
-                SerialDebug.Warning($"Invalid trampoline address: 0x{trampolineAddress:X}");
+                SerialDebug.Warning($"Invalid trampoline address: 0x{trampolineAddress.ToStringHex()}");
                 return false;
             }
 
@@ -518,7 +518,7 @@ namespace Kernel.Hardware
             int cpuCount = SMPManager.GetProcessorCount();
             int startedCount = 0;
 
-            SerialDebug.Info($"Starting {cpuCount - 1} APs with trampoline at 0x{trampolineAddress:X} (vector 0x{startupVector:X})");
+            SerialDebug.Info($"Starting {cpuCount - 1} APs with trampoline at 0x{trampolineAddress.ToStringHex()} (vector 0x{((ulong)startupVector).ToStringHex()})");
 
             // Skip BSP (index 0) and start APs
             for (int i = 1; i < cpuCount; i++)
@@ -600,10 +600,10 @@ namespace Kernel.Hardware
             bool msrEnabled = (msr & (1UL << 11)) != 0;
             ulong baseAddr = msr & 0xFFFFF000;
 
-            SerialDebug.Info($"APIC MSR: 0x{msr:X16}");
-            SerialDebug.Info($"APIC Enabled in MSR: {msrEnabled}");
-            SerialDebug.Info($"APIC Base Address from MSR: 0x{baseAddr:X}");
-            SerialDebug.Info($"APIC Base Address in use: 0x{(ulong)_localApicAddress:X}");
+            SerialDebug.Info($"APIC MSR: 0x{msr.ToStringHex()}");
+            SerialDebug.Info($"APIC Enabled in MSR: " + msrEnabled);
+            SerialDebug.Info($"APIC Base Address from MSR: 0x{baseAddr.ToStringHex()}");
+            SerialDebug.Info($"APIC Base Address in use: 0x{((ulong)_localApicAddress).ToStringHex()}");
 
             // If initialized, read key registers
             if (_initialized)
@@ -614,11 +614,11 @@ namespace Kernel.Hardware
                 uint errorStatus = ReadApicRegister(APIC_ERROR_STATUS);
 
                 SerialDebug.Info($"APIC ID Register: 0x{idReg:X8} (ID: {idReg >> 24})");
-                SerialDebug.Info($"APIC Version Register: 0x{versionReg:X8} (Version: {versionReg & 0xFF})");
+                SerialDebug.Info($"APIC Version Register: 0x{((ulong)versionReg).ToStringHex()} (Version: {versionReg & 0xFF})");
                 SerialDebug.Info($"APIC Max LVT Entries: {((versionReg >> 16) & 0xFF) + 1}");
-                SerialDebug.Info($"APIC Spurious Vector: 0x{spuriousReg:X8} (Vector: {spuriousReg & 0xFF})");
+                SerialDebug.Info($"APIC Spurious Vector: 0x{((ulong)spuriousReg).ToStringHex()} (Vector: {spuriousReg & 0xFF})");
                 SerialDebug.Info($"APIC Enabled in SVR: {(spuriousReg & APIC_ENABLE) != 0}");
-                SerialDebug.Info($"APIC Error Status: 0x{errorStatus:X8}");
+                SerialDebug.Info($"APIC Error Status: 0x{((ulong)errorStatus).ToStringHex()}");
 
                 // Timer configuration
                 uint lvtTimer = ReadApicRegister(APIC_LVT_TIMER);
@@ -626,19 +626,19 @@ namespace Kernel.Hardware
                 uint currentCount = ReadApicRegister(APIC_TIMER_CURRENT_COUNT);
                 uint divideConfig = ReadApicRegister(APIC_TIMER_DIVIDE_CONFIG);
 
-                SerialDebug.Info($"Timer LVT: 0x{lvtTimer:X8} (Vector: {lvtTimer & 0xFF}, Masked: {(lvtTimer & LVT_TIMER_MASK_INTERRUPT) != 0})");
+                SerialDebug.Info($"Timer LVT: 0x{((ulong)lvtTimer).ToStringHex()} (Vector: {lvtTimer & 0xFF}, Masked: {(lvtTimer & LVT_TIMER_MASK_INTERRUPT) != 0})");
                 SerialDebug.Info($"Timer Initial Count: {initialCount}");
                 SerialDebug.Info($"Timer Current Count: {currentCount}");
-                SerialDebug.Info($"Timer Divide Config: 0x{divideConfig:X}");
+                SerialDebug.Info($"Timer Divide Config: 0x{((ulong)divideConfig).ToStringHex()}");
                 SerialDebug.Info($"Timer Ticks/ms: {_timerTicksPerMS}");
 
                 // Check PIC status
                 byte masterMask = IOPort.InByte(PIC1_DATA);
                 byte slaveMask = IOPort.InByte(PIC2_DATA);
 
-                SerialDebug.Info($"PIC Master Mask: 0x{masterMask:X2}");
-                SerialDebug.Info($"PIC Master Mask: 0x{masterMask:X2}");
-                SerialDebug.Info($"PIC Slave Mask: 0x{slaveMask:X2}");
+                SerialDebug.Info($"PIC Master Mask: 0x{((ulong)masterMask).ToStringHex()}");
+                SerialDebug.Info($"PIC Master Mask: 0x{((ulong)masterMask).ToStringHex()}");
+                SerialDebug.Info($"PIC Slave Mask: 0x{((ulong)slaveMask).ToStringHex()}");
                 SerialDebug.Info($"PICs Fully Masked: {masterMask == 0xFF && slaveMask == 0xFF}");
 
                 // Check for any errors
@@ -654,7 +654,7 @@ namespace Kernel.Hardware
 
                 if (errorStatus != 0)
                 {
-                    SerialDebug.Warning($"APIC has error status: 0x{errorStatus:X}");
+                    SerialDebug.Warning($"APIC has error status: 0x{((ulong)errorStatus).ToStringHex()}");
                 }
             }
 

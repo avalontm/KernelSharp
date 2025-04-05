@@ -67,28 +67,27 @@ namespace Kernel.Memory
             // Allocate memory for the IDT
             _idt = (IDTEntry*)Allocator.malloc((nuint)(sizeof(IDTEntry) * IDT_SIZE));
 
-            // Verificación detallada de la dirección del stub
-            IntPtr stubHandler = GetInterruptStubAddress();
-
-            // Log de diagnóstico
-            SerialDebug.Info($"Interrupt Stub Address: 0x{((ulong)stubHandler).ToStringHex()}");
-
-            if (stubHandler == IntPtr.Zero)
-            {
-                // Método de detención de bajo nivel
-                SerialDebug.Error("CRITICAL: Cannot obtain interrupt stub address");
-                Native.CLI();  // Deshabilitar interrupciones
-                while (true)
-                {
-                    Native.Halt(); // Detener el sistema
-                }
-            }
-
-            // Configurar todas las entradas de la IDT
+            // Configurar todas las entradas de la IDT con su respectivo stub
             for (int i = 0; i < IDT_SIZE; i++)
             {
-                SetIDTEntry(i, stubHandler, 0x08, IDTGateType.InterruptGate);
+                IntPtr stub = GetInterruptStub(i);
+
+                if (stub == IntPtr.Zero)
+                {
+                    SerialDebug.Error($"CRITICAL: Stub {i} is NULL");
+                    Native.CLI();  // Deshabilitar interrupciones
+                    while (true)
+                    {
+                        Native.Halt(); // Detener el sistema
+                    }
+                }
+
+                SetIDTEntry(i, stub, 0x08, IDTGateType.InterruptGate);
             }
+
+            // Preparar el puntero IDT
+            _idtPointer.Limit = (ushort)(sizeof(IDTEntry) * IDT_SIZE - 1);
+            _idtPointer.Base = (ulong)_idt;
 
             // Cargar IDT
             fixed (IDTPointer* idtPtr = &_idtPointer)
@@ -98,6 +97,7 @@ namespace Kernel.Memory
 
             SerialDebug.Info("IDT initialized successfully");
         }
+
 
         /// <summary>
         /// Configures an entry in the IDT
@@ -123,11 +123,9 @@ namespace Kernel.Memory
             _idt[index].Reserved = 0;
         }
 
-        /// <summary>
-        /// Gets the interrupt stub address
-        /// </summary>
-        [DllImport("*", EntryPoint = "_GetInterruptStubAddress")]
-        private static extern IntPtr GetInterruptStubAddress();
+        [DllImport("*", EntryPoint = "_GetInterruptStub")]
+        private static extern IntPtr GetInterruptStub(int interruptNumber);
+
 
         /// <summary>
         /// Loads the IDT into the IDTR register
