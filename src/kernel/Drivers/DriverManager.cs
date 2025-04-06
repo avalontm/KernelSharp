@@ -1,5 +1,6 @@
 ﻿using Kernel.Diagnostics;
 using Kernel.Drivers.Audio;
+using Kernel.Drivers.Input;
 using Kernel.Drivers.Network;
 using System;
 using System.Collections.Generic;
@@ -89,6 +90,7 @@ namespace Kernel.Drivers
             SerialDebug.Info("Initializing Lightweight Driver Manager...");
             // Reset arrays
             _registeredDrivers = new IDriver[64];
+            SerialDebug.Info("Driver array initialized successfully");
             _driverTypes = new int[64];
             _driverCount = 0;
             SerialDebug.Info("Lightweight Driver Manager initialized successfully");
@@ -103,7 +105,6 @@ namespace Kernel.Drivers
             if (driver == null)
                 return false;
 
-            SerialDebug.Info($"Registering driver: {driver.Id} ({driver.Name})");
             // Check for duplicate
             for (int i = 0; i < _driverCount; i++)
             {
@@ -117,7 +118,6 @@ namespace Kernel.Drivers
                 }
             }
 
-            SerialDebug.Info($"Driver {driver.Id} not found. Proceeding with registration.");
             // Ensure capacity
             if (_driverCount >= _registeredDrivers.Length)
             {
@@ -125,7 +125,6 @@ namespace Kernel.Drivers
                 return false;
             }
 
-            SerialDebug.Info($"Driver {driver.Id} is valid. Proceeding with registration.");
             // Register driver
             _registeredDrivers[_driverCount] = driver;
             _driverTypes[_driverCount] = DetermineDriverType(driver);
@@ -196,15 +195,15 @@ namespace Kernel.Drivers
                     if (_driverTypes[i] == o)
                     {
                         IDriver driver = _registeredDrivers[i];
-                        SerialDebug.Info($"Initializing driver: {driver.Id}");
+                        //SerialDebug.Info($"Initializing driver: {driver.Id}");
 
                         if (driver.Initialize())
                         {
-                            SerialDebug.Info($"Driver initialized successfully: {driver.Id}");
+                           // SerialDebug.Info($"Driver initialized successfully: {driver.Id}");
                         }
                         else
                         {
-                            SerialDebug.Warning($"Failed to initialize driver: {driver.Id}");
+                            //SerialDebug.Warning($"Failed to initialize driver: {driver.Id}");
                         }
                     }
                 }
@@ -238,7 +237,7 @@ namespace Kernel.Drivers
         {
             // Logic to determine driver type (same as previous implementation)
             string name = driver.Name.ToUpper();
-            SerialDebug.Info($"Determining driver type for: {name}");
+
             if (name.Contains("GRAPHICS") || name.Contains("VIDEO") || name.Contains("DISPLAY"))
                 return (int)DriverType.Graphics;
 
@@ -263,9 +262,8 @@ namespace Kernel.Drivers
         {
             SerialDebug.Info("Registering PCI drivers...");
             // Obtener lista de dispositivos PCI detectados
-            List<PCIDevice> pciDevices = PCIManager.GetDevices();
+            List<PCIDevice> pciDevices = PCIMMIOManager.GetDevices();
 
-            SerialDebug.Info($"pciDevices: {pciDevices.Count}");
             // Iterar dispositivos y registrar drivers según su clase
             for (int i = 0; i < pciDevices.Count; i++)
             {
@@ -286,6 +284,10 @@ namespace Kernel.Drivers
                     case 0x04: // Dispositivos multimedia (audio)
                         RegisterAudioDriver(device);
                         break;
+                    case 0x08: // Dispositivos de entrada
+                               // Los dispositivos de entrada generalmente tienen el ClassCode 0x08
+                        RegisterInputDriver(device);
+                        break;
                     default:
                         // Registrar drivers genéricos para otros tipos de dispositivos
                         // RegisterGenericDriver(device);
@@ -295,12 +297,97 @@ namespace Kernel.Drivers
         }
 
         /// <summary>
+        /// Función para registrar un driver de dispositivos de entrada (teclados, ratones, etc.)
+        /// </summary>
+        private static void RegisterInputDriver(PCIDevice device)
+        {
+            SerialDebug.Info($"Registering input device driver for device ID: {device.ID.DeviceID}");
+
+            // Implementar el registro del driver de dispositivo de entrada aquí
+            // Esto podría incluir la inicialización de un driver de teclado o mouse,
+            // dependiendo del dispositivo PCI.
+
+            // Ejemplo de cómo se podría registrar un driver de teclado
+            if (device.ID.DeviceID == 0x1000) // Ejemplo de ID para un dispositivo de teclado
+            {
+                RegisterKeyboardDriver(device);
+            }
+            else if (device.ID.DeviceID == 0x2000) // Ejemplo de ID para un dispositivo de ratón
+            {
+                RegisterMouseDriver(device);
+            }
+            else
+            {
+                //SerialDebug.Warning($"Input device with unrecognized ID: {device.ID.DeviceID}. Registering a generic input driver.");
+                RegisterGenericInputDriver(device);
+            }
+        }
+
+        /// <summary>
+        /// Función para registrar el driver de un teclado.
+        /// </summary>
+        /// <summary>
+        /// Función para registrar el driver de un teclado.
+        /// </summary>
+        private static void RegisterKeyboardDriver(PCIDevice device)
+        {
+            //SerialDebug.Info($"Registering keyboard driver for device ID: {device.ID.DeviceID}");
+
+            // Verificar si el dispositivo es un teclado PS/2 (opcional, según el tipo de teclado que quieras registrar)
+            if (IsPS2Keyboard(device))
+            {
+                // Crear una instancia del driver para el teclado
+                KeyboardDriver driver = new KeyboardDriver();
+
+                // Registrar el driver con el DriverManager
+                DriverManager.RegisterDriver(driver);
+
+                SerialDebug.Info("PS/2 Keyboard driver successfully registered.");
+            }
+            else
+            {
+                SerialDebug.Warning("The device is not a PS/2 keyboard. Skipping driver registration.");
+            }
+        }
+
+        /// <summary>
+        /// Función para verificar si el dispositivo es un teclado PS/2.
+        /// </summary>
+        private static bool IsPS2Keyboard(PCIDevice device)
+        {
+            // Este es un ejemplo de cómo podrías verificar si el dispositivo es un teclado PS/2.
+            // Necesitarías comprobar el ID del dispositivo, y posiblemente otros parámetros
+            // para asegurar que se trata de un teclado PS/2.
+            return device.ID.DeviceID == 0x0001;  // Ejemplo de ID para un teclado PS/2 (debe ser verificado según el hardware).
+        }
+
+        /// <summary>
+        /// Función para registrar el driver de un ratón.
+        /// </summary>
+        private static void RegisterMouseDriver(PCIDevice device)
+        {
+            //SerialDebug.Info($"Registering mouse driver for device ID: {device.ID.DeviceID}");
+            // Implementar la inicialización del driver de ratón aquí.
+            // Esto podría incluir la configuración de interrupciones o puertos.
+        }
+
+        /// <summary>
+        /// Función para registrar un driver de dispositivo de entrada genérico.
+        /// </summary>
+        private static void RegisterGenericInputDriver(PCIDevice device)
+        {
+           // SerialDebug.Info($"Registering generic input driver for device ID: {device.ID.DeviceID}");
+            // Implementar la inicialización del driver genérico de entrada aquí.
+            // Esto podría involucrar el registro de un controlador genérico que maneje entradas estándar.
+
+        }
+        /// <summary>
         /// Registra controladores de dispositivos de audio
         /// </summary>
         /// <param name="device">Dispositivo PCI de audio</param>
         static void RegisterAudioDriver(PCIDevice device)
         {
-            SerialDebug.Info($"Detecting audio device: VendorID=0x{((ulong)device.ID.VendorID).ToStringHex()}, DeviceID=0x{((ulong)device.ID.DeviceID).ToStringHex()}");
+            //SerialDebug.Info($"Detecting audio device: VendorID=0x{((ulong)device.ID.VendorID).ToStringHex()}, DeviceID=0x{((ulong)device.ID.DeviceID).ToStringHex()}");
 
             // Intel AC97 Audio Controller
             if (device.ID.VendorID == 0x8086 && device.ID.DeviceID == 0x2415)
@@ -335,7 +422,7 @@ namespace Kernel.Drivers
             // Genérico para cualquier otro dispositivo de audio
             else
             {
-                SerialDebug.Info($"Detected unknown audio device (Subclass: 0x{((ulong)device.ID.Subclass).ToStringHex()})");
+                //SerialDebug.Info($"Detected unknown audio device (Subclass: 0x{((ulong)device.ID.Subclass).ToStringHex()})");
                 // Podrías intentar cargar un driver genérico según la subclase
 
                 // Audio genérico

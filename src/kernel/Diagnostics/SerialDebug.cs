@@ -1,7 +1,5 @@
 ﻿using Kernel.Drivers.IO;
-using System;
 using System.Runtime;
-using System.Text;
 
 namespace Kernel.Diagnostics
 {
@@ -65,40 +63,42 @@ namespace Kernel.Diagnostics
         /// <summary>
         /// Inicializa un puerto serie para comunicación
         /// </summary>
-        private static void InitializeSerialPort(ushort port)
+        private static void InitializeSerialPort(uint port)
         {
             // Deshabilitar interrupciones
-            IOPort.OutByte((ushort)(port + 1), 0x00);
+            IOPort.Out8((ushort)(ushort)(port + 1), 0x00);
 
             // Habilitar DLAB (Divisor Latch Access Bit)
-            IOPort.OutByte((ushort)(port + 3), 0x80);
+            IOPort.Out8((ushort)(port + 3), 0x80);
 
             // Configurar tasa de baudios (115200 bps)
             // Divisor = 115200 / 9600 = 12
-            IOPort.OutByte((ushort)(port + 0), 0x0C); // LSB
-            IOPort.OutByte((ushort)(port + 1), 0x00); // MSB
+            IOPort.Out8((ushort)(port + 0), 0x0C); // LSB
+            IOPort.Out8((ushort)(port + 1), 0x00); // MSB
 
             // 8 bits, sin paridad, 1 bit de parada
-            IOPort.OutByte((ushort)(port + 3), 0x03);
+            IOPort.Out8((ushort)(port + 3), 0x03);
 
             // Habilitar FIFO, limpiar y con umbral de 14 bytes
-            IOPort.OutByte((ushort)(port + 2), 0xC7);
+            IOPort.Out8((ushort)(port + 2), 0xC7);
 
             // Habilitar interrupciones, RTS/DSR set
-            IOPort.OutByte((ushort)(port + 4), 0x0B);
+            IOPort.Out8((ushort)(port + 4), 0x0B);
 
             // Prueba de loopback para verificar que el puerto funciona
-            IOPort.OutByte((ushort)(port + 4), 0x1E); // Habilitar loopback
-            IOPort.OutByte((ushort)(port + 0), 0x55); // Enviar byte de prueba
+            IOPort.Out8((ushort)(port + 4), 0x1E); // Habilitar loopback
+            IOPort.Out8((ushort)(port + 0), 0x55); // Enviar byte de prueba
 
-            if (IOPort.InByte((ushort)(port + 0)) != 0x55)
+            // Importante: Asegurarse de que el valor se convierta correctamente
+            byte receivedByte = IOPort.In8((port + 0));
+            if (receivedByte != 0x55)
             {
                 // El puerto no responde correctamente
                 useSerialPort = false;
             }
 
             // Restaurar modo normal
-            IOPort.OutByte((ushort)(port + 4), 0x0F);
+            IOPort.Out8((ushort)(port + 4), 0x0F);
         }
 
         /// <summary>
@@ -296,7 +296,7 @@ namespace Kernel.Diagnostics
         private static void WriteByteToSerial(byte value)
         {
             // Esperar hasta que el puerto esté listo para enviar
-            while ((IOPort.InByte((ushort)(DEBUG_PORT + 5)) & 0x20) == 0)
+            while ((IOPort.In8((DEBUG_PORT + 5)) & 0x20) == 0)
             {
                 // Pequeña pausa para no saturar el bus
                 int j = 1000;
@@ -304,7 +304,7 @@ namespace Kernel.Diagnostics
             }
 
             // Enviar byte
-            IOPort.OutByte((ushort)(DEBUG_PORT), value);
+            IOPort.Out8((ushort)(DEBUG_PORT), value);
         }
 
         /// <summary>
@@ -313,7 +313,7 @@ namespace Kernel.Diagnostics
         private static void WriteByteToDebugPort(byte value)
         {
             // El puerto 0xE9 es un puerto especial en emuladores
-            IOPort.OutByte(DEBUG_E9_PORT, value);
+            IOPort.Out8((ushort)DEBUG_E9_PORT, value);
         }
 
         /// <summary>

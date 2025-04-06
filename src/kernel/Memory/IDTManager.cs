@@ -43,6 +43,7 @@ namespace Kernel.Memory
         public ulong Base;        // Base address of IDT
     }
 
+
     /// <summary>
     /// Interrupt Descriptor Table manager for x86_64
     /// </summary>
@@ -56,12 +57,15 @@ namespace Kernel.Memory
 
         // IDT Pointer for LIDT instruction
         internal static IDTPointer _idtPointer;
-
+        static bool _isInitialized = false;
         /// <summary>
         /// Initializes the IDT
         /// </summary>
         public static void Initialize()
         {
+            if(_isInitialized)
+                return;
+
             SerialDebug.Info("Initializing Interrupt Descriptor Table (IDT)...");
 
             // Allocate memory for the IDT
@@ -95,6 +99,7 @@ namespace Kernel.Memory
                 LoadIDT(idtPtr);
             }
 
+            _isInitialized = true;
             SerialDebug.Info("IDT initialized successfully");
         }
 
@@ -121,6 +126,14 @@ namespace Kernel.Memory
             _idt[index].TypeAttr = (byte)type;
             _idt[index].IST = ist;
             _idt[index].Reserved = 0;
+        }
+
+        /// <summary>
+        /// Verifica si el IOAPIC está inicializado
+        /// </summary>
+        public static bool IsInitialized()
+        {
+            return _isInitialized;
         }
 
         [DllImport("*", EntryPoint = "_GetInterruptStub")]

@@ -1,4 +1,5 @@
 ﻿using Kernel.Diagnostics;
+using Kernel.Drivers.IO;
 using Kernel.Memory;
 using System;
 using System.Runtime;
@@ -72,11 +73,11 @@ namespace Kernel.Hardware
                 divisor = 0xFFFF;
 
             // Program PIT channel 0 in rate generator mode
-            Native.OutByte(PIT_COMMAND_PORT, PIT_CHANNEL_0 | PIT_ACCESS_BOTH | PIT_MODE_RATE_GEN);
+            IOPort.Out8(PIT_COMMAND_PORT, PIT_CHANNEL_0 | PIT_ACCESS_BOTH | PIT_MODE_RATE_GEN);
 
             // Set the divisor (low byte, then high byte)
-            Native.OutByte(PIT_DATA_PORT_0, (byte)(divisor & 0xFF));
-            Native.OutByte(PIT_DATA_PORT_0, (byte)((divisor >> 8) & 0xFF));
+            IOPort.Out8(PIT_DATA_PORT_0, (byte)(divisor & 0xFF));
+            IOPort.Out8(PIT_DATA_PORT_0, (byte)((divisor >> 8) & 0xFF));
 
             // Reset counter
             _ticks = 0;
@@ -118,7 +119,7 @@ namespace Kernel.Hardware
 
             // Send EOI (End Of Interrupt) signal to PIC
             // 0x20 is the command port for the master PIC, 0x20 is the EOI command
-            Native.OutByte(0x20, 0x20);
+            IOPort.Out8(0x20, 0x20);
         }
 
         /// <summary>

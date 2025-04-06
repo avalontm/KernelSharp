@@ -8,6 +8,7 @@ global _CLI
 global _STI
 global _Halt
 global _Pause
+global _Nop
 global _InterruptCommon
 global _GetInterruptStubAddress
 global _LoadIDT              ; Load IDT
@@ -96,49 +97,128 @@ _Pause:
     pause
     ret
 
-; Common part of the interrupt handler
-_InterruptCommon:
-    ; Save all general-purpose registers
-    push rax
-    push rcx
-    push rdx
-    push rbx
-    push rsp
-    push rbp
-    push rsi
-    push rdi
-    
-    ; Save interrupt number and error code on stack
-    sub rsp, 16
-    mov [rsp], rcx        ; Store interrupt number
-    mov qword [rsp+8], 0  ; Default error code (0)
-    
-    ; Call C# handler function
-    mov rcx, rsp          ; Pass pointer to register stack as first parameter
-    sub rsp, 32           ; Shadow space for MS x64 calling convention
-    call HandleInterrupt
-    add rsp, 32
-    
-    ; Restore stack (remove interrupt number and error code)
-    add rsp, 16
-    
-    ; Restore all registers
-    pop rdi
-    pop rsi
-    pop rbp
-    pop rsp
-    pop rbx
-    pop rdx
-    pop rcx
-    pop rax
-    
-    ; Return from interrupt
-    iretq
+; Nop instruction (for busy-waiting)
+_Nop:
+    nop
+    ret
 
-; Address of the first interrupt stub
+; Get the address of the first interrupt handler
 _GetInterruptStubAddress:
     mov rax, _InterruptStub0
     ret
+
+; Common part of the interrupt handler
+_InterruptCommon:
+    ; Create a stack frame (for debugging)
+    push rbp
+    mov rbp, rsp
+    
+    ; Save all general purpose registers
+    push rax
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+    
+    ; Calculate original stack pointer (for frame.RSP)
+    mov rax, rbp
+    add rax, 16           ; Skip RBP and return address
+    
+    ; Create InterruptFrame structure on stack
+    sub rsp, 120          ; Reserve space for frame (15 * 8 = 120 bytes)
+    
+    ; RCX contains interrupt number
+    ; Create InterruptFrame structure
+    mov [rsp], rdi        ; Frame.RDI
+    mov [rsp+8], rsi      ; Frame.RSI
+    mov [rsp+16], rbp     ; Frame.RBP
+    mov [rsp+24], rax     ; Frame.RSP (original value)
+    mov [rsp+32], rbx     ; Frame.RBX
+    mov [rsp+40], rdx     ; Frame.RDX
+    mov [rsp+48], rcx     ; Frame.RCX
+    mov [rsp+56], rax     ; Frame.RAX
+    
+    ; Interrupt number is already in RCX
+    mov [rsp+64], rcx     ; Frame.InterruptNumber
+    
+    ; Error code (if any)
+    mov rax, [rbp+8]      ; Get error code from stack
+    mov [rsp+72], rax     ; Frame.ErrorCode
+    
+    ; CPU-saved registers (these are approximations, might need adjustment)
+    mov rax, [rbp+16]     ; Get RIP from stack
+    mov [rsp+80], rax     ; Frame.RIP
+    
+    mov rax, [rbp+24]     ; Get CS from stack
+    mov [rsp+88], rax     ; Frame.CS
+    
+    mov rax, [rbp+32]     ; Get RFLAGS from stack
+    mov [rsp+96], rax     ; Frame.RFLAGS
+    
+    mov rax, [rbp+40]     ; Get UserRSP from stack
+    mov [rsp+104], rax    ; Frame.UserRSP
+    
+    mov rax, [rbp+48]     ; Get SS from stack
+    mov [rsp+112], rax    ; Frame.SS
+    
+    ; Prepare for call to C# handler
+    ; Windows x64 calling convention - First parameter in RCX
+    mov rcx, rsp          ; Pass pointer to InterruptFrame
+    
+    ; Ensure 16-byte stack alignment
+    sub rsp, 16
+    and rsp, -16
+    
+    ; Reserve shadow space (Windows x64 calling convention)
+    sub rsp, 32
+    
+    ; Call C# handler
+    call HandleInterrupt
+    
+    ; Clean up shadow space
+    add rsp, 32
+    
+    ; Restore stack alignment padding
+    mov rsp, rbp
+    sub rsp, 120          ; Point back to our frame
+
+    ; Restore all registers
+    mov rsp, rbp          ; Reset stack to base of our frame
+    sub rsp, 120          ; Calculate position of saved registers
+    
+    ; Restore all general registers
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
+    
+    ; Restore stack frame
+    pop rbp
+    
+    ; Skip error code
+    add rsp, 8
+    
+    ; Return from interrupt
+    iretq
 
 ; Macro for generating interrupt stubs
 %macro INTERRUPT_STUB 1
@@ -151,8 +231,10 @@ _InterruptStub%1:
         push qword 0
     %endif
     
-    ; Push interrupt number and jump to common code
+    ; Push interrupt number
     mov rcx, %1           ; Load interrupt number
+    
+    ; Jump to common handler
     jmp _InterruptCommon
 %endmacro
 

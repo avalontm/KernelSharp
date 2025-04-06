@@ -52,60 +52,37 @@ namespace Kernel
                 return;
             }
 
-            Console.WriteLine("Multiboot info!");
-            Console.WriteLine($"multibootInfo: 0x" + ((ulong)multibootInfo).ToStringHex());
-
-            Console.WriteLine($"Flag: {multibootInfo->Flags}");
-            /*
-           DriverManager.Initialize();
-           DriverManager.RegisterPCIDrivers();
-           DriverManager.InitializeAllDrivers();
-          */
-
             // Tablas de descriptores base del sistema
             GDTManager.Initialize();
             IDTManager.Initialize();
 
-            // Detección de hardware básico
+            // Detecciï¿½n de hardware bï¿½sico
             SMBIOS.Initialize();
             SMPManager.Initialize();
             ACPIManager.Initialize();
 
-            // Inicialización de controladores de interrupción
+            // Inicializaciï¿½n de controladores de interrupciï¿½n
             APICController.Initialize();
-
-            // Inicialización del IOAPIC explícitamente (FALTA)
-            IOAPIC.Initialize();  // <-- Añadir esta línea
-
-            // Diagnóstico del IOAPIC para verificar su estado
-            IOAPIC.Diagnose();    // <-- Añadir esta línea
-
-            // Verificar que el IOAPIC esté correctamente inicializado
-            if (!IOAPIC.IsInitialized())
-            {
-                SerialDebug.Error("IOAPIC initialization failed, interrupts may not work properly");
-            }
+            IOAPIC.Initialize();
 
             // Gestor de interrupciones y dispositivos PCI
             InterruptManager.Initialize();
-            PCIManager.Initialize();  // Mejor mover PCI después del gestor de interrupciones
+            PCIMMIOManager.Initialize();
 
-            // Diagnóstico de interrupciones
-            InterruptManager.DiagnoseInterruptSystem();
+            DriverManager.Initialize();
+            DriverManager.RegisterPCIDrivers();
+            DriverManager.InitializeAllDrivers();
 
-            // Inicialización de dispositivos de entrada
             Keyboard.Initialize();
-  
-            // Prueba del teclado
-            KeyboardTest.TestTextInput();
 
+            Console.WriteLine("Press any key to continue...");
+            string read = Console.ReadLine();
+            SerialDebug.Info("You typed: " + read);
+            Console.WriteLine("You typed: " + read);
             //ThreadPool.Initialize();
 
             // Show basic system information
             SerialDebug.Info("Initializing system...");
-
-            // Rest of the kernel initialization...
-            ArrayExamples.DemoArrays();
 
             // Initialize other kernel modules
             StartupCodeHelpers.Test();
@@ -132,55 +109,5 @@ namespace Kernel
                 Native.Halt();
             }
         }
-
-
-        public static class ArrayExamples
-        {
-            // Example method to create and use arrays
-            public static void DemoArrays()
-            {
-                SerialDebug.Info("===== ARRAY EXAMPLE =====");
-
-                // Create an array of integers explicitly
-                int[] intArray = new int[4];
-                intArray[0] = 10;
-                intArray[1] = 20;
-                intArray[2] = 30;
-                intArray[3] = 40;
-
-                SerialDebug.Info("Array of integers created explicitly:");
-                for (int i = 0; i < intArray.Length; i++)
-                {
-                    SerialDebug.Info(intArray[i].ToString());
-                }
-
-                // Create an array of strings
-                string[] stringArray = new string[] { "Hello", "World", "KernelSharp" };
-
-                SerialDebug.Info("\nArray of strings:");
-                for (int i = 0; i < stringArray.Length; i++)
-                {
-                    SerialDebug.Info(stringArray[i]);
-                }
-
-                SerialDebug.Info("==========================");
-
-                Elemento elemento = new Elemento()
-                {
-                    Name = "AvalonTM",
-                    Value = 21,
-                };
-
-
-                SerialDebug.Info(elemento.Name);
-                SerialDebug.Info(elemento.Value.ToString());
-                SerialDebug.Info(elemento.Value + " " + elemento.Name);
-                SerialDebug.Info(elemento.Name + " " + elemento.Value);
-                SerialDebug.Info($"{elemento.Name} {elemento.Value}");
-
-                SerialDebug.Info(21 + " " + 534);
-            }
-        }
-
     }
 }

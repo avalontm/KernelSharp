@@ -79,7 +79,7 @@ namespace Kernel.Hardware
             _maxRedirectionEntries = (byte)((versionReg >> 16) & 0xFF);
 
             SerialDebug.Info($"I/O APIC ID: {_ioApicId}, Version: {_ioApicVersion}");
-            SerialDebug.Info($"Maximum Redirection Entries: {_maxRedirectionEntries + 1}");
+            SerialDebug.Info($"Maximum Redirection Entries: {(_maxRedirectionEntries + 1)}");
 
             // Inicializar todas las entradas de redirección a enmascaradas
             for (byte i = 0; i <= _maxRedirectionEntries; i++)
@@ -152,7 +152,7 @@ namespace Kernel.Hardware
         /// <param name="cpuId">ID de APIC del procesador destino</param>
         /// <param name="vector">Vector de interrupción (32-255)</param>
         /// <param name="masked">Si la IRQ está enmascarada inicialmente</param>
-        public static void SetIRQRedirect(byte irq, byte cpuId, byte vector = 0, bool masked = false)
+        public static void SetIRQRedirect(byte irq, byte cpuId, byte vector, bool masked = false)
         {
             if (!_initialized)
             {
@@ -166,25 +166,20 @@ namespace Kernel.Hardware
                 return;
             }
 
-            // Si el vector es 0, usar el mapa estándar: IRQ + 32
-            if (vector == 0)
+            // Verificar que el vector sea válido (32-255)
+            if (vector < 32 || vector > 255)
             {
-                vector = (byte)(irq + 32);
-            }
-
-            // Verificar que el vector sea válido
-            if (vector < 32)
-            {
-                SerialDebug.Warning($"Invalid vector {vector}. Must be >= 32");
-                vector = 32;
+                SerialDebug.Warning($"Invalid vector {vector}. Must be between 32 and 255");
+                return;
             }
 
             // Construir la entrada de redirección para la IRQ
-            ulong entry = vector |                        // Vector de interrupción
-                          IOAPIC_DELIVERY_FIXED |         // Entrega fija
-                          IOAPIC_DESTMODE_PHYSICAL |      // Modo de destino físico
-                          IOAPIC_INTPOL_HIGH |            // Polaridad activa alta
-                          IOAPIC_TRIGGER_EDGE;            // Disparo por flanco
+            ulong entry =
+                (ulong)vector |                  // Vector de interrupción
+                IOAPIC_DELIVERY_FIXED |          // Entrega fija
+                IOAPIC_DESTMODE_PHYSICAL |       // Modo de destino físico
+                IOAPIC_INTPOL_HIGH |             // Polaridad activa alta
+                IOAPIC_TRIGGER_EDGE;             // Disparo por flanco
 
             // Enmascarar si es necesario
             if (masked)
@@ -265,39 +260,6 @@ namespace Kernel.Hardware
         public static bool IsInitialized()
         {
             return _initialized;
-        }
-
-        /// <summary>
-        /// Realiza un diagnóstico del estado del IOAPIC
-        /// </summary>
-        public static void Diagnose()
-        {
-            SerialDebug.Info("===== I/O APIC Diagnostic =====");
-
-            if (!_initialized)
-            {
-                SerialDebug.Warning("I/O APIC not initialized");
-                return;
-            }
-
-            SerialDebug.Info($"I/O APIC Base Address: 0x{((ulong)_ioApicBaseAddress).ToStringHex()}");
-            SerialDebug.Info($"I/O APIC ID: {_ioApicId}");
-            SerialDebug.Info($"I/O APIC Version: {_ioApicVersion}");
-            SerialDebug.Info($"Maximum Redirection Entries: {_maxRedirectionEntries + 1}");
-
-            // Mostrar algunas entradas de redirección importantes
-            SerialDebug.Info("IRQ Configuration:");
-            for (byte i = 0; i <= Math.Min((int)_maxRedirectionEntries, 15); i++)
-            {
-                ulong entry = ReadRedirectionEntry(i);
-                byte vector = (byte)(entry & 0xFF);
-                byte destination = (byte)(entry >> 56);
-                bool masked = (entry & IOAPIC_INT_MASK) != 0;
-
-                SerialDebug.Info($"  IRQ {i}: Vector={vector}, Dest={destination}, Masked=" + masked);
-            }
-
-            SerialDebug.Info("=============================");
         }
     }
 }

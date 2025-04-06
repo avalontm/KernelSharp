@@ -66,64 +66,16 @@ namespace Kernel
         public static extern void Invlpg(ulong address);
 
         /// <summary>
-        /// Deshabilita las interrupciones
+        /// Enables interrupts
         /// </summary>
         [DllImport("*", EntryPoint = "_STI")]
         public static extern void STI();
 
         /// <summary>
-        /// Habilita las interrupciones
+        /// Disables interrupts
         /// </summary>
         [DllImport("*", EntryPoint = "_CLI")]
         public static extern void CLI();
-
-        /// <summary>
-        /// Lee un byte desde un puerto de E/S
-        /// </summary>
-        /// <param name="port">Puerto de E/S</param>
-        /// <returns>Byte leído</returns>
-        [DllImport("*", EntryPoint = "_InByte")]
-        public static extern byte InByte(ushort port);
-
-        /// <summary>
-        /// Escribe un byte en un puerto de E/S
-        /// </summary>
-        /// <param name="port">Puerto de E/S</param>
-        /// <param name="value">Valor a escribir</param>
-        [DllImport("*", EntryPoint = "_OutByte")]
-        public static extern void OutByte(ushort port, byte value);
-
-        /// <summary>
-        /// Lee una palabra (16 bits) desde un puerto de E/S
-        /// </summary>
-        /// <param name="port">Puerto de E/S</param>
-        /// <returns>Palabra leída</returns>
-        [DllImport("*", EntryPoint = "_InWord")]
-        public static extern ushort InWord(ushort port);
-
-        /// <summary>
-        /// Escribe una palabra (16 bits) en un puerto de E/S
-        /// </summary>
-        /// <param name="port">Puerto de E/S</param>
-        /// <param name="value">Valor a escribir</param>
-        [DllImport("*", EntryPoint = "_OutWord")]
-        public static extern void OutWord(ushort port, ushort value);
-
-        /// <summary>
-        /// Lee una doble palabra (32 bits) desde un puerto de E/S
-        /// </summary>
-        /// <param name="port">Puerto de E/S</param>
-        /// <returns>Doble palabra leída</returns>
-        [DllImport("*", EntryPoint = "_InDWord")]
-        public static extern ulong InDWord(ushort port);
-
-        /// <summary>
-        /// Escribe una doble palabra (32 bits) en un puerto de E/S
-        /// </summary>
-        /// <param name="port">Puerto de E/S</param>
-        /// <param name="value">Valor a escribir</param>
-        [DllImport("*", EntryPoint = "_OutDWord")]
-        public static extern void OutDWord(ushort port, ulong value);
 
         /// <summary>
         /// Rellena un bloque de memoria con un valor específico (similar a memset)
@@ -180,6 +132,12 @@ namespace Kernel
         /// </summary>
         [DllImport("*", EntryPoint = "_Pause")]
         public static extern void Pause();
+
+        /// <summary>
+        /// Ejecuta la instrucción Nop para reducir el consumo en esperas activas
+        /// </summary>
+        [DllImport("*", EntryPoint = "_Nop")]
+        public static extern void Nop();
 
         /// <summary>
         /// Lee un registro específico del Model Specific Register (MSR)

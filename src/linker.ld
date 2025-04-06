@@ -24,12 +24,17 @@ SECTIONS {
         *(.rdata)                /* Read-only data */
     }
 
+    .reloc : {
+
+        *(.reloc)
+    }
+
     /* Discard unwanted sections */
     /DISCARD/ : {
         *(.note.*)
         *(.comment)
         *(.pdata)  /* Important to remove */
         *(.xdata)
-        *(.reloc)
+        
     }
 }

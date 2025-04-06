@@ -1,4 +1,5 @@
 ﻿using Kernel.Diagnostics;
+using System;
 using System.Runtime.InteropServices;
 
 namespace Kernel.Memory
@@ -57,7 +58,6 @@ namespace Kernel.Memory
         public static void Initialize()
         {
             SerialDebug.Info("Initializing GDT for 64-bit mode...");
-
             // Configure null descriptor (all values set to 0)
             _nullEntry = new GDTEntry();
 
@@ -156,17 +156,5 @@ namespace Kernel.Memory
         [DllImport("*", EntryPoint = "_SetSegmentRegisters")]
         private static extern void SetSegmentRegisters(ushort selector);
 
-        /// <summary>
-        /// Sets up a Task State Segment (TSS) for task management
-        /// Note: This function should be implemented if task switching will be used
-        /// </summary>
-        public static void SetupTSS(ulong tssAddress)
-        {
-            // TSS setup implementation
-            // The TSS in 64-bit mode requires a 16-byte descriptor (two GDT entries)
-
-            // This implementation would be added in a later phase when implementing
-            // task management and advanced interrupt handling
-        }
     }
 }

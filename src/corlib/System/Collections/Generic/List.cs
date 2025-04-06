@@ -30,7 +30,6 @@ namespace System.Collections.Generic
         /// </summary>
         public List()
         {
-            Debug.WriteLine("List constructor called");
             _items = new T[_defaultCapacity];
             _size = 0;
         }
@@ -102,7 +101,6 @@ namespace System.Collections.Generic
         /// </summary>
         public void Add(T item)
         {
-            Debug.WriteLine("Add method called");
             if (_size == _items.Length)
             {
                 // Growth factor of 2 is efficient for most scenarios

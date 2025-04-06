@@ -1,4 +1,5 @@
 ﻿using Kernel.Diagnostics;
+using Kernel.Drivers.IO;
 using System;
 using System.Runtime.InteropServices;
 
@@ -262,7 +263,7 @@ namespace Kernel.Hardware
 
             if (_acpiVersion2)
             {
-                SerialDebug.Info($"Detected ACPI {_rsdp->Revision.ToString()}.0");
+                SerialDebug.Info($"Detected ACPI {_rsdp->Revision}.0");
 
                 // Use XSDT for ACPI 2.0+
                 if (_rsdp->XsdtAddress != 0)
@@ -348,7 +349,7 @@ namespace Kernel.Hardware
                             if (enabled)
                             {
                                 _localApicCount++;
-                                SerialDebug.Info($"Local APIC: ID {localApic->ApicId}, Processor {localApic->ProcessorId}, Enabled: " + enabled);
+                                //SerialDebug.Info($"Local APIC: ID {localApic->ApicId}, Processor {localApic->ProcessorId}, Enabled: " + enabled);
                             }
                         }
                         break;
@@ -365,19 +366,19 @@ namespace Kernel.Hardware
                             }
 
                             _ioApicCount++;
-                            SerialDebug.Info($"I/O APIC: ID {ioApic->IOApicId}, Address 0x{((ulong)ioApic->IOApicAddress).ToStringHex()}, GSI Base {ioApic->GlobalSystemInterruptBase}");
+                           // SerialDebug.Info($"I/O APIC: ID {ioApic->IOApicId}, Address 0x{((ulong)ioApic->IOApicAddress).ToStringHex()}, GSI Base {ioApic->GlobalSystemInterruptBase}");
                         }
                         break;
 
                     case MADT_TYPE_INT_OVERRIDE:
                         {
                             MADTInterruptOverrideEntry* intOverride = (MADTInterruptOverrideEntry*)currentPtr;
-                            SerialDebug.Info($"Interrupt Override: IRQ {intOverride->Source} -> GSI {intOverride->GlobalSystemInterrupt}, Flags 0x{((ulong)intOverride->Flags).ToStringHex()}");
+                            //SerialDebug.Info($"Interrupt Override: IRQ {intOverride->Source} -> GSI {intOverride->GlobalSystemInterrupt}, Flags 0x{((ulong)intOverride->Flags).ToStringHex()}");
 
                             // Special handling for well-known IRQs
                             if (intOverride->Source == 1) // Keyboard IRQ
                             {
-                                SerialDebug.Info($"Keyboard IRQ override: ISA IRQ 1 -> GSI {intOverride->GlobalSystemInterrupt}");
+                               // SerialDebug.Info($"Keyboard IRQ override: ISA IRQ 1 -> GSI {intOverride->GlobalSystemInterrupt}");
                             }
                         }
                         break;
@@ -400,7 +401,7 @@ namespace Kernel.Hardware
                 currentPtr += entryHeader->Length;
             }
 
-            SerialDebug.Info($"MADT parsing complete. Found {_localApicCount} Local APICs and {_ioApicCount} I/O APICs.");
+           // SerialDebug.Info($"MADT parsing complete. Found {_localApicCount} Local APICs and {_ioApicCount} I/O APICs.");
         }
 
         /// <summary>
@@ -479,7 +480,7 @@ namespace Kernel.Hardware
             // Add explicit bounds check to prevent potential overflow
             if (table->Length < sizeof(ACPISDTHeader) || table->Length > 0x100000) // 1MB max table size as sanity check
             {
-                SerialDebug.Info($"Invalid table length: {table->Length.ToString()}");
+               // SerialDebug.Info($"Invalid table length: {table->Length.ToString()}");
                 return false;
             }
 
@@ -542,7 +543,7 @@ namespace Kernel.Hardware
                 // Validate entry count for security
                 if (entries <= 0 || entries > 1000) // Sanity check - no more than 1000 tables
                 {
-                    SerialDebug.Info($"Invalid XSDT entry count: {entries.ToString()}");
+                   // SerialDebug.Info($"Invalid XSDT entry count: {entries.ToString()}");
                     return null;
                 }
 
@@ -578,7 +579,7 @@ namespace Kernel.Hardware
                 // Validate entry count for security
                 if (entries <= 0 || entries > 1000) // Sanity check
                 {
-                    SerialDebug.Info($"Invalid RSDT entry count: {entries.ToString()}");
+                    //SerialDebug.Info($"Invalid RSDT entry count: {entries.ToString()}");
                     return null;
                 }
 
@@ -657,17 +658,17 @@ namespace Kernel.Hardware
                     }
                     else if (_fadt->ResetReg.AddressSpace == 1) // IO
                     {
-                        Native.OutByte((ushort)_fadt->ResetReg.Address, _resetValue);
+                        IOPort.Out8((ushort)_fadt->ResetReg.Address, _resetValue);
                     }
 
                     // Always try fallback method
                     SerialDebug.Info("Trying keyboard controller reset as fallback");
-                    Native.OutByte(0x64, 0xFE);
+                    IOPort.Out8(0x64, 0xFE);
                     break;
 
                 case ResetType.IO:
                     // Reset using keyboard controller
-                    Native.OutByte(0x64, 0xFE);
+                    IOPort.Out8(0x64, 0xFE);
                     break;
 
                 case ResetType.Memory:
@@ -684,7 +685,7 @@ namespace Kernel.Hardware
             // Last resort - try the PCI reset method
             // PCI reset through CF9 port (common in modern systems)
             SerialDebug.Info("Attempting PCI reset through CF9 port");
-            Native.OutByte(0xCF9, 0x0E);
+            IOPort.Out8(0xCF9, 0x0E);
 
             // If we get here, reset failed
             SerialDebug.Info("Reset failed. System halted.");
@@ -712,13 +713,13 @@ namespace Kernel.Hardware
                 const ushort SLP_TYP_S5 = 7 << 10;
 
                 SerialDebug.Info("Writing to PM1a control block");
-                Native.OutWord((ushort)_fadt->PM1aControlBlock, SLP_TYP_S5 | SLP_EN);
+                IOPort.Out32((ushort)_fadt->PM1aControlBlock, SLP_TYP_S5 | SLP_EN);
 
                 // If there's a second block, write there too
                 if (_fadt->PM1bControlBlock != 0)
                 {
                     SerialDebug.Info("Writing to PM1b control block");
-                    Native.OutWord((ushort)_fadt->PM1bControlBlock, SLP_TYP_S5 | SLP_EN);
+                    IOPort.Out32((ushort)_fadt->PM1bControlBlock, SLP_TYP_S5 | SLP_EN);
                 }
             }
 
@@ -893,122 +894,6 @@ namespace Kernel.Hardware
             return _ioApicCount;
         }
 
-        /// <summary>
-        /// Prints information about detected ACPI tables
-        /// </summary>
-        public static void PrintACPIInfo()
-        {
-            if (!_initialized)
-            {
-                SerialDebug.Info("ACPI not initialized.");
-                return;
-            }
-
-            SerialDebug.Info("\n=== ACPI Information ===");
-
-            if (_acpiVersion2)
-            {
-                SerialDebug.Info("ACPI Version: 2.0+");
-            }
-            else
-            {
-                SerialDebug.Info("ACPI Version: 1.0");
-            }
-
-            // Extract OEM ID
-            string oemId = "";
-            for (int i = 0; i < 6; i++)
-            {
-                oemId += (char)_rsdp->OemId[i];
-            }
-            SerialDebug.Info($"OEM ID: {oemId.ToString()}");
-
-            // RSDT/XSDT
-            if (_xsdt != null)
-            {
-                int entries = (int)(_xsdt->Length - sizeof(ACPISDTHeader)) / 8;
-                SerialDebug.Info($"XSDT Entries: {entries.ToString()}");
-            }
-
-            if (_rsdt != null)
-            {
-                int entries = (int)(_rsdt->Length - sizeof(ACPISDTHeader)) / 4;
-                SerialDebug.Info($"RSDT Entries: {entries.ToString()}");
-            }
-
-            // Important tables
-            if (_fadt != null)
-            {
-                SerialDebug.Info("FADT: Found");
-            }
-            else
-            {
-                SerialDebug.Info("FADT: Not found");
-            }
-
-            if (_dsdt != null)
-            {
-                SerialDebug.Info("DSDT: Found");
-            }
-            else
-            {
-                SerialDebug.Info("DSDT: Not found");
-            }
-
-            if (_madt != null)
-            {
-                SerialDebug.Info($"MADT: Found");
-                SerialDebug.Info($"Local APIC Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
-                SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
-                SerialDebug.Info($"Local APIC Count: {_localApicCount}");
-                SerialDebug.Info($"I/O APIC Count: {_ioApicCount}");
-                if (_ioApicAddress != 0)
-                {
-                    SerialDebug.Info($"I/O APIC Address: 0x{_ioApicAddress.ToStringHex()}");
-                    SerialDebug.Info($"I/O APIC ID: {_ioApicId}");
-                }
-            }
-            else
-            {
-                SerialDebug.Info("MADT: Not found");
-            }
-
-            // Reset method
-            SerialDebug.Info($"Reset Method: {_resetType}");
-
-            SerialDebug.Info("========================\n");
-        }
-
-        /// <summary>
-        /// Prints detailed information about APIC configuration detected from MADT
-        /// </summary>
-        public static void PrintAPICInfo()
-        {
-            if (!_initialized || _madt == null)
-            {
-                SerialDebug.Info("APIC information not available.");
-                return;
-            }
-
-            SerialDebug.Info("\n=== APIC Configuration ===");
-            SerialDebug.Info($"Local APIC Base Address: 0x{((ulong)_madt->LocalApicAddress).ToStringHex()}");
-            SerialDebug.Info($"MADT Flags: 0x{((ulong)_madt->Flags).ToStringHex()}");
-            SerialDebug.Info($"  - PIC Mode: {(_madt->Flags & 1) == 0}");
-            SerialDebug.Info($"  - APIC Mode: {(_madt->Flags & 1) != 0}");
-
-            SerialDebug.Info($"Detected {_localApicCount} Local APICs");
-            SerialDebug.Info($"Detected {_ioApicCount} I/O APICs");
-
-            if (_ioApicAddress != 0)
-            {
-                SerialDebug.Info($"Primary I/O APIC:");
-                SerialDebug.Info($"  - ID: {_ioApicId}");
-                SerialDebug.Info($"  - Address: 0x{_ioApicAddress.ToStringHex()}");
-            }
-
-            // Other APIC information could be added here from the parsed MADT
-            SerialDebug.Info("===========================\n");
-        }
 
         /// <summary>
         /// Gets information about the IRQ override for a specific ISA IRQ
@@ -1061,6 +946,53 @@ namespace Kernel.Hardware
         {
             // If MADT flags bit 0 is clear, system is in legacy PIC mode
             return _madt != null && (_madt->Flags & 1) == 0;
+        }
+
+        /// <summary>
+        /// Gets the PCI Express MMIO base address from the ACPI MCFG table
+        /// </summary>
+        /// <returns>The base address for PCI Express MMIO configuration space, or 0 if not found</returns>
+        public static ulong GetMCFGBaseAddress()
+        {
+            if (!_initialized)
+            {
+                SerialDebug.Warning("ACPI subsystem not initialized");
+                return 0;
+            }
+
+            SerialDebug.Info("Searching for ACPI MCFG table...");
+
+            // Find the MCFG table
+            ACPISDTHeader* mcfgTable = FindTable(MCFG_SIGNATURE);
+            if (mcfgTable == null)
+            {
+                SerialDebug.Warning("ACPI MCFG table not found");
+                return 0;
+            }
+
+            // Verify the table size is at least enough to contain the header and one entry
+            if (mcfgTable->Length < 44) // 36 (header) + 8 (reserved bytes) + min 16 (first entry)
+            {
+               // SerialDebug.Warning("ACPI MCFG table is too small: " + mcfgTable->Length);
+                return 0;
+            }
+
+            // The MCFG structure has an 8-byte reserved section after the standard ACPI header
+            // After that come the MMIO base address entries
+            byte* mcfgData = (byte*)mcfgTable + sizeof(ACPISDTHeader) + 8; // Skip header and reserved section
+
+            // Each entry is 16 bytes
+            // Offset 0-7: Base Address
+            // Offset 8-9: PCI Segment Group
+            // Offset 10: Start Bus Number
+            // Offset 11: End Bus Number
+            // Offset 12-15: Reserved
+            ulong baseAddress = *(ulong*)mcfgData;
+
+            SerialDebug.Info("Found MCFG table with base address: 0x" + baseAddress.ToStringHex());
+
+            // For simplicity, we're just taking the first entry's base address
+            return baseAddress;
         }
     }
 }

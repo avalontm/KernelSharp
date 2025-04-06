@@ -1,4 +1,6 @@
 using Internal.Runtime.CompilerHelpers;
+using Kernel;
+using Kernel.Drivers.IO;
 using System;
 using System.Runtime.InteropServices;
 
@@ -353,19 +355,11 @@ namespace System
             // Actualizar cursor de hardware a través de los puertos VGA
             // Puerto 0x3D4 = registro de selección
             // Puerto 0x3D5 = registro de datos
-            OutByte(0x3D4, 0x0F);
-            OutByte(0x3D5, (byte)(position & 0xFF));
-            OutByte(0x3D4, 0x0E);
-            OutByte(0x3D5, (byte)((position >> 8) & 0xFF));
+            IOPort.Out8(0x3D4, 0x0F);
+            IOPort.Out8(0x3D5, (byte)(position & 0xFF));
+            IOPort.Out8(0x3D4, 0x0E);
+            IOPort.Out8(0x3D5, (byte)((position >> 8) & 0xFF));
         }
-
-        /// <summary>
-        /// Envía un byte a un puerto de salida.
-        /// </summary>
-        /// <param name="port">Puerto de destino.</param>
-        /// <param name="value">Valor a enviar.</param>
-        [DllImport("*", EntryPoint = "_OutByte")]
-        private static extern void OutByte(ushort port, byte value);
 
         /// <summary>
         /// Desplaza el contenido de la pantalla hacia arriba una línea.
@@ -471,55 +465,31 @@ namespace System
 
         /// <summary>
         /// Lee un carácter de teclado.
-        /// Nota: Esta es una implementación de ejemplo; en un sistema real usaríamos
-        /// interrupciones de teclado u otras técnicas para obtener entrada.
+        /// Utiliza el driver de teclado del sistema para obtener entrada.
         /// </summary>
         /// <returns>Carácter leído.</returns>
         private static char ReadChar()
         {
-            // En un sistema real, esta función llamaría a una rutina de 
-            // la BIOS o al controlador de teclado para obtener entrada.
-            // Para este ejemplo, simplemente retornamos un valor por defecto.
-
-            // Este es un placeholder. En un kernel real, este código sería reemplazado
-            // con la implementación específica para tu arquitectura de entrada.
-
-            // Por ahora, este método espera indefinidamente un carácter (simulado)
-            bool keyAvailable = false;
-            char result = '\0';
-
-            while (!keyAvailable)
+            // Reemplazar las llamadas a BIOS con el driver de teclado
+            while (true)
             {
-                // Llamada a la BIOS Int 16h, AH=01h (verificar si hay tecla disponible)
-                keyAvailable = CheckKeyAvailable();
-
-                if (keyAvailable)
+                // Verificar si hay teclas disponibles usando el driver de teclado
+                if (Kernel.Drivers.Input.Keyboard.IsKeyAvailable())
                 {
-                    // Llamada a la BIOS Int 16h, AH=00h (leer tecla)
-                    result = ReadKeyFromBIOS();
+                    // Leer el caracter usando el driver de teclado
+                    char c = Kernel.Drivers.Input.Keyboard.ReadChar();
+
+                    // Si es un carácter válido, devolverlo
+                    if (c != '\0')
+                    {
+                        return c;
+                    }
                 }
 
-                // Pequeño retraso para no saturar la CPU mientras espera entrada
-                // En un sistema real, usaríamos mecanismos de espera más eficientes
-                for (int i = 0; i < 1000; i++) { }
+                // Pequeño retraso para no saturar la CPU
+                for (int i = 0; i < 1000; i++) { Native.Nop(); }
             }
-
-            return result;
         }
-
-        /// <summary>
-        /// Verifica si hay una tecla disponible en el buffer del teclado.
-        /// </summary>
-        /// <returns>true si hay una tecla disponible.</returns>
-        [DllImport("*", EntryPoint = "_CheckKeyAvailable")]
-        private static extern bool CheckKeyAvailable();
-
-        /// <summary>
-        /// Lee una tecla del buffer del teclado.
-        /// </summary>
-        /// <returns>El carácter leído.</returns>
-        [DllImport("*", EntryPoint = "_ReadKeyFromBIOS")]
-        private static extern char ReadKeyFromBIOS();
 
         /// <summary>
         /// Obtiene el ancho de la pantalla de la consola.

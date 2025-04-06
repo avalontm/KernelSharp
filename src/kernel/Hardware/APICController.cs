@@ -101,6 +101,10 @@ namespace Kernel.Hardware
         private static byte _apicVersion;
         private static uint _timerTicksPerMS;  // Calibrated timer ticks per millisecond
 
+        // Safe flag for detected CPU features
+        private static bool _cpuidApicSupported;
+        private static bool _msrApicEnabled;
+
         /// <summary>
         /// Initialize APIC Controller
         /// </summary>
@@ -118,6 +122,7 @@ namespace Kernel.Hardware
             // Get Local APIC Address from ACPI
             ulong apicAddr = ACPIManager.GetLocalApicAddress();
 
+            // Validate and fallback to default if needed
             if (apicAddr == 0)
             {
                 SerialDebug.Info("Could not obtain Local APIC address from ACPI. Using default 0xFEE00000");
@@ -135,10 +140,13 @@ namespace Kernel.Hardware
             }
 
             // Read APIC ID and Version from registers
-            _apicId = (byte)(ReadApicRegister(APIC_ID_REGISTER) >> 24);
-            _apicVersion = (byte)(ReadApicRegister(APIC_VERSION_REGISTER) & 0xFF);
+            uint idReg = ReadApicRegister(APIC_ID_REGISTER);
+            uint versionReg = ReadApicRegister(APIC_VERSION_REGISTER);
 
-            SerialDebug.Info($"Local APIC ID: {_apicId}, Version: {_apicVersion}");
+            _apicId = (byte)(idReg >> 24);
+            _apicVersion = (byte)(versionReg & 0xFF);
+
+            SerialDebug.Info("Local APIC ID: " + _apicId + ", Version: " + _apicVersion);
 
             // Configure APIC
             ConfigureApic();
@@ -162,22 +170,22 @@ namespace Kernel.Hardware
             CPUID(1, ref eax, ref ebx, ref ecx, ref edx);
 
             // Check APIC feature bit (bit 9 of EDX)
-            bool apicSupported = (edx & (1 << 9)) != 0;
-            SerialDebug.Info($"APIC Support via CPUID: {(apicSupported ? "Yes" : "No")}");
+            _cpuidApicSupported = (edx & (1 << 9)) != 0;
+           // SerialDebug.Info("APIC Support via CPUID: " + (_cpuidApicSupported ? "Yes" : "No"));
 
             // Read MSR to check if APIC is enabled
             ulong msr = Native.ReadMSR(0x1B);
-            bool apicEnabled = (msr & (1 << 11)) != 0;
-            SerialDebug.Info($"APIC Enabled in MSR: {(apicEnabled ? "Yes" : "No")}");
+            _msrApicEnabled = (msr & (1 << 11)) != 0;
+            //SerialDebug.Info("APIC Enabled in MSR: " + (_msrApicEnabled ? "Yes" : "No"));
 
             // Override CPUID result if MSR indicates APIC is enabled
-            if (apicEnabled && !apicSupported)
+            if (_msrApicEnabled && !_cpuidApicSupported)
             {
                 SerialDebug.Info("MSR indicates APIC is enabled despite CPUID result. Proceeding with APIC initialization.");
                 return true;
             }
 
-            return apicSupported;
+            return _cpuidApicSupported;
         }
 
         /// <summary>
@@ -188,36 +196,36 @@ namespace Kernel.Hardware
             SerialDebug.Info("Remapping legacy PIC...");
 
             // Save masks
-            byte masterMask = IOPort.InByte(PIC1_DATA);
-            byte slaveMask = IOPort.InByte(PIC2_DATA);
+            byte masterMask = IOPort.In8(PIC1_DATA);
+            byte slaveMask = IOPort.In8(PIC2_DATA);
 
             // Start initialization sequence (cascade mode)
-            IOPort.OutByte(PIC1_COMMAND, PIC_ICW1_INIT | PIC_ICW1_ICW4);
+            IOPort.Out8(PIC1_COMMAND, PIC_ICW1_INIT | PIC_ICW1_ICW4);
             IOPort.Wait();
-            IOPort.OutByte(PIC2_COMMAND, PIC_ICW1_INIT | PIC_ICW1_ICW4);
+            IOPort.Out8(PIC2_COMMAND, PIC_ICW1_INIT | PIC_ICW1_ICW4);
             IOPort.Wait();
 
             // Set vector offsets
-            IOPort.OutByte(PIC1_DATA, 0x20);  // Master PIC: IRQ 0-7 -> INT 0x20-0x27
+            IOPort.Out8(PIC1_DATA, 0x20);  // Master PIC: IRQ 0-7 -> INT 0x20-0x27
             IOPort.Wait();
-            IOPort.OutByte(PIC2_DATA, 0x28);  // Slave PIC: IRQ 8-15 -> INT 0x28-0x2F
+            IOPort.Out8(PIC2_DATA, 0x28);  // Slave PIC: IRQ 8-15 -> INT 0x28-0x2F
             IOPort.Wait();
 
             // Set up cascading
-            IOPort.OutByte(PIC1_DATA, 4);     // Master: Slave on IRQ2
+            IOPort.Out8(PIC1_DATA, 4);     // Master: Slave on IRQ2
             IOPort.Wait();
-            IOPort.OutByte(PIC2_DATA, 2);     // Slave: Cascade identity
+            IOPort.Out8(PIC2_DATA, 2);     // Slave: Cascade identity
             IOPort.Wait();
 
             // Set operation mode (8086 mode)
-            IOPort.OutByte(PIC1_DATA, PIC_ICW4_8086);
+            IOPort.Out8(PIC1_DATA, PIC_ICW4_8086);
             IOPort.Wait();
-            IOPort.OutByte(PIC2_DATA, PIC_ICW4_8086);
+            IOPort.Out8(PIC2_DATA, PIC_ICW4_8086);
             IOPort.Wait();
 
             // Restore masks
-            IOPort.OutByte(PIC1_DATA, masterMask);
-            IOPort.OutByte(PIC2_DATA, slaveMask);
+            IOPort.Out8(PIC1_DATA, masterMask);
+            IOPort.Out8(PIC2_DATA, slaveMask);
 
             SerialDebug.Info("PIC remapped successfully");
         }
@@ -227,12 +235,18 @@ namespace Kernel.Hardware
         /// </summary>
         private static void ConfigureApic()
         {
+            // Read current spurious vector register value for diagnostics
+            uint currentSvr = ReadApicRegister(APIC_SPURIOUS_INTERRUPT_VECTOR);
+            //SerialDebug.Info("Current Spurious Register Value: 0x" + ((ulong)currentSvr).ToStringHex());
+
             // Enable APIC in MSR if not already enabled
             EnableApicInMSR();
 
             // Configure Spurious Interrupt Vector Register
             // Bit 8: Enable APIC, Bit 9: Focus Processor Checking
-            WriteApicRegister(APIC_SPURIOUS_INTERRUPT_VECTOR, APIC_ENABLE | APIC_SPURIOUS_VECTOR);
+            uint newSvr = APIC_ENABLE | APIC_SPURIOUS_VECTOR;
+            WriteApicRegister(APIC_SPURIOUS_INTERRUPT_VECTOR, newSvr);
+            //SerialDebug.Info("New Spurious Register Value: 0x" + ((ulong)newSvr).ToStringHex());
 
             // Configure Task Priority Register (accept all interrupts)
             WriteApicRegister(APIC_TASK_PRIORITY, 0);
@@ -266,7 +280,7 @@ namespace Kernel.Hardware
         {
             // Read MSR IA32_APIC_BASE (0x1B)
             ulong msr = Native.ReadMSR(0x1B);
-            SerialDebug.Info($"Initial MSR value: 0x{((ulong)msr).ToStringHex()}");
+            SerialDebug.Info("Initial MSR value: 0x" + msr.ToStringHex());
 
             // Check if APIC is already enabled (bit 11)
             if ((msr & (1UL << 11)) != 0)
@@ -281,7 +295,7 @@ namespace Kernel.Hardware
             // Write updated MSR
             Native.WriteMSR(0x1B, msr);
 
-            SerialDebug.Info($"Updated MSR value: 0x{((ulong)msr).ToStringHex()}");
+            SerialDebug.Info("Updated MSR value: 0x" + msr.ToStringHex());
             SerialDebug.Info("APIC enabled in MSR");
         }
 
@@ -293,27 +307,52 @@ namespace Kernel.Hardware
             SerialDebug.Info("Calibrating APIC timer...");
 
             // Configure PIT for one-shot mode
-            IOPort.OutByte(0x43, 0x30);   // Channel 0, Mode 0 (one-shot), binary
+            IOPort.Out8(0x43, 0x30);   // Channel 0, Mode 0 (one-shot), binary
 
             // Set PIT to count down from 65535
-            IOPort.OutByte(0x40, 0xFF);   // Low byte
-            IOPort.OutByte(0x40, 0xFF);   // High byte
+            IOPort.Out8(0x40, 0xFF);   // Low byte
+            IOPort.Out8(0x40, 0xFF);   // High byte
 
             // Set up APIC timer with maximum count, divide by 16
             WriteApicRegister(APIC_TIMER_DIVIDE_CONFIG, TIMER_DIV_16);
             WriteApicRegister(APIC_TIMER_INITIAL_COUNT, 0xFFFFFFFF);
 
-            // Wait for PIT to count down (about 54.9ms with 1.193182 MHz frequency)
-            uint startPit = IOPort.InByte(0x40) | ((uint)IOPort.InByte(0x40) << 8); // Read initial PIT count
+            // Read initial PIT count
+            IOPort.Out8(0x43, 0x00);  // Latch count
+            uint startPit = (uint)IOPort.In8(0x40);        // Low byte
+            startPit |= (uint)(IOPort.In8(0x40) << 8);     // High byte
 
-            // Wait for PIT to reach a lower value (e.g., 1/4 of the way down)
+            // Calculate target count (1/4 of the way down)
             uint targetCount = startPit - (startPit / 4);
+
+            // Wait for PIT to count down to target
             uint currentPit;
+            int waitCounter = 0;
+            int maxWait = 1000000;   // Prevent infinite loop
+
             do
             {
-                IOPort.OutByte(0x43, 0x00);  // Latch count
-                currentPit = IOPort.InByte(0x40) | ((uint)IOPort.InByte(0x40) << 8);
-            } while (currentPit > targetCount && currentPit < startPit);  // Guard against underflow
+                IOPort.Out8(0x43, 0x00);  // Latch count
+                currentPit = (uint)IOPort.In8(0x40);       // Low byte
+                currentPit |= (uint)(IOPort.In8(0x40) << 8); // High byte
+
+                // Make sure we don't get stuck in an infinite loop
+                waitCounter++;
+                if (waitCounter > maxWait)
+                {
+                    SerialDebug.Warning("Timer calibration timeout - using default value");
+                    _timerTicksPerMS = 10000; // Default value
+                    return;
+                }
+
+                // Handle underflow (PIT counts down)
+                if (currentPit > startPit)
+                {
+                    // PIT has wrapped around
+                    break;
+                }
+
+            } while (currentPit > targetCount);
 
             // Stop the APIC timer
             WriteApicRegister(APIC_LVT_TIMER, LVT_TIMER_MASK_INTERRUPT);
@@ -321,12 +360,39 @@ namespace Kernel.Hardware
             uint ticksElapsed = 0xFFFFFFFF - timerCount;
 
             // Calculate elapsed time in microseconds (adjust for PIT frequency 1.193182 MHz)
-            uint elapsedMicroseconds = (startPit - currentPit) * 838; // 838ns per PIT tick
+            uint elapsedMicroseconds;
 
-            // Calculate ticks per millisecond
-            _timerTicksPerMS = (ticksElapsed * 1000) / (elapsedMicroseconds / 1000);
+            // Handle possible PIT wraparound
+            if (currentPit > startPit)
+            {
+                // PIT wrapped around (rare case)
+                elapsedMicroseconds = (65536 - startPit + currentPit) * 838;
+            }
+            else
+            {
+                // Normal case
+                elapsedMicroseconds = (startPit - currentPit) * 838; // 838ns per PIT tick
+            }
 
-            SerialDebug.Info($"APIC Timer Calibration: {_timerTicksPerMS} ticks/ms (div=16)");
+            // Calculate ticks per millisecond (prevent division by zero)
+            if (elapsedMicroseconds >= 1000)
+            {
+                _timerTicksPerMS = (ticksElapsed * 1000) / (elapsedMicroseconds / 1000);
+            }
+            else
+            {
+                // In case elapsed time was too short
+                _timerTicksPerMS = ticksElapsed * (1000 / elapsedMicroseconds);
+            }
+
+            // Sanity check - if we got a very small or very large value, use a reasonable default
+            if (_timerTicksPerMS < 1000 || _timerTicksPerMS > 100000000)
+            {
+               // SerialDebug.Warning("Unreliable timer calibration result: " + _timerTicksPerMS + " ticks/ms - using default");
+                _timerTicksPerMS = 10000; // Default reasonable value
+            }
+
+           // SerialDebug.Info("APIC Timer Calibration: " + _timerTicksPerMS + " ticks/ms (div=16)");
         }
 
         /// <summary>
@@ -335,29 +401,49 @@ namespace Kernel.Hardware
         private static void DisablePIC()
         {
             // Mask all interrupts on both PICs
-            IOPort.OutByte(PIC1_DATA, 0xFF);
-            IOPort.OutByte(PIC2_DATA, 0xFF);
+            IOPort.Out8(PIC1_DATA, 0xFF);
+            IOPort.Out8(PIC2_DATA, 0xFF);
             SerialDebug.Info("Legacy PIC disabled");
         }
 
         /// <summary>
-        /// Read APIC Local Register
+        /// Read APIC Local Register with safety checks
         /// </summary>
         private static uint ReadApicRegister(int reg)
         {
             if (_localApicAddress == null)
+            {
+               // SerialDebug.Warning("Attempted to read APIC register 0x" + ((ulong)reg).ToStringHex() + " but APIC address is null");
                 return 0;
+            }
+
+            // Make sure the register offset is aligned (should be divisible by 4)
+            if ((reg & 0x3) != 0)
+            {
+                SerialDebug.Warning("Unaligned APIC register offset: 0x" + ((ulong)reg).ToStringHex());
+                reg &= ~0x3; // Force alignment
+            }
 
             return _localApicAddress[reg / 4];
         }
 
         /// <summary>
-        /// Write to APIC Local Register
+        /// Write to APIC Local Register with safety checks
         /// </summary>
         private static void WriteApicRegister(int reg, uint value)
         {
             if (_localApicAddress == null)
+            {
+               // SerialDebug.Warning("Attempted to write 0x" + ((ulong)value).ToStringHex() + " to APIC register 0x" + ((ulong)reg).ToStringHex() + " but APIC address is null");
                 return;
+            }
+
+            // Make sure the register offset is aligned (should be divisible by 4)
+            if ((reg & 0x3) != 0)
+            {
+                SerialDebug.Warning("Unaligned APIC register offset: 0x" + ((ulong)reg).ToStringHex());
+                reg &= ~0x3; // Force alignment
+            }
 
             _localApicAddress[reg / 4] = value;
         }
@@ -402,7 +488,7 @@ namespace Kernel.Hardware
             // Set initial count to start the timer
             WriteApicRegister(APIC_TIMER_INITIAL_COUNT, initialCount);
 
-            SerialDebug.Info($"APIC Timer started: vector={vector}, period={milliseconds}ms, count={initialCount}");
+            //SerialDebug.Info("APIC Timer started: vector=" + vector + ", period=" + milliseconds + "ms, count=" + initialCount);
             return true;
         }
 
@@ -435,13 +521,15 @@ namespace Kernel.Hardware
 
             // Wait for any previous IPI to complete (check delivery status bit)
             int spinCount = 0;
+            int maxSpinCount = 1000000;
+
             while ((ReadApicRegister(APIC_INTERRUPT_COMMAND_LOW) & ICR_DELIVERY_STATUS) != 0)
             {
                 Native.Pause();
                 spinCount++;
 
                 // Timeout after too many attempts
-                if (spinCount > 1000000)
+                if (spinCount > maxSpinCount)
                 {
                     SerialDebug.Warning("IPI send timeout - delivery still in progress");
                     return false;
@@ -507,7 +595,7 @@ namespace Kernel.Hardware
             // Address must be 4K aligned and below 1MB
             if ((trampolineAddress & 0xFFF) != 0 || trampolineAddress >= 0x100000)
             {
-                SerialDebug.Warning($"Invalid trampoline address: 0x{trampolineAddress.ToStringHex()}");
+                SerialDebug.Warning("Invalid trampoline address: 0x" + trampolineAddress.ToStringHex());
                 return false;
             }
 
@@ -518,7 +606,7 @@ namespace Kernel.Hardware
             int cpuCount = SMPManager.GetProcessorCount();
             int startedCount = 0;
 
-            SerialDebug.Info($"Starting {cpuCount - 1} APs with trampoline at 0x{trampolineAddress.ToStringHex()} (vector 0x{((ulong)startupVector).ToStringHex()})");
+           // SerialDebug.Info("Starting " + (cpuCount - 1) + " APs with trampoline at 0x" + trampolineAddress.ToStringHex() + " (vector 0x" + ((ulong)startupVector).ToStringHex() + ")");
 
             // Skip BSP (index 0) and start APs
             for (int i = 1; i < cpuCount; i++)
@@ -529,7 +617,7 @@ namespace Kernel.Hardware
                 if (apicId == _apicId)
                     continue;
 
-                SerialDebug.Info($"Starting processor with APIC ID {apicId}...");
+               // SerialDebug.Info("Starting processor with APIC ID " + apicId + "...");
 
                 // Send INIT IPI
                 SendInitIpi(apicId);
@@ -563,7 +651,7 @@ namespace Kernel.Hardware
         {
             // This is a crude delay - in a real system you'd use a timer
             // Adjust the loop count based on CPU speed
-            uint loopCount = ms * 100000;  // Adjust this multiplier based on CPU speed
+            uint loopCount = (uint)ms * 100000;  // Adjust this multiplier based on CPU speed
             for (uint i = 0; i < loopCount; i++)
             {
                 Native.Pause();  // Pause instruction for efficiency
@@ -575,92 +663,8 @@ namespace Kernel.Hardware
         /// </summary>
         private static void CPUID(uint function, ref uint eax, ref uint ebx, ref uint ecx, ref uint edx)
         {
-            // This is a placeholder. In real code, you'd use a method that executes CPUID.
-            // The implementation might be in another file, or via DllImport
-            eax = 0;
-            ebx = 0;
-            ecx = 0;
-            edx = Native.CPUID(function);  // This assumes your Native class has a CPUID method
-        }
-
-        /// <summary>
-        /// Diagnose APIC status and configuration
-        /// </summary>
-        /// <returns>True if APIC is properly configured</returns>
-        public static bool DiagnoseApic()
-        {
-            SerialDebug.Info("===== APIC Diagnostic =====");
-
-            // Basic initialization check
-            SerialDebug.Info($"APIC Initialized: {_initialized}");
-            SerialDebug.Info($"APIC Enabled: {_apicEnabled}");
-
-            // Check MSR
-            ulong msr = Native.ReadMSR(0x1B);
-            bool msrEnabled = (msr & (1UL << 11)) != 0;
-            ulong baseAddr = msr & 0xFFFFF000;
-
-            SerialDebug.Info($"APIC MSR: 0x{msr.ToStringHex()}");
-            SerialDebug.Info($"APIC Enabled in MSR: " + msrEnabled);
-            SerialDebug.Info($"APIC Base Address from MSR: 0x{baseAddr.ToStringHex()}");
-            SerialDebug.Info($"APIC Base Address in use: 0x{((ulong)_localApicAddress).ToStringHex()}");
-
-            // If initialized, read key registers
-            if (_initialized)
-            {
-                uint idReg = ReadApicRegister(APIC_ID_REGISTER);
-                uint versionReg = ReadApicRegister(APIC_VERSION_REGISTER);
-                uint spuriousReg = ReadApicRegister(APIC_SPURIOUS_INTERRUPT_VECTOR);
-                uint errorStatus = ReadApicRegister(APIC_ERROR_STATUS);
-
-                SerialDebug.Info($"APIC ID Register: 0x{idReg:X8} (ID: {idReg >> 24})");
-                SerialDebug.Info($"APIC Version Register: 0x{((ulong)versionReg).ToStringHex()} (Version: {versionReg & 0xFF})");
-                SerialDebug.Info($"APIC Max LVT Entries: {((versionReg >> 16) & 0xFF) + 1}");
-                SerialDebug.Info($"APIC Spurious Vector: 0x{((ulong)spuriousReg).ToStringHex()} (Vector: {spuriousReg & 0xFF})");
-                SerialDebug.Info($"APIC Enabled in SVR: {(spuriousReg & APIC_ENABLE) != 0}");
-                SerialDebug.Info($"APIC Error Status: 0x{((ulong)errorStatus).ToStringHex()}");
-
-                // Timer configuration
-                uint lvtTimer = ReadApicRegister(APIC_LVT_TIMER);
-                uint initialCount = ReadApicRegister(APIC_TIMER_INITIAL_COUNT);
-                uint currentCount = ReadApicRegister(APIC_TIMER_CURRENT_COUNT);
-                uint divideConfig = ReadApicRegister(APIC_TIMER_DIVIDE_CONFIG);
-
-                SerialDebug.Info($"Timer LVT: 0x{((ulong)lvtTimer).ToStringHex()} (Vector: {lvtTimer & 0xFF}, Masked: {(lvtTimer & LVT_TIMER_MASK_INTERRUPT) != 0})");
-                SerialDebug.Info($"Timer Initial Count: {initialCount}");
-                SerialDebug.Info($"Timer Current Count: {currentCount}");
-                SerialDebug.Info($"Timer Divide Config: 0x{((ulong)divideConfig).ToStringHex()}");
-                SerialDebug.Info($"Timer Ticks/ms: {_timerTicksPerMS}");
-
-                // Check PIC status
-                byte masterMask = IOPort.InByte(PIC1_DATA);
-                byte slaveMask = IOPort.InByte(PIC2_DATA);
-
-                SerialDebug.Info($"PIC Master Mask: 0x{((ulong)masterMask).ToStringHex()}");
-                SerialDebug.Info($"PIC Master Mask: 0x{((ulong)masterMask).ToStringHex()}");
-                SerialDebug.Info($"PIC Slave Mask: 0x{((ulong)slaveMask).ToStringHex()}");
-                SerialDebug.Info($"PICs Fully Masked: {masterMask == 0xFF && slaveMask == 0xFF}");
-
-                // Check for any errors
-                if (!msrEnabled)
-                {
-                    SerialDebug.Warning("APIC is not enabled in MSR!");
-                }
-
-                if ((spuriousReg & APIC_ENABLE) == 0)
-                {
-                    SerialDebug.Warning("APIC is not enabled in Spurious Vector Register!");
-                }
-
-                if (errorStatus != 0)
-                {
-                    SerialDebug.Warning($"APIC has error status: 0x{((ulong)errorStatus).ToStringHex()}");
-                }
-            }
-
-            SerialDebug.Info("=============================");
-
-            return _initialized && _apicEnabled && msrEnabled;
+            eax = function;  // Set function number in eax
+            Native.Cpuid(function, ref eax, ref ebx, ref ecx, ref edx);
         }
 
         /// <summary>
@@ -674,6 +678,32 @@ namespace Kernel.Hardware
         {
             if (!_initialized || !_apicEnabled)
                 return false;
+
+            // Validate vector if enabling
+            if (enable && vector < 32)
+            {
+                SerialDebug.Warning("Invalid vector " + vector + " for LVT entry (must be >= 32)");
+                return false;
+            }
+
+            // Validate LVT register offset
+            bool validRegister = false;
+
+            if (lvtRegister == APIC_LVT_TIMER ||
+                lvtRegister == APIC_LVT_THERMAL ||
+                lvtRegister == APIC_LVT_PERFORMANCE ||
+                lvtRegister == APIC_LVT_LINT0 ||
+                lvtRegister == APIC_LVT_LINT1 ||
+                lvtRegister == APIC_LVT_ERROR)
+            {
+                validRegister = true;
+            }
+
+            if (!validRegister)
+            {
+                SerialDebug.Warning("Invalid LVT register offset: 0x" + ((ulong)lvtRegister).ToStringHex());
+                return false;
+            }
 
             // Read current value
             uint value = ReadApicRegister(lvtRegister);
@@ -746,19 +776,6 @@ namespace Kernel.Hardware
         public static uint TimerTicksPerMS
         {
             get { return _timerTicksPerMS; }
-        }
-    }
-
-    // Extension method for IOPort to add a wait function
-    public static class IOPortExtensions
-    {
-        /// <summary>
-        /// Small delay for I/O operations
-        /// </summary>
-        public static void Wait()
-        {
-            // Write to unused port 0x80 (commonly used for I/O delays)
-            IOPort.OutByte(0x80, 0);
         }
     }
 }

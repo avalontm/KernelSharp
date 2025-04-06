@@ -181,8 +181,8 @@ namespace Kernel.Hardware
                         // Perform basic validation
                         if (_tablePtr != IntPtr.Zero && _tableLength > 0 && _tableLength < 0x100000) // 1MB max
                         {
-                            SerialDebug.Info($"SMBIOS 3.0: v{_majorVersion}.{_minorVersion}, " +
-                                            $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
+                            //SerialDebug.Info($"SMBIOS 3.0: v{_majorVersion}.{_minorVersion}, " +
+                                            //$"address: 0x{((ulong)_tablePtr).ToStringHex()}");
                             return true;
                         }
                         else
@@ -207,8 +207,8 @@ namespace Kernel.Hardware
                         // Perform basic validation
                         if (_tablePtr != IntPtr.Zero && _tableLength > 0 && _tableLength < 0x100000) // 1MB max
                         {
-                            SerialDebug.Info($"SMBIOS 2.x: v{_majorVersion.ToString()}.{_minorVersion.ToString()}, " +
-                                            $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
+                            //SerialDebug.Info($"SMBIOS 2.x: v{_majorVersion.ToString()}.{_minorVersion.ToString()}, " +
+                               //             $"address: 0x{((ulong)_tablePtr).ToStringHex()}");
                             return true;
                         }
                         else
@@ -282,7 +282,7 @@ namespace Kernel.Hardware
                 // Basic header validation
                 if (header->Length < sizeof(SMBIOSHeader) || current + header->Length > end)
                 {
-                    SerialDebug.Warning($"Invalid SMBIOS structure header at 0x{((ulong)current).ToStringHex()}");
+                    //SerialDebug.Warning($"Invalid SMBIOS structure header at 0x{((ulong)current).ToStringHex()}");
                     break;
                 }
 
@@ -437,67 +437,6 @@ namespace Kernel.Hardware
             }
 
             return string.Empty; // String not found
-        }
-
-        /// <summary>
-        /// Prints basic system information detected by SMBIOS.
-        /// </summary>
-        public static void PrintSystemSummary()
-        {
-            if (!_initialized && !Initialize())
-            {
-                SerialDebug.Info("Failed to initialize SMBIOS");
-                return;
-            }
-
-            SerialDebug.Info("\n===== SMBIOS INFORMATION =====");
-            SerialDebug.Info($"SMBIOS Version: {_majorVersion.ToString()}.{_minorVersion.ToString()}");
-
-            // BIOS
-            IntPtr biosPtr = FindStructure(SMBIOSStructureType.BIOSInformation);
-            if (biosPtr != IntPtr.Zero)
-            {
-                BIOSInfo* biosInfo = (BIOSInfo*)biosPtr.ToPointer();
-                if (biosInfo != null && biosInfo->Header.Length >= sizeof(BIOSInfo))
-                {
-                    SerialDebug.Info("\n== BIOS ==");
-                    SerialDebug.Info($"Manufacturer: {GetString(biosPtr, biosInfo->Vendor)}");
-                    SerialDebug.Info($"Version: {GetString(biosPtr, biosInfo->Version)}");
-                    SerialDebug.Info($"Release Date: {GetString(biosPtr, biosInfo->ReleaseDate)}");
-                }
-            }
-
-            // System
-            IntPtr sysPtr = FindStructure(SMBIOSStructureType.SystemInformation);
-            if (sysPtr != IntPtr.Zero)
-            {
-                SystemInfo* sysInfo = (SystemInfo*)sysPtr.ToPointer();
-                if (sysInfo != null && sysInfo->Header.Length >= sizeof(SystemInfo))
-                {
-                    SerialDebug.Info("\n== System ==");
-                    SerialDebug.Info($"Manufacturer: {GetString(sysPtr, sysInfo->Manufacturer)}");
-                    SerialDebug.Info($"Product: {GetString(sysPtr, sysInfo->ProductName)}");
-                    SerialDebug.Info($"Version: {GetString(sysPtr, sysInfo->Version)}");
-                }
-            }
-
-            // Processor
-            IntPtr cpuPtr = FindStructure(SMBIOSStructureType.ProcessorInformation);
-            if (cpuPtr != IntPtr.Zero)
-            {
-                ProcessorInfo* cpuInfo = (ProcessorInfo*)cpuPtr.ToPointer();
-                if (cpuInfo != null && cpuInfo->Header.Length >= sizeof(ProcessorInfo))
-                {
-                    SerialDebug.Info("\n== Processor ==");
-                    SerialDebug.Info($"Socket: {GetString(cpuPtr, cpuInfo->SocketDesignation)}");
-                    SerialDebug.Info($"Manufacturer: {GetString(cpuPtr, cpuInfo->ProcessorManufacturer)}");
-                    SerialDebug.Info($"Version: {GetString(cpuPtr, cpuInfo->ProcessorVersion)}");
-                    SerialDebug.Info($"Current Speed: {cpuInfo->CurrentSpeed.ToString()} MHz");
-                    SerialDebug.Info($"Max Speed: {cpuInfo->MaxSpeed.ToString()} MHz");
-                }
-            }
-
-            SerialDebug.Info("\n=============================");
-        }
+        } 
     }
 }

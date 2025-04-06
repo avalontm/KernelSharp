@@ -113,7 +113,7 @@ namespace Kernel.Drivers.Audio
             _initialized = true;
             SerialDebug.Info("AC97 Audio: Controller initialized successfully");
 
-           // SetupInterrupts();
+            SetupInterrupts();
             return true;
         }
 
@@ -122,35 +122,36 @@ namespace Kernel.Drivers.Audio
             SerialDebug.Info($"AC97 Audio: Setting up interrupts, IRQ: {_pciDevice.InterruptLine}");
 
             // Leer y limpiar cualquier interrupción pendiente
-            ushort status = IOPort.InWord((ushort)(_nabmPort + PO_STATUS));
-            IOPort.OutWord((ushort)(_nabmPort + PO_STATUS), (ushort)0x1F); // Limpiar todos los bits de estado
+            ushort status = IOPort.In16((ushort)(_nabmPort + PO_STATUS));
+            IOPort.Out16((ushort)(_nabmPort + PO_STATUS), (ushort)0x1F); // Limpiar todos los bits de estado
 
             // Habilitar interrupciones para reproducción
             // Bit 1 (0x02): Interrupt on Completion Enable
             // Bit 4 (0x10): Last Valid Index Interrupt Enable
-            IOPort.OutByte((ushort)(_nabmPort + PO_CONTROL), (byte)0x02);
+            IOPort.Out8((ushort)(_nabmPort + PO_CONTROL), (byte)0x02);
 
             // Registrar manejador de interrupciones
             InterruptDelegate handler = new InterruptDelegate(HandleInterrupt);
             InterruptManager.RegisterIRQHandler(_pciDevice.InterruptLine, handler);
+            InterruptManager.EnableIRQ(_pciDevice.InterruptLine);
         }
 
         // Manejador de interrupciones que será llamado cuando ocurra la IRQ
         public void HandleInterrupt()
         {
+            SerialDebug.Info("AC97 Audio: Interrupt received");
             // Leer causas de interrupción
-            ushort status = IOPort.InWord((ushort)(_nabmPort + PO_STATUS));
+            ushort status = IOPort.In16((ushort)(_nabmPort + PO_STATUS));
 
             // Procesar la interrupción según los bits de estado
             if ((status & 0x01) != 0) // Buffer Completion Interrupt
             {
                 // Procesar buffer completado
-                byte currentIndex = IOPort.InByte((ushort)(_nabmPort + PO_CIV));
-                SerialDebug.Info($"AC97 Audio: Buffer {currentIndex} completed");
+                byte currentIndex = IOPort.In8((ushort)(_nabmPort + PO_CIV));
             }
 
             // Limpiar todos los bits de estado escribiendo los bits a 1
-            IOPort.OutWord((ushort)(_nabmPort + PO_STATUS), status);
+            IOPort.Out16((ushort)(_nabmPort + PO_STATUS), status);
         }
 
         /// <summary>
@@ -172,21 +173,21 @@ namespace Kernel.Drivers.Audio
             SerialDebug.Info("AC97 Audio: Resetting controller");
 
             // Reset AC97 Mixer
-            IOPort.OutWord((ushort)(_mixerPort + RESET_REGISTER), 0x0000);
+            IOPort.Out16((ushort)(_mixerPort + RESET_REGISTER), 0x0000);
 
             // Esperar un poco
             for (int i = 0; i < 10000; i++)
                 Native.Pause();
 
             // Reset Bus Master
-            IOPort.OutByte((ushort)(_nabmPort + PO_CONTROL), CONTROL_RESET);
+            IOPort.Out8((ushort)(_nabmPort + PO_CONTROL), CONTROL_RESET);
 
             // Esperar a que el reset se complete
             for (int i = 0; i < 1000; i++)
                 Native.Pause();
 
             // Limpiar bit de reset
-            IOPort.OutByte((ushort)(_nabmPort + PO_CONTROL), 0);
+            IOPort.Out8((ushort)(_nabmPort + PO_CONTROL), 0);
 
             SerialDebug.Info("AC97 Audio: Reset complete");
         }
@@ -231,12 +232,12 @@ namespace Kernel.Drivers.Audio
             }
 
             // Establecer la dirección del descriptor base
-            IOPort.OutDword((ushort)(_nabmPort + PO_BDBAR), (uint)_descriptorListPhys);
+            IOPort.Out32((ushort)(_nabmPort + PO_BDBAR), (uint)_descriptorListPhys);
 
             // Inicializar índices
             _currentBuffer = 0;
-            IOPort.OutByte((ushort)(_nabmPort + PO_CIV), 0);
-            IOPort.OutByte((ushort)(_nabmPort + PO_LVI), (byte)(BUFFER_COUNT - 1));
+            IOPort.Out8((ushort)(_nabmPort + PO_CIV), 0);
+            IOPort.Out8((ushort)(_nabmPort + PO_LVI), (byte)(BUFFER_COUNT - 1));
 
             SerialDebug.Info("AC97 Audio: Buffers initialized");
             return true;
@@ -251,20 +252,20 @@ namespace Kernel.Drivers.Audio
 
             // Establecer Master Volume (0x0000 = max, 0x8000 = mute)
             // 0x0F0F = 75% del volumen (los 8 bits más bajos, para ambos canales)
-            IOPort.OutWord((ushort)(_mixerPort + MASTER_VOLUME), 0x0F0F);
+            IOPort.Out16((ushort)(_mixerPort + MASTER_VOLUME), 0x0F0F);
 
             // Establecer PCM Volume (0x0000 = max, 0x8000 = mute)
-            IOPort.OutWord((ushort)(_mixerPort + PCM_VOLUME), 0x0F0F);
+            IOPort.Out16((ushort)(_mixerPort + PCM_VOLUME), 0x0F0F);
 
             // Establecer frecuencia de muestreo para PCM (44100 Hz)
-            IOPort.OutWord((ushort)(_mixerPort + PCM_FRONT_DAC_RATE), 44100);
+            IOPort.Out16((ushort)(_mixerPort + PCM_FRONT_DAC_RATE), 44100);
 
             // Leer y mostrar el ID del codec
-            ushort extAudioId = IOPort.InWord((ushort)(_mixerPort + EXT_AUDIO_ID));
+            ushort extAudioId = IOPort.In16((ushort)(_mixerPort + EXT_AUDIO_ID));
             SerialDebug.Info($"AC97 Audio: Extended Audio ID: 0x{((ulong)extAudioId).ToStringHex()}");
 
             // Leer y mostrar estado del codec
-            ushort extAudioStatus = IOPort.InWord((ushort)(_mixerPort + EXT_AUDIO_STATUS));
+            ushort extAudioStatus = IOPort.In16((ushort)(_mixerPort + EXT_AUDIO_STATUS));
             SerialDebug.Info($"AC97 Audio: Extended Audio Status: 0x{((ulong)extAudioStatus).ToStringHex()}");
         }
 
@@ -290,7 +291,7 @@ namespace Kernel.Drivers.Audio
             }
 
             // Determinar buffer actual
-            byte currentIndex = IOPort.InByte((ushort)(_nabmPort + PO_CIV));
+            byte currentIndex = IOPort.In8((ushort)(_nabmPort + PO_CIV));
             int bufferIndex = (_currentBuffer + 1) % BUFFER_COUNT;
 
             // Verificar si el buffer está disponible
@@ -319,10 +320,10 @@ namespace Kernel.Drivers.Audio
             }
 
             // Actualizar el último índice válido
-            IOPort.OutByte((ushort)(_nabmPort + PO_LVI), (byte)bufferIndex);
+            IOPort.Out8((ushort)(_nabmPort + PO_LVI), (byte)bufferIndex);
 
             // Iniciar reproducción si está detenida
-            if ((IOPort.InByte((ushort)(_nabmPort + PO_CONTROL)) & CONTROL_RUN) == 0)
+            if ((IOPort.In8((ushort)(_nabmPort + PO_CONTROL)) & CONTROL_RUN) == 0)
             {
                 StartPlayback();
             }
@@ -345,10 +346,10 @@ namespace Kernel.Drivers.Audio
             SerialDebug.Info("AC97 Audio: Starting playback");
 
             // Limpiar registros de estado
-            IOPort.OutWord((ushort)(_nabmPort + PO_STATUS), 0x1F);
+            IOPort.Out16((ushort)(_nabmPort + PO_STATUS), 0x1F);
 
             // Iniciar reproducción
-            IOPort.OutByte((ushort)(_nabmPort + PO_CONTROL), CONTROL_RUN);
+            IOPort.Out8((ushort)(_nabmPort + PO_CONTROL), CONTROL_RUN);
         }
 
         /// <summary>
@@ -365,10 +366,10 @@ namespace Kernel.Drivers.Audio
             SerialDebug.Info("AC97 Audio: Stopping playback");
 
             // Detener reproducción
-            IOPort.OutByte((ushort)(_nabmPort + PO_CONTROL), 0);
+            IOPort.Out8((ushort)(_nabmPort + PO_CONTROL), 0);
 
             // Limpiar registros de estado
-            IOPort.OutWord((ushort)(_nabmPort + PO_STATUS), 0x1F);
+            IOPort.Out32((ushort)(_nabmPort + PO_STATUS), 0x1F);
         }
 
         /// <summary>
@@ -400,7 +401,7 @@ namespace Kernel.Drivers.Audio
             }
 
             // Establecer volumen
-            IOPort.OutWord((ushort)(_mixerPort + MASTER_VOLUME), volumeReg);
+            IOPort.Out16((ushort)(_mixerPort + MASTER_VOLUME), volumeReg);
         }
 
         /// <summary>
@@ -413,10 +414,10 @@ namespace Kernel.Drivers.Audio
                 return "Not initialized";
             }
 
-            ushort status = IOPort.InWord((ushort)(_nabmPort + PO_STATUS));
-            byte control = IOPort.InByte((ushort)(_nabmPort + PO_CONTROL));
-            byte currentIndex = IOPort.InByte((ushort)(_nabmPort + PO_CIV));
-            byte lastIndex = IOPort.InByte((ushort)(_nabmPort + PO_LVI));
+            ushort status = IOPort.In16((ushort)(_nabmPort + PO_STATUS));
+            byte control = IOPort.In8((ushort)(_nabmPort + PO_CONTROL));
+            byte currentIndex = IOPort.In8((ushort)(_nabmPort + PO_CIV));
+            byte lastIndex = IOPort.In8((ushort)(_nabmPort + PO_LVI));
 
             return $"Status: 0x{((ulong)status).ToStringHex()}, Control: 0x{((ulong)control).ToStringHex()}, " +
                    $"Current: {currentIndex}, Last: {lastIndex}, Running: {(control & CONTROL_RUN) != 0}";

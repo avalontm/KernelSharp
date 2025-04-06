@@ -5,7 +5,7 @@ global _Movsb
 global _ReadMSR
 global _WriteMSR
 global _GetAPICID
-g
+
 ; Lee un registro MSR
 ; ulong ReadMSR(uint msr)
 _ReadMSR:

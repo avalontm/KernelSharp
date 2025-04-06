@@ -11,7 +11,7 @@ namespace Kernel
     /// <summary>
     /// Delegate para manejadores de interrupciones de hardware (IRQ)
     /// </summary>
-    public delegate void InterruptDelegate();
+    public unsafe delegate void InterruptDelegate();
 
     /// <summary>
     /// Structure representing CPU state during an interrupt
@@ -38,9 +38,6 @@ namespace Kernel
         public ulong RFLAGS;
         public ulong UserRSP;
         public ulong SS;
-
-        // Agregar el ScanCode (si lo necesitas para el teclado)
-        public byte ScanCode;
     }
 
 
@@ -74,7 +71,7 @@ namespace Kernel
 
             SerialDebug.Info("Initializing interrupt manager (APIC mode)...");
             _irqHandlers = new InterruptDelegate[24]; // APIC típicamente soporta 24 IRQs
-
+            SerialDebug.Info("Allocating memory for handler table...");
             // Allocate memory for the handler table (256 possible interrupts)
             _handlerTable = (IntPtr*)Allocator.malloc((nuint)(sizeof(IntPtr) * 256));
 
@@ -119,88 +116,10 @@ namespace Kernel
             SerialDebug.Info("Disabling legacy PIC (8259)...");
 
             // Enmascarar todas las IRQs en ambos PICs
-            IOPort.OutByte(0x21, 0xFF);  // PIC maestro
-            IOPort.OutByte(0xA1, 0xFF);  // PIC esclavo
+            IOPort.Out8(0x21, 0xFF);  // PIC maestro
+            IOPort.Out8(0xA1, 0xFF);  // PIC esclavo
 
             SerialDebug.Info("Legacy PIC disabled successfully");
-        }
-
-        public static void DiagnoseInterruptSystem()
-        {
-            SerialDebug.Info("Starting Interrupt System Diagnosis (APIC mode)");
-
-            // Verificar inicialización
-            if (!_initialized)
-            {
-                SerialDebug.Warning("Interrupt manager not initialized");
-                return;
-            }
-
-            // Verificar tabla de manejadores
-            int validHandlers = 0;
-            for (int i = 0; i < 256; i++)
-            {
-                if (_handlerTable[i] != IntPtr.Zero)
-                {
-                    validHandlers++;
-                }
-            }
-
-            SerialDebug.Info($"Total valid interrupt handlers: {validHandlers}");
-
-            // Verificar manejadores de IRQ
-            int activeIRQHandlers = 0;
-            for (int i = 0; i < 24; i++)
-            {
-                if (_irqHandlers[i] != null)
-                {
-                    activeIRQHandlers++;
-                    SerialDebug.Info($"Active handler for IRQ {i}");
-                }
-            }
-
-            SerialDebug.Info($"Active IRQ handlers: {activeIRQHandlers}");
-
-            // Obtener información del APIC
-            DiagnoseAPICConfiguration();
-
-            // Prueba de habilitación/deshabilitación de interrupciones
-            SerialDebug.Info("Testing interrupt enable/disable");
-
-            DisableInterrupts();
-            SerialDebug.Info("Interrupts disabled");
-
-            EnableInterrupts();
-            SerialDebug.Info("Interrupts enabled");
-        }
-
-        /// <summary>
-        /// Diagnóstico específico para la configuración APIC
-        /// </summary>
-        private static void DiagnoseAPICConfiguration()
-        {
-            SerialDebug.Info("APIC Configuration Diagnosis");
-
-            // Obtener identificación del procesador local
-            uint apicId = ACPIManager.GetLocalAPICId();
-            SerialDebug.Info($"Local APIC ID: {apicId}");
-
-            // Obtener y mostrar estado del APIC
-            ulong apicBase = ACPIManager.GetLocalAPICBase();
-            SerialDebug.Info($"Local APIC Base: 0x{apicBase.ToStringHex()}");
-
-            // Verificar si el APIC local está habilitado
-            bool apicEnabled = ACPIManager.IsLocalAPICEnabled();
-            SerialDebug.Info($"Local APIC Enabled: " + apicEnabled);
-
-            // Obtener información del IOAPIC
-            uint ioApicId = IOAPIC.GetIOAPICId();
-            SerialDebug.Info($"IO APIC ID: {ioApicId}");
-
-            // Verificar entradas de redirección para IRQs importantes
-            SerialDebug.Info("Checking IRQ redirection entries:");
-            SerialDebug.Info($"Timer (IRQ 0): 0x{IOAPIC.ReadRedirectionEntry(0).ToStringHex()}");
-            SerialDebug.Info($"Keyboard (IRQ 1): 0x{IOAPIC.ReadRedirectionEntry(1).ToStringHex()}");
         }
 
         /// <summary>
@@ -234,13 +153,34 @@ namespace Kernel
         /// <param name="cpuId">ID del procesador al que dirigir la interrupción (opcional)</param>
         public static void RegisterIRQHandler(byte irq, InterruptDelegate handler, byte cpuId = DEFAULT_CPU_ID)
         {
+            // Verificar que IOAPIC esté inicializado
+            if (!IOAPIC.IsInitialized())
+            {
+                SerialDebug.Error("IOAPIC not initialized before registering IRQ handler");
+                return;
+            }
+
+            // Verificar que IDT esté configurada
+            if (!IDTManager.IsInitialized())
+            {
+                SerialDebug.Error("IDT not initialized before registering IRQ handler");
+                return;
+            }
+
+            SerialDebug.Info($"Registering handler for IRQ {irq} on CPU {cpuId}");
             if (irq < 24)
             {
                 _irqHandlers[irq] = handler;
                 SerialDebug.Info($"Registered handler for IRQ {irq}");
 
+                // Para el teclado (IRQ 1), usar un vector específico
+                byte vector = (byte)(irq == 1 ? 33 : (irq + 32));
+
                 // Configurar el IOAPIC para dirigir esta IRQ al vector y procesador correctos
-                IOAPIC.SetIRQRedirect(irq, cpuId);
+                IOAPIC.SetIRQRedirect(irq, cpuId, vector);
+
+                // Desenmascarar la IRQ
+                IOAPIC.UnmaskIRQ(irq);
             }
             else
             {
@@ -337,11 +277,12 @@ namespace Kernel
             SerialDebug.Info("Comprehensive Interrupt System Diagnosis (APIC mode)");
 
             // Verificar configuración de IDT
-            SerialDebug.Info($"IDT Base Address: 0x{((ulong)IDTManager._idt).ToStringHex()}");
-            SerialDebug.Info($"IDT Limit: {((ulong)IDTManager._idtPointer.Limit).ToStringHex()}");
+            //  SerialDebug.Info($"IDT Base Address: 0x{((ulong)IDTManager._idt).ToStringHex()}");
+            // SerialDebug.Info($"IDT Limit: {((ulong)IDTManager._idtPointer.Limit).ToStringHex()}");
 
             // Verificar manejadores registrados
             int validHandlers = 0;
+
             for (int i = 0; i < 256; i++)
             {
                 if (_handlerTable[i] != IntPtr.Zero)
@@ -349,18 +290,10 @@ namespace Kernel
                     validHandlers++;
 
                     // Log de dirección de manejadores
-                    SerialDebug.Info($"Handler for Interrupt {i}: 0x{((ulong)_handlerTable[i]).ToStringHex()}");
+                    //  SerialDebug.Info($"Handler for Interrupt {i}: 0x{((ulong)_handlerTable[i]).ToStringHex()}");
                 }
             }
             SerialDebug.Info($"Total Valid Interrupt Handlers: {validHandlers}");
-
-            // Verificar configuración del APIC
-            SerialDebug.Info("APIC Configuration:");
-
-            // Verificar el estado de habilitación de IRQs importantes
-            SerialDebug.Info($"Timer IRQ (0) enabled: " + IsIRQEnabled(0));
-            SerialDebug.Info($"Keyboard IRQ (1) enabled: " + IsIRQEnabled(1));
-            SerialDebug.Info($"Mouse IRQ (12) enabled: " + IsIRQEnabled(12));
         }
 
         /// <summary>
@@ -386,7 +319,8 @@ namespace Kernel
         [RuntimeExport("HandleInterrupt")]
         public static void HandleInterrupt(InterruptFrame* frame)
         {
-            SerialDebug.Info($"Handling interrupt: {frame->InterruptNumber.ToStringHex()}");
+            SerialDebug.Info("Handling interrupt...");
+            //SerialDebug.Info($"Handling interrupt: {frame->InterruptNumber.ToStringHex()}");
             int interruptNumber = (int)frame->InterruptNumber;
 
             // Handle the interrupt based on its number
@@ -429,7 +363,7 @@ namespace Kernel
             if (frame->InterruptNumber < 32)
             {
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Unhandled interrupt: 0x{frame->InterruptNumber.ToStringHex()} at address 0x{frame->RIP.ToStringHex()}");
+                //Console.WriteLine($"Unhandled interrupt: 0x{frame->InterruptNumber.ToStringHex()} at address 0x{frame->RIP.ToStringHex()}");
                 Console.ForegroundColor = ConsoleColor.White;
             }
         }
@@ -439,10 +373,8 @@ namespace Kernel
         /// </summary>
         public static void DivideByZeroHandler(InterruptFrame* frame)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: Divide by zero at address 0x{frame->RIP.ToStringHex()}");
-            Console.ForegroundColor = ConsoleColor.White;
-            HaltSystem();
+            KernelPanic($"Divide by zero at address 0x{frame->RIP.ToStringHex()}",
+               "InterruptManager.cs", 0, "DivideByZeroHandler");
         }
 
         /// <summary>
@@ -450,10 +382,8 @@ namespace Kernel
         /// </summary>
         public static void InvalidOpcodeHandler(InterruptFrame* frame)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: Invalid opcode at address 0x{frame->RIP.ToStringHex()}");
-            Console.ForegroundColor = ConsoleColor.White;
-            HaltSystem();
+            KernelPanic($"Invalid opcode at address 0x{frame->RIP.ToStringHex()}",
+                 "InterruptManager.cs", 0, "InvalidOpcodeHandler");
         }
 
         /// <summary>
@@ -461,10 +391,8 @@ namespace Kernel
         /// </summary>
         public static void DoubleFaultHandler(InterruptFrame* frame)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("CRITICAL ERROR: Double fault. System will halt.");
-            Console.ForegroundColor = ConsoleColor.White;
-            HaltSystem();
+            KernelPanic("Double fault - System integrity compromised",
+                "InterruptManager.cs", 0, "DoubleFaultHandler");
         }
 
         /// <summary>
@@ -472,11 +400,8 @@ namespace Kernel
         /// </summary>
         public static void GeneralProtectionHandler(InterruptFrame* frame)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: General protection fault at address 0x{frame->RIP.ToStringHex()}");
-            Console.WriteLine($"Error code: 0x{frame->ErrorCode.ToStringHex()}");
-            Console.ForegroundColor = ConsoleColor.White;
-            HaltSystem();
+            KernelPanic($"General protection fault at address 0x{frame->RIP.ToStringHex()} - Error code: 0x{frame->ErrorCode.ToStringHex()}",
+              "InterruptManager.cs", 0, "GeneralProtectionHandler");
         }
 
         /// <summary>
@@ -494,32 +419,67 @@ namespace Kernel
             bool reserved = (frame->ErrorCode & 8) != 0;     // Reserved bits
             bool instruction = (frame->ErrorCode & 16) != 0; // Instruction fetch
 
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"ERROR: Page fault at address 0x{faultAddress.ToStringHex()}");
-            Console.WriteLine($"Type: {(present ? "Protection violation" : "Page not present")}");
-            Console.WriteLine($"Operation: {(write ? "Write" : "Read")}");
-            Console.WriteLine($"Context: {(user ? "User" : "Kernel")}");
-            if (reserved) Console.WriteLine("Reserved bits error");
-            if (instruction) Console.WriteLine("Caused by instruction fetch");
-            Console.ForegroundColor = ConsoleColor.White;
+            string faultType = present ? "Protection violation" : "Page not present";
+            string operation = write ? "Write" : "Read";
+            string context = user ? "User" : "Kernel";
 
-            HaltSystem();
+            KernelPanic($"Page fault at address 0x{faultAddress.ToStringHex()} - Type: {faultType}, Operation: {operation}, Context: {context}",
+                        "InterruptManager.cs", 0, "PageFaultHandler");
         }
 
         /// <summary>
-        /// Halts the system after a critical exception
+        /// Muestra un mensaje de kernel panic y detiene el sistema
         /// </summary>
-        private static void HaltSystem()
+        /// <param name="message">Mensaje de error</param>
+        /// <param name="file">Archivo donde ocurrió el error (opcional)</param>
+        /// <param name="line">Línea donde ocurrió el error (opcional)</param>
+        /// <param name="function">Función donde ocurrió el error (opcional)</param>
+        public static void KernelPanic(string message, string file = null, int line = 0, string function = null)
         {
-            // Disable interrupts
-            Native.CLI();
+            // Deshabilitar interrupciones para evitar interferencias
+            DisableInterrupts();
 
-            Console.WriteLine("System halted");
+            // Guardar el color original
+            ConsoleColor oldFg = Console.ForegroundColor;
+            ConsoleColor oldBg = Console.BackgroundColor;
 
-            // Infinite loop
+            // Cambiar a colores de error (fondo rojo, texto blanco)
+            Console.BackgroundColor = ConsoleColor.Red;
+            Console.ForegroundColor = ConsoleColor.White;
+
+            // Limpiar pantalla para que el mensaje sea muy visible
+            Console.Clear();
+
+            // Mostrar encabezado de kernel panic
+            Console.WriteLine("================ KERNEL PANIC ================");
+            Console.WriteLine();
+
+            // Mostrar mensaje principal
+            Console.WriteLine($"ERROR: {message}");
+            Console.WriteLine();
+
+            // Mostrar información de ubicación si está disponible
+            if (!string.IsNullOrEmpty(file))
+            {
+                Console.WriteLine($"Location: {file}");
+                if (line > 0)
+                    Console.WriteLine($"Line: {line}");
+                if (!string.IsNullOrEmpty(function))
+                    Console.WriteLine($"Function: {function}");
+                Console.WriteLine();
+            }
+
+            // Si tenemos un frame de interrupción, mostrar información relevante
+            Console.WriteLine("Technical information:");
+            Console.WriteLine("System halted due to critical error");
+
+            // Hacer log al puerto serie también
+            SerialDebug.Error("KERNEL PANIC: " + message);
+
+            // Detener el sistema
             while (true)
             {
-                // Pause the CPU to save power
+                // Pausar la CPU para reducir el consumo de energía
                 Native.Halt();
             }
         }

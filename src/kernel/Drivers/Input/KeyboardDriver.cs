@@ -1,5 +1,6 @@
 ﻿using Kernel.Diagnostics;
 using Kernel.Drivers.IO;
+using Kernel.Hardware;
 using System;
 
 namespace Kernel.Drivers.Input
@@ -153,67 +154,136 @@ namespace Kernel.Drivers.Input
         /// </summary>
         protected override bool OnInitialize()
         {
-            SerialDebug.Info("Initializing keyboard controller...");
+            SerialDebug.Info("Initializing keyboard controller with detailed diagnostics...");
 
-            // Deshabilitar ambos puertos PS/2 durante la inicialización
+            // Diagnóstico previo - lee el estado actual
+            byte initialStatus = IOPort.In8(STATUS_PORT);
+            SerialDebug.Info($"Initial keyboard controller status: 0x{((ulong)initialStatus).ToStringHex()}");
+
+            // Deshabilitar dispositivos
+            SerialDebug.Info("Disabling PS/2 ports...");
             SendCommand(CMD_DISABLE_FIRST_PORT);
             SendCommand(CMD_DISABLE_SECOND_PORT);
 
-            // Vaciar cualquier dato en el buffer
-            while ((IOPort.InByte(STATUS_PORT) & 0x01) != 0)
+            // Vaciar buffer
+            SerialDebug.Info("Flushing data buffer...");
+            while ((IOPort.In8(STATUS_PORT) & 0x01) != 0)
             {
-                IOPort.InByte(DATA_PORT);
+                byte data = IOPort.In8(DATA_PORT);
+                SerialDebug.Info($"Flushed data byte: 0x{((ulong)data).ToStringHex()}");
             }
 
-            // Configurar el controlador
-            // Leer configuración actual
+            // Auto-test del controlador
+            SerialDebug.Info("Testing controller...");
+            SendCommand(CMD_TEST_CONTROLLER);
+            byte testResult = ReadData();
+            if (testResult != 0x55)
+            {
+                SerialDebug.Error($"Controller self-test failed: 0x{((ulong)testResult).ToStringHex()}");
+                return false;
+            }
+            SerialDebug.Info("Controller self-test passed");
+
+            // Leer y modificar configuración
+            SerialDebug.Info("Reading controller configuration...");
             SendCommand(CMD_READ_CONFIG);
             byte config = ReadData();
+            SerialDebug.Info($"Current configuration: 0x{((ulong)config).ToStringHex()}");
 
-            // Modificar configuración: habilitar IRQ del teclado
-            config |= 0x01;    // Habilitar IRQ1 (teclado)
+            // Modificar para habilitar IRQ del teclado y deshabilitar traducción de scan codes
+            config |= 0x01;  // Habilitar IRQ1
+            config &= unchecked((byte)~0x40); // Deshabilitar traducción de scan codes (importante!)
 
-            // Escribir nueva configuración
+            SerialDebug.Info($"New configuration: 0x{((ulong)config).ToStringHex()}");
             SendCommand(CMD_WRITE_CONFIG);
             SendData(config);
 
-            // Habilitar el primer puerto (teclado)
+            // Prueba del primer puerto
+            SerialDebug.Info("Testing first PS/2 port...");
+            SendCommand(CMD_TEST_FIRST_PORT);
+            byte portTest = ReadData();
+            if (portTest != 0x00)
+            {
+                SerialDebug.Error($"First port test failed: 0x{((ulong)portTest).ToStringHex()}");
+                return false;
+            }
+            SerialDebug.Info("First port test passed");
+
+            // Habilitar el primer puerto
+            SerialDebug.Info("Enabling first PS/2 port...");
             SendCommand(CMD_ENABLE_FIRST_PORT);
 
+            // Resetear el teclado
+            SerialDebug.Info("Resetting keyboard...");
+            SendData(DEV_RESET);
 
-            // Habilitar escaneo del teclado directamente - método más directo
+            // Esperar ACK (0xFA)
+            byte response = ReadData();
+            if (response != 0xFA)
+            {
+                SerialDebug.Warning($"Keyboard did not acknowledge reset command: 0x{((ulong)response).ToStringHex()}");
+                // Continuar de todos modos, algunos teclados pueden no responder correctamente
+            }
+            else
+            {
+                SerialDebug.Info("Reset acknowledged");
+
+                // Esperar resultado del autoprueba (0xAA)
+                response = ReadData();
+                if (response != 0xAA)
+                {
+                    SerialDebug.Warning($"Keyboard self-test failed: 0x{((ulong)response).ToStringHex()}");
+                    // Continuar de todos modos
+                }
+                else
+                {
+                    SerialDebug.Info("Keyboard self-test passed");
+                }
+            }
+
+            // Habilitar escaneo
+            SerialDebug.Info("Enabling keyboard scanning...");
             SendData(DEV_ENABLE_SCANNING);
+            response = ReadData();
+            if (response != 0xFA)
+            {
+                SerialDebug.Warning($"Keyboard did not acknowledge enable command: 0x{((ulong)response).ToStringHex()}");
+                // Continuar de todos modos
+            }
+            else
+            {
+                SerialDebug.Info("Scanning enabled successfully");
+            }
 
-            // No esperamos necesariamente una respuesta - algunas VMs no la envían correctamente
-
-            // Registrar manejador de interrupciones
+            // Registrar manejador
+            SerialDebug.Info("Registering interrupt handler...");
             InterruptDelegate handler = new InterruptDelegate(HandleInterrupt);
-            InterruptManager.RegisterIRQHandler(1, handler);  // IRQ 1 para teclado PS/2
-
-            // Este es un paso crucial - habilitar la IRQ en el IOAPIC
+            InterruptManager.RegisterIRQHandler(1, handler);
             InterruptManager.EnableIRQ(1);
-
-            // Asegurarnos de que las interrupciones globales estén habilitadas
-            Native.STI();
 
             SerialDebug.Info("Keyboard controller initialized successfully");
             return true;
         }
-
 
         /// <summary>
         /// Manejador de interrupciones del teclado
         /// </summary>
         public void HandleInterrupt()
         {
-            // Leer el código de escaneo
-            byte scanCode = IOPort.InByte(DATA_PORT);
-            SerialDebug.Info($"Keyboard IRQ: Scan code 0x{scanCode}");
+            SerialDebug.Info("Keyboard IRQ triggered");
 
-            // Procesar el código de escaneo
+            // Leer el código de escaneo
+            byte scanCode = IOPort.In8(DATA_PORT);
+
+            // Enviar EOI inmediatamente
+            //APICController.SendEOI();
+
+            // Log después de enviar EOI
+            SerialDebug.Info($"Keyboard scancode: 0x{((ulong)scanCode).ToStringHex()}");
+
+            // Ahora que el EOI está enviado, es seguro procesar el código
             ProcessScanCode(scanCode);
         }
-
         /// <summary>
         /// Inicializa el mapa de códigos de escaneo
         /// </summary>
@@ -510,13 +580,13 @@ namespace Kernel.Drivers.Input
         private void SendCommand(byte command)
         {
             // Esperar a que el controlador esté listo para recibir comandos
-            while ((IOPort.InByte(STATUS_PORT) & 0x02) != 0)
+            while ((IOPort.In8(STATUS_PORT) & 0x02) != 0)
             {
-                Native.Pause();
+                Native.Nop();
             }
 
             // Enviar comando
-            IOPort.OutByte(COMMAND_PORT, command);
+            IOPort.Out8(COMMAND_PORT, command);
         }
 
         /// <summary>
@@ -525,13 +595,13 @@ namespace Kernel.Drivers.Input
         private void SendData(byte data)
         {
             // Esperar a que el controlador esté listo para recibir datos
-            while ((IOPort.InByte(STATUS_PORT) & 0x02) != 0)
+            while ((IOPort.In8(STATUS_PORT) & 0x02) != 0)
             {
-                Native.Pause();
+                Native.Nop();
             }
 
             // Enviar datos
-            IOPort.OutByte(DATA_PORT, data);
+            IOPort.Out8(DATA_PORT, data);
         }
 
         /// <summary>
@@ -542,11 +612,11 @@ namespace Kernel.Drivers.Input
             // Esperar a que haya datos disponibles
             for (int timeout = 0; timeout < 1000; timeout++)
             {
-                if ((IOPort.InByte(STATUS_PORT) & 0x01) != 0)
+                if ((IOPort.In8(STATUS_PORT) & 0x01) != 0)
                 {
-                    return IOPort.InByte(DATA_PORT);
+                    return IOPort.In8(DATA_PORT);
                 }
-                Native.Pause();
+                Native.Nop();
             }
 
             // Timeout
@@ -597,6 +667,7 @@ namespace Kernel.Drivers.Input
 
             // Determinar si es código de pulsación o liberación
             bool isBreak = IsBreakCode(scanCode);
+
             // Normalizar el código de escaneo (eliminar bit de liberación)
             byte normalizedScanCode = isBreak ? (byte)(scanCode & 0x7F) : scanCode;
 
@@ -644,7 +715,7 @@ namespace Kernel.Drivers.Input
             // Añadir el evento al buffer
             if (AddEventToBuffer(keyEvent))
             {
-                SerialDebug.Info($"Taclado Evento");
+                SerialDebug.Info($"Teclado Evento");
             }
         }
 
@@ -778,7 +849,7 @@ namespace Kernel.Drivers.Input
                 // Esperar a que haya una tecla disponible
                 while (!IsKeyAvailable())
                 {
-                    Native.Pause();
+                    Native.Nop();
                 }
 
                 // Leer la tecla
@@ -873,6 +944,7 @@ namespace Kernel.Drivers.Input
         /// </summary>
         public static KeyEvent ReadKey()
         {
+            SerialDebug.Info("Reading key event...");
             if (!_initialized)
                 return new KeyEvent();
 

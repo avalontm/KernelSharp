@@ -40,37 +40,37 @@ public static class PICController
         SerialDebug.Info("Initializing PIC controller...");
 
         // Save current masks (if important)
-        byte mask1 = IOPort.InByte(PIC1_DATA);
-        byte mask2 = IOPort.InByte(PIC2_DATA);
+        byte mask1 = IOPort.In8(PIC1_DATA);
+        byte mask2 = IOPort.In8(PIC2_DATA);
 
         // Start initialization sequence (ICW1)
-        IOPort.OutByte(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+        IOPort.Out8(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
         IOWait();
-        IOPort.OutByte(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+        IOPort.Out8(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
         IOWait();
 
         // ICW2: IRQ remapping
-        IOPort.OutByte(PIC1_DATA, IRQ_OFFSET_MASTER); // IRQ 0-7 -> INT 0x20-0x27
+        IOPort.Out8(PIC1_DATA, IRQ_OFFSET_MASTER); // IRQ 0-7 -> INT 0x20-0x27
         IOWait();
-        IOPort.OutByte(PIC2_DATA, IRQ_OFFSET_SLAVE);  // IRQ 8-15 -> INT 0x28-0x2F
+        IOPort.Out8(PIC2_DATA, IRQ_OFFSET_SLAVE);  // IRQ 8-15 -> INT 0x28-0x2F
         IOWait();
 
         // ICW3: Master/slave configuration
-        IOPort.OutByte(PIC1_DATA, 0x04);  // Bit 2 indicates slave on IRQ2
+        IOPort.Out8(PIC1_DATA, 0x04);  // Bit 2 indicates slave on IRQ2
         IOWait();
-        IOPort.OutByte(PIC2_DATA, 0x02);  // Value 2 indicates cascade identity
+        IOPort.Out8(PIC2_DATA, 0x02);  // Value 2 indicates cascade identity
         IOWait();
 
         // ICW4: Mode configuration
-        IOPort.OutByte(PIC1_DATA, ICW4_8086);
+        IOPort.Out8(PIC1_DATA, ICW4_8086);
         IOWait();
-        IOPort.OutByte(PIC2_DATA, ICW4_8086);
+        IOPort.Out8(PIC2_DATA, ICW4_8086);
         IOWait();
 
         // Restore original masks or set new ones
         // Here we disable all IRQs except keyboard (IRQ1) and timer (IRQ0)
-        IOPort.OutByte(PIC1_DATA, 0xFC); // 1111 1100 - Only allow IRQ0 and IRQ1
-        IOPort.OutByte(PIC2_DATA, 0xFF); // 1111 1111 - Disable all IRQs on PIC2
+        IOPort.Out8(PIC1_DATA, 0xFC); // 1111 1100 - Only allow IRQ0 and IRQ1
+        IOPort.Out8(PIC2_DATA, 0xFF); // 1111 1111 - Disable all IRQs on PIC2
 
         SerialDebug.Info("PIC controller initialized successfully");
     }
@@ -84,8 +84,8 @@ public static class PICController
 
         // Apply masks that enable required IRQs
         // Default: enable timer (IRQ0) and keyboard (IRQ1) only
-        IOPort.OutByte(PIC1_DATA, 0xFC); // 1111 1100 - Only IRQ0 and IRQ1 enabled
-        IOPort.OutByte(PIC2_DATA, 0xFF); // All slave PIC IRQs disabled
+        IOPort.Out8(PIC1_DATA, 0xFC); // 1111 1100 - Only IRQ0 and IRQ1 enabled
+        IOPort.Out8(PIC2_DATA, 0xFF); // All slave PIC IRQs disabled
 
         SerialDebug.Info("PIC enabled for timer and keyboard interrupts");
     }
@@ -99,8 +99,8 @@ public static class PICController
         SerialDebug.Info("Disabling PIC (preparing for APIC mode)...");
 
         // Mask all interrupts in both PICs
-        IOPort.OutByte(PIC1_DATA, 0xFF); // Disable all IRQs on master PIC
-        IOPort.OutByte(PIC2_DATA, 0xFF); // Disable all IRQs on slave PIC
+        IOPort.Out8(PIC1_DATA, 0xFF); // Disable all IRQs on master PIC
+        IOPort.Out8(PIC2_DATA, 0xFF); // Disable all IRQs on slave PIC
 
         SerialDebug.Info("PIC disabled - all interrupts masked");
     }
@@ -114,11 +114,11 @@ public static class PICController
         if (irq >= 8)
         {
             // If it's an IRQ from the slave PIC, send EOI to both PICs
-            IOPort.OutByte(PIC2_COMMAND, PIC_EOI);
+            IOPort.Out8(PIC2_COMMAND, PIC_EOI);
         }
 
         // Always send EOI to the master PIC
-        IOPort.OutByte(PIC1_COMMAND, PIC_EOI);
+        IOPort.Out8(PIC1_COMMAND, PIC_EOI);
     }
 
     /// <summary>
@@ -133,15 +133,15 @@ public static class PICController
         if (irq < 8)
         {
             port = PIC1_DATA;
-            value = (byte)(IOPort.InByte(port) & ~(1 << irq));
+            value = (byte)(IOPort.In8(port) & ~(1 << irq));
         }
         else
         {
             port = PIC2_DATA;
-            value = (byte)(IOPort.InByte(port) & ~(1 << (irq - 8)));
+            value = (byte)(IOPort.In8(port) & ~(1 << (irq - 8)));
         }
 
-        IOPort.OutByte(port, value);
+        IOPort.Out8(port, value);
     }
 
     /// <summary>
@@ -156,15 +156,15 @@ public static class PICController
         if (irq < 8)
         {
             port = PIC1_DATA;
-            value = (byte)(IOPort.InByte(port) | (1 << irq));
+            value = (byte)(IOPort.In8(port) | (1 << irq));
         }
         else
         {
             port = PIC2_DATA;
-            value = (byte)(IOPort.InByte(port) | (1 << (irq - 8)));
+            value = (byte)(IOPort.In8(port) | (1 << (irq - 8)));
         }
 
-        IOPort.OutByte(port, value);
+        IOPort.Out8(port, value);
     }
 
     /// <summary>
@@ -173,7 +173,7 @@ public static class PICController
     /// <param name="mask">Mask (1 bit per IRQ, 1 = disabled)</param>
     public static void SetMasterMask(byte mask)
     {
-        IOPort.OutByte(PIC1_DATA, mask);
+        IOPort.Out8(PIC1_DATA, mask);
     }
 
     /// <summary>
@@ -182,7 +182,7 @@ public static class PICController
     /// <param name="mask">Mask (1 bit per IRQ, 1 = disabled)</param>
     public static void SetSlaveMask(byte mask)
     {
-       IOPort.OutByte(PIC2_DATA, mask);
+       IOPort.Out8(PIC2_DATA, mask);
     }
 
     /// <summary>
@@ -191,6 +191,6 @@ public static class PICController
     private static void IOWait()
     {
         // Simple method: write to an unused port
-        IOPort.OutByte(0x80, 0);
+        IOPort.Out8(0x80, 0);
     }
 }

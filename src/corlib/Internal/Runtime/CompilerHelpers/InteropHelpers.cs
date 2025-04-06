@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -49,6 +50,23 @@ namespace Internal.Runtime.CompilerHelpers
         public unsafe static void CoTaskMemFree(void* p)
         {
             //TO-DO
+        }
+
+        // Este método convierte un carácter ANSI a su equivalente Unicode (wide char)
+        public static char AnsiCharToWideChar(byte ansiChar)
+        {
+            // Implementación básica: para ASCII estándar (0-127), la conversión es directa
+            if (ansiChar <= 127)
+            {
+                return (char)ansiChar;
+            }
+
+            // Para caracteres extendidos, depende de la página de códigos que estés usando
+            // Esta es una implementación muy básica para la página de códigos 437 (DOS/BIOS estándar en inglés)
+            // Podrías necesitar una tabla de conversión más completa
+
+            // En un kernel real, probablemente querrás tener una tabla de mapeo completa
+            return (char)ansiChar;
         }
 
         /// <summary>
@@ -211,13 +229,7 @@ namespace Internal.Runtime.CompilerHelpers
 
         private static void* AllocGenericMemory(UIntPtr sizeInBytes)
         {
-            // Implementación básica para entornos genéricos
-            // En un sistema real, esto usaría una llamada al sistema como malloc
-            // Por ahora, simplemente devolvemos un puntero estático para ejemplos
-
-            // Nota: Esta implementación es solo para demostración y no asigna memoria real
-            // Para un kernel real, necesitarías implementar tu propio administrador de memoria
-            return (void*)0x10000;
+            return (void*)MemoryHelpers.Malloc((ulong)sizeInBytes);
         }
 
         private static void FreeGenericMemory(void* allocatedMemory)
