@@ -1,80 +1,66 @@
-; GDT.asm - Funciones para cargar la GDT y recargar segmentos en x86_64
-; Este archivo contiene las implementaciones de las funciones _LoadGDT y _ReloadSegments
-; utilizadas por el GDTManager.cs
+; Native x86_64 assembly functions for GDT operations
+global _StoreGDT
+global _LoadGDT
+global _SetDataSegments
+global _SetStackSegment
+global _ReloadCodeSegment
+global _LoadTSS
 
 section .text
 
-; Constantes para los selectores de segmento
-KERNEL_CODE_SEL equ 0x08    ; Selector de código del kernel (segundo descriptor)
-KERNEL_DATA_SEL equ 0x10    ; Selector de datos del kernel (tercer descriptor)
-
-
-global _LoadGDT          ; Función para cargar la GDT
-global _ReloadSegments   ; Función para recargar los registros de segmento
-global _SetSegmentRegisters
-section .text
+; void _StoreGDT(GDTPointer* gdtPtr)
+; Stores the current GDTR value to the provided pointer
+_StoreGDT:
+    sgdt [rcx]  ; Store GDTR to pointer in RCX (Windows x64 calling convention)
+    ret
 
 ; void _LoadGDT(GDTPointer* gdtPtr)
-; Carga la GDT especificada por el puntero
+; Loads a new GDT
 _LoadGDT:
-    ; La convención de llamada en x86_64 pasa el primer parámetro en RDI
-    ; RDI contiene GDTPointer*
-    lgdt [rdi]       ; Cargar la GDT usando el puntero
+    lgdt [rcx]  ; Load GDTR from pointer in RCX
     ret
 
-; void _ReloadSegments(void)
-; Recarga los registros de segmento después de cambiar la GDT
-_ReloadSegments:
-    ; Guardar el estado original
-    pushfq              ; Guardar flags
-    cli                 ; Deshabilitar interrupciones durante el cambio
-
-    ; Preparar el salto lejos
-    lea rax, [rel .reload_data_segments]  ; Obtener dirección de la próxima etiqueta
-    
-    ; Empujar selector de código y dirección de retorno
-    push KERNEL_CODE_SEL    ; Nuevo selector de código
-    push rax                ; Dirección donde continuar
-    
-    ; Realizar un far return para cambiar CS
-    ; Esto cambiará CS y RIP atómicamente
-    retfq
-
-.reload_data_segments:
-    ; En este punto, CS ya ha sido cambiado a KERNEL_CODE_SEL
-    
-    ; Recargar los segmentos de datos
-    mov ax, KERNEL_DATA_SEL
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
-    
-    ; Restaurar flags (incluyendo el estado de interrupción)
-    popfq
-    
+; void _SetDataSegments(ushort selector)
+; Sets the DS and ES segment registers
+_SetDataSegments:
+    mov ax, cx   ; CX contains the selector
+    mov ds, ax   ; DS = selector
+    mov es, ax   ; ES = selector
     ret
 
-    ; void _SetSegmentRegisters(ushort selector)
-; Establece los registros de segmento DS, ES, FS, GS y SS con el valor dado
-_SetSegmentRegisters:
-    ; La convención de llamada en x86_64 pone el primer parámetro en DI
-    ; DI ya contiene el selector como valor de 16 bits
-    mov ax, di
+; void _SetStackSegment(ushort selector)
+; Sets the SS segment register
+_SetStackSegment:
+    mov ax, cx   ; CX contains the selector
+    mov ss, ax   ; SS = selector
+    ret
+
+; void _ReloadCodeSegment(ushort selector)
+; Reloads the CS segment register using a far return
+_ReloadCodeSegment:
+    ; Prepare for far return
+    lea rax, [rel .reload_cs]  ; Get address of return point
+    push rcx                   ; Push new CS selector
+    push rax                   ; Push return address
     
-    ; Guardar el estado de interrupciones
-    pushfq
-    cli                 ; Deshabilitar interrupciones durante el cambio
+    ; Execute far return to change CS
+    o64 retf                   ; 64-bit far return
     
-    ; Cambiar todos los segmentos de datos
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax          ; Cambiar SS puede requerir estar en una pila válida
+.reload_cs:
+    ; Now using the new code segment
+    ret
+
+; void _LoadTSS(ushort selector)
+; Loads the Task State Segment
+_LoadTSS:
+    ; Ensure selector has the correct format
+    and cx, 0xFFF8          ; Clear RPL and TI bits
+    or cx, 0                ; Set RPL to 0 (privilege level 0)
     
-    ; Restaurar el estado de interrupciones
-    popfq
+    mov ax, cx              ; CX contains the selector
     
+    ; Try to load the TSS
+    ltr ax
+    
+    ; Return success if no exception occurred
     ret

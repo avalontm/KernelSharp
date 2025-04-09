@@ -1,6 +1,4 @@
 ﻿using Kernel.Diagnostics;
-using Kernel.Drivers.IO;
-using System;
 
 namespace Kernel.Hardware
 {
@@ -60,10 +58,17 @@ namespace Kernel.Hardware
             // Obtener la dirección base del IOAPIC desde ACPI o usar un valor predeterminado
             _ioApicBaseAddress = ACPIManager.GetIOApicAddress();
 
-            if (_ioApicBaseAddress == 0)
+            if (_ioApicBaseAddress == 0 || _ioApicBaseAddress == ulong.MaxValue)
             {
-                SerialDebug.Info("Could not obtain I/O APIC address from ACPI. Using default 0xFEC00000");
+                SerialDebug.Error("Invalid or null I/O APIC address from ACPI. Using default 0xFEC00000");
                 _ioApicBaseAddress = 0xFEC00000; // Dirección predeterminada
+            }
+
+            // Verificar que la dirección de IOAPIC es válida
+            if (_ioApicBaseAddress < 0x1000 || _ioApicBaseAddress > 0xFFFFFFFF)
+            {
+                SerialDebug.Error("Invalid IOAPIC base address.");
+                return false;
             }
 
             // Mapear registros del IOAPIC
@@ -91,6 +96,7 @@ namespace Kernel.Hardware
             SerialDebug.Info("I/O APIC initialized successfully");
             return true;
         }
+
 
         /// <summary>
         /// Lee un registro del IOAPIC
@@ -143,6 +149,71 @@ namespace Kernel.Hardware
 
             WriteRegister(IOAPIC_REG_REDTBL + (irq * 2), lowDword);
             WriteRegister(IOAPIC_REG_REDTBL + (irq * 2) + 1, highDword);
+        }
+
+        /// <summary>
+        /// Configura una IRQ específica con opciones detalladas
+        /// </summary>
+        /// <param name="irq">Número de IRQ</param>
+        /// <param name="cpuId">ID de APIC del procesador destino</param>
+        /// <param name="vector">Vector de interrupción (32-255)</param>
+        /// <param name="masked">Si la IRQ está enmascarada inicialmente</param>
+        /// <param name="activeLow">True si la señal es activa en bajo, False si es activa en alto</param>
+        /// <param name="levelTriggered">True si el disparo es por nivel, False si es por flanco</param>
+        public static void ConfigureIRQ(byte irq, byte cpuId, byte vector, bool masked = false, bool activeLow = true, bool levelTriggered = true)
+        {
+            if (!_initialized)
+            {
+                SerialDebug.Warning("I/O APIC not initialized");
+                return;
+            }
+
+            if (irq > _maxRedirectionEntries)
+            {
+                SerialDebug.Warning($"IRQ {irq} exceeds maximum I/O APIC redirection entries");
+                return;
+            }
+
+            // Verificar que el vector sea válido (32-255)
+            if (vector < 32 || vector > 255)
+            {
+                SerialDebug.Warning($"Invalid vector {vector}. Must be between 32 and 255");
+                return;
+            }
+
+            // Construir la entrada de redirección para la IRQ
+            ulong entry = (ulong)vector | IOAPIC_DELIVERY_FIXED | IOAPIC_DESTMODE_PHYSICAL;
+
+            // Configurar polaridad
+            if (activeLow)
+                entry |= IOAPIC_INTPOL_LOW;
+            else
+                entry |= IOAPIC_INTPOL_HIGH;
+
+            // Configurar modo de disparo
+            if (levelTriggered)
+                entry |= IOAPIC_TRIGGER_LEVEL;
+            else
+                entry |= IOAPIC_TRIGGER_EDGE;
+
+            // Enmascarar si es necesario
+            if (masked)
+                entry |= IOAPIC_INT_MASK;
+
+            // Establecer el destino (ID del procesador) en los bits altos
+            entry |= ((ulong)cpuId << 56);
+
+            // Escribir la entrada - Primero asegurarse de que esté enmascarada durante la configuración
+            ulong tempEntry = entry | IOAPIC_INT_MASK;
+            WriteRedirectionEntry(irq, tempEntry);
+
+            // Si no debe estar enmascarada, actualizar sin la máscara
+            if (!masked)
+            {
+                WriteRedirectionEntry(irq, entry);
+            }
+
+            //SerialDebug.Info($"Configured IRQ {irq} -> Vector {vector}, CPU {cpuId}, ActiveLow: "+ activeLow + ", LevelTriggered: " + levelTriggered + ", Masked: "  + masked);
         }
 
         /// <summary>

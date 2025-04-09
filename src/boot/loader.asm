@@ -3,8 +3,8 @@ BITS 32
 ; Multiboot Constants
 MODULEALIGN       equ     1<<0
 MEMINFO           equ     1<<1
-FLAGS             equ     MODULEALIGN | MEMINFO
 MAGIC             equ     0x1BADB002
+FLAGS             equ     MODULEALIGN | MEMINFO
 CHECKSUM          equ     -(MAGIC + FLAGS)
 
 section .text
@@ -19,9 +19,9 @@ mb_header:
     dd CHECKSUM
 
 _start:
-    cli
-    mov [multiboot_ptr], ebx  ; Save Multiboot pointer
-    mov esp, stack_top        ; Configure stack
+    cli                         ; Disable interrupts
+    mov [multiboot_ptr], ebx    ; Save Multiboot pointer
+    mov esp, stack_top          ; Configure stack
 
     ; Clear screen
     mov edi, 0xB8000
@@ -39,12 +39,11 @@ _start:
     out 0xA1, al  ; Slave PIC
     out 0x21, al  ; Master PIC
 
-    ; Check CPUID
+    ; Verify minimum environment requirements
     call check_cpuid
     test eax, eax
     jz no_cpuid
 
-    ; Check Long Mode
     call check_long_mode
     test eax, eax
     jz no_long_mode
@@ -154,22 +153,17 @@ setup_paging:
     mov ecx, 4096*3        ; PML4, PDPT, PD
     rep stosb
 
-    ; Recursive mapping (optional for debugging)
-    mov eax, pml4_table
-    or eax, 0b11
-    mov [pml4_table + 511*8], eax
-
     ; PML4 -> PDPT
     mov eax, pdpt_table
-    or eax, 0b11
+    or eax, 0b11           ; Present + RW
     mov [pml4_table], eax
 
     ; PDPT -> PD
     mov eax, pd_table
-    or eax, 0b11
+    or eax, 0b11           ; Present + RW
     mov [pdpt_table], eax
 
-    ; Map 1GB with 2MB pages
+    ; Map first 1GB with 2MB pages
     mov edi, pd_table
     mov eax, 0x00000083    ; Present + RW + Page Size (2MB)
     mov ecx, 512           ; 512 entries = 1GB
@@ -212,91 +206,132 @@ enter_long_mode:
     or eax, 1 << 31
     mov cr0, eax
 
-    ; Load 64-bit GDT
-    lgdt [gdt64.pointer]
+    ; Set up a temporary GDT that will be replaced by the kernel
+    ; Keep this minimal - just enough to get into long mode
+    mov eax, gdt_temp      ; Get address of temporary GDT
+    mov [gdt_temp_ptr + 2], eax ; Store in GDT pointer
+    lgdt [gdt_temp_ptr]    ; Load the temporary GDT
 
     ; Jump to 64-bit mode
-    jmp gdt64.code:long_mode_start
+    jmp 0x08:long_mode_start  ; 0x08 is the code segment selector
 
 ;----------------------------------------------------------
 ; 64-bit Code
 ;----------------------------------------------------------
 bits 64
 long_mode_start:
-    ; Disable interrupts
-    cli
-
     ; Clear segment registers
-    xor ax, ax
+    mov ax, 0x10           ; 0x10 is the data segment selector
     mov ds, ax
     mov es, ax
+    mov ss, ax
     mov fs, ax
     mov gs, ax
-    mov ss, ax
-
-    ; Clear general-purpose registers
-    xor rax, rax
-    xor rbx, rbx
-    xor rcx, rcx
-    xor rdx, rdx
-    xor rsi, rsi
-    xor rdi, rdi
-    xor rbp, rbp
-    xor r8, r8
-    xor r9, r9
-    xor r10, r10
-    xor r11, r11
-    xor r12, r12
-    xor r13, r13
-    xor r14, r14
-    xor r15, r15
 
     ; Set stack pointer
     mov rsp, stack_top
 
-    ; Clear flags
-    push 0
-    popfq
+    ; Display a message to confirm we're in 64-bit mode
+    mov rdi, 0xB8000 + 240
+    mov rsi, long_mode_msg
+    call print_string_64
 
-    ; Invalidate TLB
-    mov rax, cr3
-    mov cr3, rax
-
-    ; Prepare parameters for FastCall
-    ; RCX: Multiboot pointer
-    mov rcx, [multiboot_ptr]
-
+    ; Save the temporary GDT information for the kernel
+    mov qword [gdt_info_base], gdt_temp
+    mov word [gdt_info_limit], gdt_temp_size - 1
+    
+    ; Setup parameters for Entry according to fastcall convention
+    mov rcx, 0                         ; Zero-extend RCX
+    mov ecx, [rel multiboot_ptr]       ; First parameter (RCX) - multiboot info
+    
+    mov rdx, 0                         ; Initialize RDX to 0
+    mov rbx, rcx
+    test dword [rbx], 0x8              ; Check MODULES flag (bit 3)
+    jz .no_modules
+    
+    mov edx, [rbx + 24]                ; ModAddr is at offset 24 (0x18) of MultibootInfo
+    
+.no_modules:
+    ; Store GDT info as the 3rd parameter (used by some C# kernels)
+    mov r8, gdt_info
+    
+    ; Display calling kernel message
+    push rcx
+    push rdx
+    push r8
+    mov rdi, 0xB8000 + 320
+    mov rsi, call_kernel_msg
+    call print_string_64
+    pop r8
+    pop rdx
+    pop rcx
+    
+    ; Ensure 16-byte stack alignment
+    and rsp, -16
+    
+    ; Reserve shadow space (required by Windows x64 calling convention)
+    sub rsp, 32
+    
     ; Call kernel entry point
-    extern Entry
     call Entry
-
-    ; In case of return
+    
+    ; If Entry returns, display message and halt
+    mov rdi, 0xB8000 + 400
+    mov rsi, kernel_returned_msg
+    call print_string_64
+    
+    ; Halt the system
     cli
     hlt
     jmp $
+
+; Simple 64-bit string printing function
+print_string_64:
+    push rax
+    push rcx
+.loop:
+    lodsb                   ; Load byte from RSI into AL
+    test al, al
+    jz .done
+    mov ah, 0x0F            ; White text on black background
+    mov [rdi], ax
+    add rdi, 2
+    jmp .loop
+.done:
+    pop rcx
+    pop rax
+    ret
 
 ;----------------------------------------------------------
 ; Data Section
 ;----------------------------------------------------------
 section .data
-init_msg          db "KernelSharp: Initializing loader...", 0
+init_msg          db "KernelSharp: Minimal loader initializing...", 0
 cpuid_err_msg     db "ERROR: CPUID not supported!", 0
 long_mode_err_msg db "ERROR: 64-bit mode not supported!", 0
-paging_msg        db "Configuring paging...", 0
+paging_msg        db "Setting up paging...", 0
 halt_msg          db "System halted.", 0
+long_mode_msg     db "Successfully entered 64-bit mode.", 0
+call_kernel_msg   db "Calling kernel Entry function...", 0
+kernel_returned_msg db "Kernel Entry function returned - system halted.", 0
 
-; 64-bit GDT
-align 16
-gdt64:
-    .null: equ $ - gdt64
-        dq 0
-    .code: equ $ - gdt64
-        dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53)
-    .data: equ $ - gdt64
-        dq (1 << 44) | (1 << 47) | (1 << 41)
-    .pointer:
-        dw $ - gdt64 - 1
-        dq gdt64
+; Temporary GDT structure - Minimal and meant to be replaced by kernel
+align 8
+gdt_temp:
+    dq 0                    ; Null descriptor
+    dq 0x00AF9A000000FFFF   ; 64-bit code segment (0x08)
+    dq 0x00AF92000000FFFF   ; 64-bit data segment (0x10)
+gdt_temp_size equ $ - gdt_temp
+
+; Temporary GDT pointer
+gdt_temp_ptr:
+    dw gdt_temp_size - 1    ; Size
+    dd 0                    ; Base - to be filled at runtime
+
+; Structure to pass GDT info to kernel
+gdt_info:
+    gdt_info_limit: dw 0    ; Size of GDT
+    gdt_info_base: dq 0     ; Base address of GDT
 
 ;----------------------------------------------------------
 ; BSS Section

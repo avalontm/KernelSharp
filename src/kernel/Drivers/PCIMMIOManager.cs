@@ -86,17 +86,12 @@ namespace Kernel.Drivers
                 SerialDebug.Warning("Could not obtain PCI MMIO base address from ACPI");
                 // Default base address - this may vary by system, so it's better to get it from ACPI
                 _mmioBaseAddress = 0xE0000000;
-                //SerialDebug.Info("Using default PCI MMIO base address: 0x" + _mmioBaseAddress.ToStringHex());
+                //SerialDebug.Info($"Using default PCI MMIO base address: 0x{_mmioBaseAddress.ToStringHex()}");
             }
             else
             {
-               // SerialDebug.Info("Found PCI MMIO base address: 0x" + _mmioBaseAddress.ToStringHex());
+                //SerialDebug.Info($"Found PCI MMIO base address: 0x{_mmioBaseAddress.ToStringHex()}");
             }
-
-            // Make sure the MMIO base address is mapped in memory
-            // This is necessary only if your memory manager requires explicit mapping
-            // In a flat memory model with identity paging, this may not be needed
-            // MapPCIMmioRegion(_mmioBaseAddress, 256 * 1024 * 1024);  // 256MB range
 
             SerialDebug.Info("Scanning PCI buses via MMIO...");
             _initialized = true;
@@ -104,7 +99,7 @@ namespace Kernel.Drivers
             // Scan all PCI buses
             ScanAllBuses();
 
-            //SerialDebug.Info("MMIO PCI detection complete. Found " + _devices.Count + " devices");
+            SerialDebug.Info($"MMIO PCI detection complete. Found {_devices.Count} devices");
         }
 
         /// <summary>
@@ -114,9 +109,11 @@ namespace Kernel.Drivers
         private static ulong GetPCIMMIOBaseAddress()
         {
             // Try to get the base address from ACPI manager
+            SerialDebug.Info("Searching for ACPI MCFG table...");
             ulong mcfgAddr = ACPIManager.GetMCFGBaseAddress();
             if (mcfgAddr != 0)
             {
+                SerialDebug.Info($"Found MCFG table with base address: 0x{mcfgAddr.ToStringHex()}");
                 return mcfgAddr;
             }
 
@@ -141,7 +138,7 @@ namespace Kernel.Drivers
                 // If we get a valid vendor ID (not 0xFFFF), it might be a working MMIO region
                 if (vendorID != 0xFFFF && vendorID != 0)
                 {
-                   // SerialDebug.Info("Detected potential PCI MMIO base at 0x" + addr.ToStringHex() + " (VendorID: 0x" + ((ulong)vendorID).ToStringHex() + ")");
+                    SerialDebug.Info($"Detected potential PCI MMIO base at 0x{addr} (VendorID: 0x{vendorID})");
                     return addr;
                 }
             }
@@ -381,8 +378,6 @@ namespace Kernel.Drivers
         /// </summary>
         private static void ScanBus(byte bus)
         {
-            //SerialDebug.Info("Scanning PCI bus " + bus + " via MMIO");
-
             // In MMIO mode, we can efficiently check multiple devices
             for (byte device = 0; device < 32; device++)
             {
@@ -416,17 +411,20 @@ namespace Kernel.Drivers
         {
             PCIDevice pciDevice = GetDeviceInfo(bus, device, function);
 
-            // Log device information
-           // SerialDebug.Info("Found PCI device at " + bus + ":" + device + ":" + function + " - VID=0x" +
-                       //    ((ulong)pciDevice.ID.VendorID).ToStringHex() + ", DID=0x" + ((ulong)pciDevice.ID.DeviceID).ToStringHex() + ", " +
-                       //    "Class=0x" + ((ulong)pciDevice.ID.ClassCode).ToStringHex() + ", Subclass=0x" + ((ulong)pciDevice.ID.Subclass).ToStringHex());
+            // Log device information if it's interesting
+            if (pciDevice.ID.ClassCode == 0x01 || // Mass Storage Controller
+                pciDevice.ID.ClassCode == 0x02 || // Network Controller
+                pciDevice.ID.ClassCode == 0x03 || // Display Controller
+                pciDevice.ID.ClassCode == 0x04)   // Multimedia Controller
+            {
+               // SerialDebug.Info($"Found important PCI device: {pciDevice.ID.ClassCode}:{pciDevice.ID.Subclass} at {bus}:{device}:{function} VID:{pciDevice.ID.VendorID} DID:{pciDevice.ID.DeviceID}");
+            }
 
             _devices.Add(pciDevice);
 
             // If this is a PCI-to-PCI bridge, scan the secondary bus
             if (pciDevice.IsBridge)
             {
-                //SerialDebug.Info("PCI bridge found, scanning secondary bus " + pciDevice.SecondaryBus);
                 ScanBus(pciDevice.SecondaryBus);
             }
         }
@@ -442,8 +440,6 @@ namespace Kernel.Drivers
                 return;
             }
 
-            SerialDebug.Info("Scanning all PCI buses via MMIO");
-
             // First, check if we can access bus 0, device 0, function 0
             if (!DeviceExists(0, 0, 0))
             {
@@ -455,15 +451,13 @@ namespace Kernel.Drivers
                 // Check buses 0-15 for any devices
                 for (byte bus = 0; bus < 16 && !foundAnyDevice; bus++)
                 {
-                    SerialDebug.Info("Trying PCI bus " + bus);
-
                     for (byte device = 0; device < 32 && !foundAnyDevice; device++)
                     {
                         // Only check first function to save time
                         if (DeviceExists(bus, device, 0))
                         {
                             foundAnyDevice = true;
-                            //SerialDebug.Info("Found first PCI device at " + bus + ":" + device + ":0");
+                            SerialDebug.Info($"Found first PCI device at {bus}:{device}:0");
 
                             // Scan from this point
                             ScanBus(bus);
@@ -517,35 +511,19 @@ namespace Kernel.Drivers
 
             if (!DeviceExists(bus, device, function))
             {
-               // SerialDebug.Warning("No device exists at " + bus + ":" + device + ":" + function);
+                SerialDebug.Warning($"No device exists at {bus}:{device}:{function}");
                 return;
             }
 
-            //SerialDebug.Info("Dumping PCI configuration space for device " + bus + ":" + device + ":" + function);
+            SerialDebug.Info($"Dumping PCI configuration space for device {bus}:{device}:{function}");
 
             // Read the first 64 bytes (header)
-           // SerialDebug.Info("Header:");
+            SerialDebug.Info("Header:");
             for (byte offset = 0; offset < 64; offset += 4)
             {
                 uint value = ReadConfig32(bus, device, function, offset);
-               // SerialDebug.Info("  Offset 0x" + ((ulong)offset).ToStringHex() + ": 0x" + ((ulong)value).ToStringHex());
-            }
-
-            // The rest of the configuration space (typically up to 256 bytes)
-            SerialDebug.Info("Extended Configuration:");
-            for (byte offset = 64; offset < 192; offset += 16)
-            {
-                string line = "  Offset 0x" + ((ulong)offset).ToStringHex() + ":";
-
-                for (byte j = 0; j < 16; j += 4)
-                {
-                    uint value = ReadConfig32(bus, device, function, (byte)(offset + j));
-                    line += " 0x" + ((ulong)value).ToStringHex();
-                }
-
-              //  SerialDebug.Info(line);
+                SerialDebug.Info($"  Offset 0x{offset}: 0x{value}");
             }
         }
-
     }
 }

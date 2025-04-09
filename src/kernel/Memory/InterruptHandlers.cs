@@ -45,7 +45,9 @@ namespace Kernel
     /// Basic system interrupt manager, APIC version
     /// </summary>
     public static unsafe class InterruptManager
-    {
+    {  // Constants
+        private const int MAX_INTERRUPTS = 256;
+        private const int MAX_IRQ_HANDLERS = 24;
         // Table of pointers to interrupt handlers
         private static IntPtr* _handlerTable;
         internal static bool _initialized;
@@ -70,19 +72,19 @@ namespace Kernel
             }
 
             SerialDebug.Info("Initializing interrupt manager (APIC mode)...");
-            _irqHandlers = new InterruptDelegate[24]; // APIC típicamente soporta 24 IRQs
+            _irqHandlers = new InterruptDelegate[MAX_IRQ_HANDLERS]; // APIC típicamente soporta 24 IRQs
             SerialDebug.Info("Allocating memory for handler table...");
             // Allocate memory for the handler table (256 possible interrupts)
-            _handlerTable = (IntPtr*)Allocator.malloc((nuint)(sizeof(IntPtr) * 256));
+            _handlerTable = (IntPtr*)Allocator.malloc((nuint)(sizeof(IntPtr) * MAX_INTERRUPTS));
 
             // Initialize all pointers to zero
-            for (int i = 0; i < 256; i++)
+            for (int i = 0; i < MAX_INTERRUPTS; i++)
             {
                 _handlerTable[i] = IntPtr.Zero;
             }
 
             // Initialize IRQ handlers
-            for (int i = 0; i < 24; i++)
+            for (int i = 0; i < MAX_IRQ_HANDLERS; i++)
             {
                 _irqHandlers[i] = null;
             }
@@ -95,7 +97,7 @@ namespace Kernel
             RegisterHandler(14, &PageFaultHandler);         // Page fault
 
             // Registrar manejadores para las IRQs básicas (32-55 en APIC típico)
-            for (int i = 0; i < 24; i++)
+            for (int i = 0; i < MAX_IRQ_HANDLERS; i++)
             {
                 RegisterHandler(IRQ_BASE_VECTOR + i, &IRQHandler);
             }
@@ -132,7 +134,7 @@ namespace Kernel
             int irqNumber = (int)(frame->InterruptNumber - IRQ_BASE_VECTOR);
 
             // Verificar que sea un IRQ válido
-            if (irqNumber >= 0 && irqNumber < 24)
+            if (irqNumber >= 0 && irqNumber < MAX_IRQ_HANDLERS)
             {
                 // Llamar al manejador específico si existe
                 if (_irqHandlers[irqNumber] != null)
@@ -153,6 +155,10 @@ namespace Kernel
         /// <param name="cpuId">ID del procesador al que dirigir la interrupción (opcional)</param>
         public static void RegisterIRQHandler(byte irq, InterruptDelegate handler, byte cpuId = DEFAULT_CPU_ID)
         {
+            SerialDebug.Info($"Attempting to register IRQ handler:");
+            SerialDebug.Info($"IRQ Number: {irq}");
+            SerialDebug.Info($"CPU ID: {cpuId}");
+
             // Verificar que IOAPIC esté inicializado
             if (!IOAPIC.IsInitialized())
             {
@@ -173,14 +179,27 @@ namespace Kernel
                 _irqHandlers[irq] = handler;
                 SerialDebug.Info($"Registered handler for IRQ {irq}");
 
-                // Para el teclado (IRQ 1), usar un vector específico
-                byte vector = (byte)(irq == 1 ? 33 : (irq + 32));
+                byte vector = (byte)(irq + 32);
 
-                // Configurar el IOAPIC para dirigir esta IRQ al vector y procesador correctos
-                IOAPIC.SetIRQRedirect(irq, cpuId, vector);
+                // Configuración específica según el tipo de dispositivo
+                bool activeLow = true;      // La mayoría de los dispositivos en ISA/PS/2
+                bool levelTriggered = true; // La mayoría de los dispositivos en ISA/PS/2
 
-                // Desenmascarar la IRQ
-                IOAPIC.UnmaskIRQ(irq);
+                // Configuraciones especiales según el IRQ
+                if (irq == 1) // IRQ 1 = Teclado PS/2
+                {
+                    SerialDebug.Info("Configuring PS/2 keyboard IRQ with ActiveLow and LevelTriggered");
+                    activeLow = true;
+                    levelTriggered = true;
+                }
+                else if (irq >= 16) // Típicamente dispositivos PCI usan polaridad activa en alto y disparo por flanco
+                {
+                    activeLow = false;
+                    levelTriggered = false;
+                }
+
+                // Configurar el IOAPIC con los parámetros específicos
+                IOAPIC.ConfigureIRQ(irq, cpuId, vector, false, activeLow, levelTriggered);
             }
             else
             {
@@ -320,6 +339,7 @@ namespace Kernel
         public static void HandleInterrupt(InterruptFrame* frame)
         {
             SerialDebug.Info("Handling interrupt...");
+
             //SerialDebug.Info($"Handling interrupt: {frame->InterruptNumber.ToStringHex()}");
             int interruptNumber = (int)frame->InterruptNumber;
 

@@ -2,10 +2,11 @@
 ; Low-level keyboard functions for 64-bit kernel
 ; Implements functions to check for keypress availability and read keyboard input directly from BIOS
 
-SECTION .text
+section .text
 global _CheckKeyAvailable
 global _ReadKeyFromBIOS
 
+section .data
 ;------------------------------------------------------------------------------
 ; _CheckKeyAvailable
 ; Checks if a key is available in the keyboard buffer

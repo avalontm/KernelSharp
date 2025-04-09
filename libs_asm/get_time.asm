@@ -4,6 +4,7 @@ section .text
 global _GetTime
 global _GetUtcTime
 
+section .data
 ; Obtener la hora actual desde el RTC (Real-Time Clock)
 _GetTime:
     push rbx

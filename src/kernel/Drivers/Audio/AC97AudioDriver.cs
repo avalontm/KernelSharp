@@ -160,9 +160,9 @@ namespace Kernel.Drivers.Audio
         private void EnablePCI()
         {
             // Habilitar Bus Mastering y espacio de I/O
-            ushort command = PCIManager.ReadConfig16(_pciDevice.Location.Bus, _pciDevice.Location.Device, _pciDevice.Location.Function, 0x04);
+            ushort command = PCIMMIOManager.ReadConfig16(_pciDevice.Location.Bus, _pciDevice.Location.Device, _pciDevice.Location.Function, 0x04);
             command |= 0x5; // I/O Space + Bus Master
-            PCIManager.WriteConfig16(_pciDevice.Location.Bus, _pciDevice.Location.Device, _pciDevice.Location.Function, 0x04, command);
+            PCIMMIOManager.WriteConfig16(_pciDevice.Location.Bus, _pciDevice.Location.Device, _pciDevice.Location.Function, 0x04, command);
         }
 
         /// <summary>
@@ -420,7 +420,7 @@ namespace Kernel.Drivers.Audio
             byte lastIndex = IOPort.In8((ushort)(_nabmPort + PO_LVI));
 
             return $"Status: 0x{((ulong)status).ToStringHex()}, Control: 0x{((ulong)control).ToStringHex()}, " +
-                   $"Current: {currentIndex}, Last: {lastIndex}, Running: {(control & CONTROL_RUN) != 0}";
+                   $"Current: {currentIndex}, Last: {lastIndex}, Running: " + ((control & CONTROL_RUN) != 0);
         }
 
         /// <summary>
@@ -466,9 +466,9 @@ namespace Kernel.Drivers.Audio
             SerialDebug.Info("AC97 Audio: Detecting controller");
 
             // Buscar el dispositivo PCI
-            for (int i = 0; i < PCIManager.GetDevices().Count; i++)
+            for (int i = 0; i < PCIMMIOManager.GetDevices().Count; i++)
             {
-                PCIDevice device = PCIManager.GetDevices()[i];
+                PCIDevice device = PCIMMIOManager.GetDevices()[i];
 
                 // Verificar si es un controlador AC97
                 if (device.ID.VendorID == AC97_VENDOR_ID && device.ID.DeviceID == AC97_DEVICE_ID)

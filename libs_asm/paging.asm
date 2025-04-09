@@ -17,6 +17,7 @@ global _Reset                ; System reset
 global _GetRFlags            ; Get RFLAGS
 global _SetRFlags            ; Set RFLAGS
 
+section .data
 ; Read the value of CR0 register
 ; uint64_t _ReadCR0()
 _ReadCR0:

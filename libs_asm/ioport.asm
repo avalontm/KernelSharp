@@ -7,6 +7,7 @@ global _Out16
 global _In32
 global _Out32
 
+section .data
 ; Read a single byte from an I/O port
 ; Input: Port in RCX (32 bits)
 ; Output: Byte read in AL

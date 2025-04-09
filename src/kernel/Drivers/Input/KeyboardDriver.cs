@@ -272,18 +272,42 @@ namespace Kernel.Drivers.Input
         {
             SerialDebug.Info("Keyboard IRQ triggered");
 
+            // Verificar estado del controlador antes de leer
+            byte statusBefore = IOPort.In8(STATUS_PORT);
+            SerialDebug.Info($"Keyboard status before read: 0x{((ulong)statusBefore).ToStringHex()}");
+
+            // Verificar si hay datos disponibles
+            if ((statusBefore & 0x01) == 0)
+            {
+                SerialDebug.Warning("No keyboard data available in interrupt");
+                APICController.SendEOI();
+                return;
+            }
+
             // Leer el código de escaneo
             byte scanCode = IOPort.In8(DATA_PORT);
 
-            // Enviar EOI inmediatamente
-            //APICController.SendEOI();
+            // Verificar estado después de leer
+            byte statusAfter = IOPort.In8(STATUS_PORT);
+            SerialDebug.Info($"Keyboard status after read: 0x{((ulong)statusAfter).ToStringHex()}");
 
-            // Log después de enviar EOI
+            // Enviar EOI inmediatamente
+            APICController.SendEOI();
+
+            // Log del scancode
             SerialDebug.Info($"Keyboard scancode: 0x{((ulong)scanCode).ToStringHex()}");
 
-            // Ahora que el EOI está enviado, es seguro procesar el código
+            // Verificaciones adicionales del scancode
+            if (scanCode == 0x00)
+            {
+                SerialDebug.Warning("Received null scancode");
+                return;
+            }
+
+            // Procesar el código de escaneo
             ProcessScanCode(scanCode);
         }
+
         /// <summary>
         /// Inicializa el mapa de códigos de escaneo
         /// </summary>
@@ -822,6 +846,7 @@ namespace Kernel.Drivers.Input
         /// </summary>
         public char ReadChar()
         {
+            SerialDebug.Info("Reading character from keyboard..."); 
             while (IsKeyAvailable())
             {
                 KeyEvent keyEvent = ReadKey();

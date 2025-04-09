@@ -302,9 +302,6 @@ namespace Kernel.Hardware
             // Parse MADT to find APIC information
             ParseMADT();
 
-            // Detect system reset method
-            DetectResetMethod();
-
             _initialized = true;
             SerialDebug.Info("ACPI subsystem initialized successfully.");
             return true;
@@ -611,28 +608,6 @@ namespace Kernel.Hardware
             return null;
         }
 
-        /// <summary>
-        /// Detects the available method for system reset
-        /// </summary>
-        private static void DetectResetMethod()
-        {
-            _resetType = ResetType.None;
-
-            // In ACPI 2.0+, check the reset register
-            if (_acpiVersion2 && _fadt != null && _fadt->ResetReg.Address != 0)
-            {
-                _resetType = ResetType.Register;
-                _resetValue = _fadt->ResetValue;
-                SerialDebug.Info("Reset method: ACPI Register");
-                return;
-            }
-
-            // Alternative reset method: Keyboard port
-            _resetType = ResetType.IO;
-            _resetPort = 0x64; // Keyboard controller port
-            _resetValue = 0xFE; // Reset value
-            SerialDebug.Info("Reset method: Keyboard Controller Port");
-        }
 
         /// <summary>
         /// Resets the system using the ACPI method

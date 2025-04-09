@@ -1,5 +1,6 @@
 using Internal.Runtime.CompilerHelpers;
 using Kernel;
+using Kernel.Diagnostics;
 using Kernel.Drivers.IO;
 using System;
 using System.Runtime.InteropServices;
@@ -470,7 +471,6 @@ namespace System
         /// <returns>Carácter leído.</returns>
         private static char ReadChar()
         {
-            // Reemplazar las llamadas a BIOS con el driver de teclado
             while (true)
             {
                 // Verificar si hay teclas disponibles usando el driver de teclado

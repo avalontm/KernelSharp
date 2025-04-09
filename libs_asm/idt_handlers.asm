@@ -1,125 +1,57 @@
-; Interrupt Handlers for x86_64 OS Kernel
-; This file defines 256 unique interrupt stubs for the IDT
-; Each stub preserves registers and calls the common C# handler
+; Advanced Interrupt Handling for 64-bit Kernel
+; Optimized for native C# low-level kernel with APIC support
 
-global _SetupInterrupts
+global _LoadIDT
 global _GetInterruptStub
+global _GetInterruptStubAddress
 global _CLI
 global _STI
 global _Halt
 global _Pause
-global _Nop
-global _InterruptCommon
-global _GetInterruptStubAddress
-global _LoadIDT              ; Load IDT
 
-; Declare external references to C# functions
-extern HandleInterrupt     ; Main handler function in C#
-extern _handlerTable       ; Table of interrupt handlers in C#
+extern HandleInterrupt
 
 section .data
-
-; Interrupt Descriptor Table (IDT)
-; Define 256 interrupt stubs (address array for IDT)
+align 8
 InterruptStubTable:
-    ; Assign 256 stubs
     %assign i 0
     %rep 256
-        dq _InterruptStub %+ i  ; Add address of each stub to the table
+        dq _InterruptStub %+ i
     %assign i i+1
     %endrep
 
 section .text
 
-; Load the IDT
-_LoadIDT:
-    push rbp                 ; Save base pointer
-    mov rbp, rsp             ; Set up new base pointer
-    
-    ; Save critical registers that might be affected
-    push rax
-    
-    ; Disable interrupts while loading IDT
-    cli
-    
-    ; Load the IDT using LIDT instruction
-    ; RDI already contains the address of the IDTR structure
-    lidt [rdi]
-    
-    ; Brief delay to ensure IDT is properly loaded
-    nop
-    nop
-    nop
-    
-    ; Re-enable interrupts
-    sti
-    
-    ; Restore registers
-    pop rax
-    
-    ; Restore stack frame
-    pop rbp
-    
-    ; Return
-    ret
+; Macro para crear stubs de interrupciones
+%macro CREATE_INTERRUPT_STUB 1
+_InterruptStub%1:
+    ; Si tiene error code, no se hace nada. Si no, se pushea 0
+    %if (%1 == 8) || (%1 >= 10 && %1 <= 14) || (%1 == 17) || (%1 == 30)
+        ; Interrupts con error code, no hacer push extra
+    %else
+        push qword 0
+    %endif
+    push qword %1        ; Interrupt Number
+    jmp _InterruptCommonHandler
+%endmacro
 
-; Setup the interrupt system
-_SetupInterrupts:
-    ret
+; Generar los 256 stubs
+%assign i 0
+%rep 256
+    CREATE_INTERRUPT_STUB i
+%assign i i+1
+%endrep
 
-; Returns the address of a specific interrupt stub
-_GetInterruptStub:
-    cmp rcx, 256          ; Check if number is valid
-    jae .invalid
-    mov rax, [InterruptStubTable + rcx * 8]  ; Get address from table
-    ret
-.invalid:
-    xor rax, rax          ; Return NULL if invalid
-    ret
-
-; Disable interrupts (CLI instruction)
-_CLI:
-    cli
-    ret
-
-; Enable interrupts (STI instruction)
-_STI:
-    sti
-    ret
-
-; Halt the CPU until next interrupt
-_Halt:
-    hlt
-    ret
-
-; Pause instruction (for busy-waiting)
-_Pause:
-    pause
-    ret
-
-; Nop instruction (for busy-waiting)
-_Nop:
-    nop
-    ret
-
-; Get the address of the first interrupt handler
-_GetInterruptStubAddress:
-    mov rax, _InterruptStub0
-    ret
-
-; Common part of the interrupt handler
-_InterruptCommon:
-    ; Create a stack frame (for debugging)
-    push rbp
-    mov rbp, rsp
-    
-    ; Save all general purpose registers
+; Handler común para todas las interrupciones
+_InterruptCommonHandler:
+    ; Salvar registros generales
     push rax
     push rbx
     push rcx
     push rdx
     push rsi
     push rdi
+    push rbp
     push r8
     push r9
     push r10
@@ -128,74 +60,50 @@ _InterruptCommon:
     push r13
     push r14
     push r15
-    
-    ; Calculate original stack pointer (for frame.RSP)
-    mov rax, rbp
-    add rax, 16           ; Skip RBP and return address
-    
-    ; Create InterruptFrame structure on stack
-    sub rsp, 120          ; Reserve space for frame (15 * 8 = 120 bytes)
-    
-    ; RCX contains interrupt number
-    ; Create InterruptFrame structure
-    mov [rsp], rdi        ; Frame.RDI
-    mov [rsp+8], rsi      ; Frame.RSI
-    mov [rsp+16], rbp     ; Frame.RBP
-    mov [rsp+24], rax     ; Frame.RSP (original value)
-    mov [rsp+32], rbx     ; Frame.RBX
-    mov [rsp+40], rdx     ; Frame.RDX
-    mov [rsp+48], rcx     ; Frame.RCX
-    mov [rsp+56], rax     ; Frame.RAX
-    
-    ; Interrupt number is already in RCX
-    mov [rsp+64], rcx     ; Frame.InterruptNumber
-    
-    ; Error code (if any)
-    mov rax, [rbp+8]      ; Get error code from stack
-    mov [rsp+72], rax     ; Frame.ErrorCode
-    
-    ; CPU-saved registers (these are approximations, might need adjustment)
-    mov rax, [rbp+16]     ; Get RIP from stack
-    mov [rsp+80], rax     ; Frame.RIP
-    
-    mov rax, [rbp+24]     ; Get CS from stack
-    mov [rsp+88], rax     ; Frame.CS
-    
-    mov rax, [rbp+32]     ; Get RFLAGS from stack
-    mov [rsp+96], rax     ; Frame.RFLAGS
-    
-    mov rax, [rbp+40]     ; Get UserRSP from stack
-    mov [rsp+104], rax    ; Frame.UserRSP
-    
-    mov rax, [rbp+48]     ; Get SS from stack
-    mov [rsp+112], rax    ; Frame.SS
-    
-    ; Prepare for call to C# handler
-    ; Windows x64 calling convention - First parameter in RCX
-    mov rcx, rsp          ; Pass pointer to InterruptFrame
-    
-    ; Ensure 16-byte stack alignment
-    sub rsp, 16
-    and rsp, -16
-    
-    ; Reserve shadow space (Windows x64 calling convention)
-    sub rsp, 32
-    
-    ; Call C# handler
-    call HandleInterrupt
-    
-    ; Clean up shadow space
-    add rsp, 32
-    
-    ; Restore stack alignment padding
-    mov rsp, rbp
-    sub rsp, 120          ; Point back to our frame
 
-    ; Restore all registers
-    mov rsp, rbp          ; Reset stack to base of our frame
-    sub rsp, 120          ; Calculate position of saved registers
-    
-    ; Restore all general registers
+    ; Guardar puntero al stack actual (para construir el frame)
+    mov rax, rsp
+
+    ; Reservar espacio para InterruptFrame (128 bytes)
+    sub rsp, 128
+
+    ; Guardar registros en InterruptFrame
+    mov [rsp],     rdi
+    mov [rsp+8],   rsi
+    mov [rsp+16],  rbp
+    mov [rsp+24],  rax       ; Stack base
+    mov [rsp+32],  rbx
+    mov [rsp+40],  rdx
+    mov [rsp+48],  rcx
+    mov [rsp+56],  rax       ; RAX duplicado para seguridad
+
+    ; Cargar interrupt number y error code
+    mov rax, [rsp+128 + 8]   ; Número de interrupción
+    mov [rsp+64], rax
+    mov rax, [rsp+128]       ; Error code
+    mov [rsp+72], rax
+
+    ; RIP, CS, RFLAGS, RSP (User), SS
+    mov rax, [rsp+128 + 16]
+    mov [rsp+80], rax
+    mov rax, [rsp+128 + 24]
+    mov [rsp+88], rax
+    mov rax, [rsp+128 + 32]
+    mov [rsp+96], rax
+    mov rax, [rsp+128 + 40]
+    mov [rsp+104], rax
+    mov rax, [rsp+128 + 48]
+    mov [rsp+112], rax
+
+    ; Fastcall RCX = ptr a InterruptFrame
+    mov rcx, rsp
+    and rsp, -16
+    call HandleInterrupt
+
+    ; Restaurar registros
+    mov rsp, [rsp+24]  ; restaurar RSP desde frame original
+    add rsp, 128       ; eliminar espacio del InterruptFrame
+
     pop r15
     pop r14
     pop r13
@@ -204,43 +112,52 @@ _InterruptCommon:
     pop r10
     pop r9
     pop r8
+    pop rbp
     pop rdi
     pop rsi
     pop rdx
     pop rcx
     pop rbx
     pop rax
-    
-    ; Restore stack frame
-    pop rbp
-    
-    ; Skip error code
-    add rsp, 8
-    
-    ; Return from interrupt
+
+    add rsp, 16        ; eliminar interrupt number + error code
     iretq
 
-; Macro for generating interrupt stubs
-%macro INTERRUPT_STUB 1
-_InterruptStub%1:
-    %if (%1 = 8) || (%1 >= 10 && %1 <= 14) || (%1 = 17) || (%1 = 30)
-        ; These interrupts push an error code
-        ; So we leave it on the stack
-    %else
-        ; For interrupts without error code, push a dummy value
-        push qword 0
-    %endif
-    
-    ; Push interrupt number
-    mov rcx, %1           ; Load interrupt number
-    
-    ; Jump to common handler
-    jmp _InterruptCommon
-%endmacro
+; ------------------------------
+; Funciones auxiliares del kernel
+; ------------------------------
 
-; Generate all 256 interrupt stubs
-%assign i 0
-%rep 256
-    INTERRUPT_STUB i
-%assign i i+1
-%endrep
+_LoadIDT:
+    cli
+    lidt [rcx]   ; RCX = ptr a IDT (struct)
+    sti
+    ret
+
+_GetInterruptStub:
+    cmp rcx, 256
+    jae .invalid
+    mov rax, [InterruptStubTable + rcx * 8]
+    ret
+.invalid:
+    xor rax, rax
+    ret
+
+_GetInterruptStubAddress:
+    mov rax, _InterruptStub0
+    ret
+
+_CLI:
+    cli
+    ret
+
+_STI:
+    sti
+    ret
+
+_Halt:
+    hlt
+    ret
+
+_Pause:
+    pause
+    ret

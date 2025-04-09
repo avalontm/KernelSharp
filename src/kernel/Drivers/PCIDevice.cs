@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Kernel.Diagnostics;
+using System;
 using System.Diagnostics;
 
 namespace Kernel.Drivers
@@ -94,13 +95,14 @@ namespace Kernel.Drivers
         public byte HeaderType { get; }
         public byte InterruptLine { get; }
         public byte InterruptPin { get; }
-        public uint[] BAR { get; } = new uint[6];
+        public uint[] BAR { get;}
         public bool IsBridge { get; }
         public byte SecondaryBus { get; }
         public byte SubordinateBus { get; }
 
         public PCIDevice(PCIDeviceID id, PCILocation location, byte headerType, byte interruptLine, byte interruptPin, uint[] bars, bool isBridge, byte secondaryBus, byte subordinateBus)
         {
+            BAR = new uint[6];
             ID = id;
             Location = location;
             HeaderType = headerType;
@@ -108,9 +110,12 @@ namespace Kernel.Drivers
             InterruptPin = interruptPin;
             if (bars != null && bars.Length == 6)
             {
-                Array.Copy(bars, BAR, bars.Length);
+                for (int i = 0; i < bars.Length; i++)
+                {
+                    BAR[i] = bars[i];
+                }
             }
-         
+
             IsBridge = isBridge;
             SecondaryBus = secondaryBus;
             SubordinateBus = subordinateBus;

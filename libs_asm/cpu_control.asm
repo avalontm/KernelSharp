@@ -8,8 +8,18 @@ global _SetCR0              ; Escribe en el registro CR0
 global _GetCR3              ; Lee el registro CR3 (directorio de páginas)
 global _SetCR3              ; Escribe en el registro CR3
 global _CPUID
+global _Nop
 
+; Pause instruction (for busy-waiting)
+_Pause:
+    pause
+    ret
 
+; Nop instruction (for busy-waiting)
+_Nop:
+    nop
+    ret
+    
 ; Lee el valor del registro CR0
 ; uint _GetCR0()
 _GetCR0:
@@ -42,43 +52,78 @@ _SetCR3:
 
 ; void _CPUID(uint leaf, ref uint eax, ref uint ebx, ref uint ecx, ref uint edx)
 _CPUID:
-    ; Save non-volatile registers
-    push rbx                    ; rbx is a non-volatile register and must be preserved
+    ; Prólogo: Preservar todos los registros no volátiles
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
     
-    ; Get function arguments
-    ; En x86-64:
-    ; rdi = primer argumento (leaf)
-    ; rsi = segundo argumento (puntero a eax)
-    ; rdx = tercer argumento (puntero a ebx)
-    ; rcx = cuarto argumento (puntero a ecx)
-    ; r8 = quinto argumento (puntero a edx)
-    
-    ; Mover leaf a eax para ejecutar CPUID
-    mov eax, edi
-    
-    ; Guardar los punteros de referencia
-    mov r9, rdx                 ; Guardar puntero a ebx en r9
-    mov r10, rcx                ; Guardar puntero a ecx en r10
-    mov r11, r8                 ; Guardar puntero a edx en r11
-    
-    ; Si necesitamos un valor ecx inicial, cargarlo
-    xor ecx, ecx                ; Inicializar ecx a 0 por defecto
-    cmp r10, 0                  ; Verificar si el puntero a ecx es nulo
-    je .execute_cpuid           ; Saltar si es nulo
-    mov ecx, [r10]              ; Cargar el valor inicial de ecx
-    
-.execute_cpuid:
+    ; Preparación de argumentos
+    ; RCX = leaf
+    ; RDX = puntero a eax
+    ; R8  = puntero a ebx
+    ; R9  = puntero a ecx
+    ; [rsp+64] = puntero a edx
+
+    ; Inicializar valores
+    mov eax, ecx            ; Mover leaf a EAX
+    xor ebx, ebx            ; Limpiar EBX
+    xor ecx, ecx            ; Limpiar ECX
+    xor edx, edx            ; Limpiar EDX
+
+    ; Verificaciones de punteros
+    test rdx, rdx           ; Verificar puntero a EAX
+    jz .error_invalid_pointer
+
+    ; Cargar valor inicial de EAX
+    mov eax, [rdx]
+
+    ; Verificar puntero a ECX
+    test r9, r9
+    jz .skip_ecx_load
+    mov ecx, [r9]
+.skip_ecx_load:
+
     ; Ejecutar CPUID
     cpuid
+
+    ; Guardar resultados
+    mov [rdx], eax          ; Guardar EAX
     
-    ; Guardar los resultados en los punteros
-    mov [rsi], eax              ; Guardar eax en el puntero a eax
-    mov [r9], ebx               ; Guardar ebx en el puntero a ebx
-    mov [r10], ecx              ; Guardar ecx en el puntero a ecx
-    mov [r11], edx              ; Guardar edx en el puntero a edx
-    
-    ; Restaurar registros no volátiles
+    ; Verificar puntero a EBX
+    test r8, r8
+    jz .skip_ebx_store
+    mov [r8], ebx           ; Guardar EBX
+.skip_ebx_store:
+
+    ; Verificar puntero a ECX
+    test r9, r9
+    jz .skip_ecx_store
+    mov [r9], ecx           ; Guardar ECX
+.skip_ecx_store:
+
+    ; Verificar puntero a EDX
+    mov r12, [rsp+64]       ; Puntero a EDX
+    test r12, r12
+    jz .cleanup
+    mov [r12], edx          ; Guardar EDX
+    jmp .cleanup
+
+.error_invalid_pointer:
+    ; Manejo de error de puntero inválido
+    ; Podrías añadir código para manejar este caso, como establecer un código de error
+    xor eax, eax            ; Establecer EAX a cero
+    jmp .cleanup
+
+.cleanup:
+    ; Restaurar registros
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     
-    ; Retornar
     ret

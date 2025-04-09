@@ -6,6 +6,7 @@ global _ReadMSR
 global _WriteMSR
 global _GetAPICID
 
+section .data
 ; Lee un registro MSR
 ; ulong ReadMSR(uint msr)
 _ReadMSR:

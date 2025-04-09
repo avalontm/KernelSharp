@@ -30,22 +30,6 @@ namespace System
             return ref Unsafe.AddByteOffset(ref _numComponents, (nuint)sizeof(void*));
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal new ref byte GetRawData()
-        {
-            // The array data starts after the _numComponents field and any bounds.
-            // For single-dimensional arrays, this is immediately after _numComponents.
-            return ref Unsafe.AddByteOffset(ref Unsafe.As<int, byte>(ref _numComponents), (nuint)sizeof(int));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal new uint GetRawDataSize()
-        {
-            // Get the element size from the array's EEType
-            // This is a simplified implementation for low-level kernel
-            return (uint)sizeof(int); // Default to int size if unknown
-        }
-
         public static void ForEach<T>(T[] array, Action<T> action)
         {
             if (array == null)
@@ -228,11 +212,14 @@ namespace System
                 ThrowHelpers.ArgumentException("Destination array too short");
 
 
+            uint elementSize = sourceArray.GetRawDataSize(); 
+
             fixed (void* sourcePtr = &sourceArray.GetRawData(), destPtr = &destinationArray.GetRawData())
             {
-                byte* src = (byte*)sourcePtr + (sourceIndex * sourceArray.GetRawDataSize());
-                byte* dest = (byte*)destPtr + (destinationIndex * destinationArray.GetRawDataSize());
-                MemoryHelpers.Movsb(dest, src, (ulong)(length * sourceArray.GetRawDataSize()));
+                byte* src = (byte*)sourcePtr + (sourceIndex * elementSize);
+                byte* dest = (byte*)destPtr + (destinationIndex * elementSize);
+
+                MemoryHelpers.Movsb(dest, src, (ulong)(length * elementSize));
             }
 
         }
@@ -295,6 +282,7 @@ namespace System
             for (int i = 0; i < length; i++)
             {
                 destinationArray[destinationIndex + i] = sourceArray[sourceIndex + i];
+
             }
         }
 
@@ -323,11 +311,12 @@ namespace System
                 ThrowHelpers.ArgumentException("Destination array too short");
 
 
+            int elementSize = (int)sourceArray.GetRawDataSize();
+
             fixed (void* sourcePtr = &sourceArray.GetRawData(), destPtr = &destinationArray.GetRawData())
             {
-                int elementSize = (int)sourceArray.GetRawDataSize();
                 byte* src = (byte*)sourcePtr + (startIndex * elementSize);
-                byte* dest = (byte*)destPtr;
+                byte* dest = (byte*)destPtr; // empieza en índice 0
 
                 MemoryHelpers.Movsb(dest, src, (ulong)(length * elementSize));
             }

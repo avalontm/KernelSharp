@@ -158,7 +158,7 @@ namespace Kernel.Hardware
             InitializeLocalApic();
 
             _initialized = true;
-            //SerialDebug.Info($"SMP system initialized: {_cpuCount} processor(s) detected");
+            SerialDebug.Info($"SMP system initialized: {_cpuCount} processor(s) detected");
             return true;
         }
 
@@ -445,40 +445,49 @@ namespace Kernel.Hardware
 
         }
 
-        /// <summary>
-        /// Initializes the Local APIC
-        /// </summary>
         private static void InitializeLocalApic()
         {
-
             if (_localApicAddress == 0)
             {
                 SerialDebug.Info("Cannot initialize Local APIC - address is 0");
                 return;
             }
 
-           // SerialDebug.Info($"Initializing Local APIC at 0x{_localApicAddress.ToStringHex()}");
+            SerialDebug.Info($"Initializing Local APIC at 0x{_localApicAddress.ToStringHex()}");
 
-            // Map the physical APIC address to a virtual address if needed
-            // In a simple system, we could use identity mapping
+            // Habilitar APIC en MSR (Model Specific Register)
+            ulong msr = Native.ReadMSR(0x1B); // IA32_APIC_BASE MSR
 
-            // Enable the Local APIC (only for BSP for now)
+            // Verificar si el APIC ya está habilitado (bit 11)
+            if ((msr & (1UL << 11)) == 0)
+            {
+                // Habilitar APIC manteniendo la dirección base
+                msr |= (1UL << 11);
+                Native.WriteMSR(0x1B, msr);
+                SerialDebug.Info("Enabled APIC in MSR");
+            }
+
+            // Configurar el APIC Local para operación básica
             uint* apicBase = (uint*)_localApicAddress;
 
             // Spurious Interrupt Vector Register (offset 0xF0)
             uint* spuriousReg = apicBase + (0xF0 / 4);
 
-            // Read current value
+            // Leer valor actual
             uint spuriousValue = *spuriousReg;
-            //SerialDebug.Info($"Current Spurious Register Value: 0x{((ulong)spuriousValue).ToStringHex()}");
 
-            // Enable APIC (bit 8) and set spurious vector to 0xFF
+            // Habilitar APIC (bit 8) y establecer vector espurio a 0xFF
             *spuriousReg = (spuriousValue | 0x100) | 0xFF;
 
-            // Verify the write
-            uint newValue = *spuriousReg;
-            //SerialDebug.Info($"New Spurious Register Value: 0x{((ulong)newValue).ToStringHex()}");
+            // Task Priority Register (offset 0x80) - aceptar todas las interrupciones
+            uint* tprReg = apicBase + (0x80 / 4);
+            *tprReg = 0;
 
+            // Verificar el ID del APIC
+            uint* apicIdReg = apicBase + (0x20 / 4);
+            byte localApicId = (byte)((*apicIdReg >> 24) & 0xFF);
+
+            SerialDebug.Info($"Local APIC ID: {localApicId}");
         }
 
         /// <summary>
@@ -490,22 +499,57 @@ namespace Kernel.Hardware
         }
 
         /// <summary>
-        /// Gets the APIC ID of the current processor
+        /// Gets the APIC ID of the current processor using multiple methods for reliability
         /// </summary>
         public static byte GetCurrentApicId()
         {
-            // In a real system, you would get the APIC ID of the current processor
-            // Through CPUID or reading the corresponding register from the Local APIC
-
+            // Método 1: Leer directamente desde el registro del APIC Local
             if (_initialized && _localApicAddress != 0)
             {
-
                 // Read APIC ID register (offset 0x20)
                 uint* apicIdReg = (uint*)_localApicAddress + (0x20 / 4);
-                return (byte)((*apicIdReg >> 24) & 0xFF);
+                byte apicId = (byte)((*apicIdReg >> 24) & 0xFF);
+
+                // Verificar que sea un valor razonable
+                if (apicId < MAX_CPUS)
+                {
+                    return apicId;
+                }
             }
 
-            // To simplify, assume we're on the BSP (ID 0)
+            // Método 2: Intentar usar CPUID
+            uint eax = 1;
+            uint ebx = 0, ecx = 0, edx = 0;
+
+            // Verificar primero si CPUID función 1 está disponible
+            uint maxFunc = 0;
+            Native.Cpuid(0, ref maxFunc, ref ebx, ref ecx, ref edx);
+
+            if (maxFunc >= 1)
+            {
+                Native.Cpuid(eax, ref eax, ref ebx, ref ecx, ref edx);
+
+                // El ID del APIC está en los bits 24-31 de EBX después de CPUID función 1
+                byte apicId = (byte)((ebx >> 24) & 0xFF);
+
+                if (apicId < MAX_CPUS)
+                {
+                    return apicId;
+                }
+            }
+
+            // Método 3: Verificar la información acumulada durante ParseMADT
+            // Asumimos que el procesador actual es el BSP (Bootstrap Processor)
+            for (int i = 0; i < _cpuCount; i++)
+            {
+                if (_cpuInfos[i].IsBootProcessor)
+                {
+                    return _cpuInfos[i].ApicId;
+                }
+            }
+
+            // Valor predeterminado si todo lo demás falla
+            SerialDebug.Warning("Could not determine current APIC ID, defaulting to 0");
             return 0;
         }
 
